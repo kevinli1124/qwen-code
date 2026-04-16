@@ -46,7 +46,7 @@ export class MCPOAuthTokenStorage implements TokenStorage {
    */
   private async ensureConfigDir(): Promise<void> {
     const configDir = path.dirname(this.getTokenFilePath());
-    await fs.mkdir(configDir, { recursive: true });
+    await fs.mkdir(configDir, { recursive: true, mode: 0o700 });
   }
 
   /**

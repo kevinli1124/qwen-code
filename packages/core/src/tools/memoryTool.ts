@@ -136,6 +136,56 @@ function getMemoryFilePath(scope: 'global' | 'project' = 'global'): string {
 /**
  * Ensures proper newline separation before appending content.
  */
+/**
+ * Acquires an exclusive file-based lock to prevent concurrent writes to the
+ * memory file. Uses `wx` flag which fails atomically if the lock exists.
+ * Returns a release function that must be called in a finally block.
+ */
+async function acquireMemoryFileLock(
+  targetPath: string,
+  maxWaitMs = 5000,
+): Promise<() => Promise<void>> {
+  const lockPath = `${targetPath}.lock`;
+  const start = Date.now();
+  const retryIntervalMs = 50;
+
+  while (true) {
+    try {
+      const handle = await fs.open(lockPath, 'wx');
+      await handle.close();
+      return async () => {
+        try {
+          await fs.unlink(lockPath);
+        } catch {
+          // Lock file already removed or inaccessible — ignore
+        }
+      };
+    } catch (err) {
+      const nodeErr = err as NodeJS.ErrnoException;
+      if (nodeErr.code !== 'EEXIST') {
+        throw err;
+      }
+      if (Date.now() - start > maxWaitMs) {
+        // Stale lock detection: if the lock is older than maxWaitMs, assume
+        // the previous holder crashed and remove it.
+        try {
+          const stat = await fs.stat(lockPath);
+          if (Date.now() - stat.mtimeMs > maxWaitMs) {
+            await fs.unlink(lockPath).catch(() => {});
+            continue;
+          }
+        } catch {
+          // Stat failed — try once more
+        }
+        throw new Error(
+          `Failed to acquire memory file lock for ${targetPath} after ${maxWaitMs}ms`,
+        );
+      }
+      await new Promise((resolve) => setTimeout(resolve, retryIntervalMs));
+    }
+  }
+}
+
 function ensureNewlineSeparation(currentContent: string): string {
   if (currentContent.length === 0) return '';
   if (currentContent.endsWith('\n\n') || currentContent.endsWith('\r\n\r\n'))
@@ -342,12 +392,13 @@ Project: ${projectPath} (current project only)`;
     const scope = this.params.scope || 'global';
     const memoryFilePath = getMemoryFilePath(scope);
 
+    let releaseLock: (() => Promise<void>) | null = null;
     try {
+      await fs.mkdir(path.dirname(memoryFilePath), { recursive: true });
+      releaseLock = await acquireMemoryFileLock(memoryFilePath);
+
       if (modified_by_user && modified_content !== undefined) {
         // User modified the content in external editor, write it directly
-        await fs.mkdir(path.dirname(memoryFilePath), {
-          recursive: true,
-        });
         await fs.writeFile(memoryFilePath, modified_content, 'utf-8');
         const successMessage = `Okay, I've updated the ${scope} memory file with your modifications.`;
         return {
@@ -382,6 +433,10 @@ Project: ${projectPath} (current project only)`;
           type: ToolErrorType.MEMORY_TOOL_EXECUTION_ERROR,
         },
       };
+    } finally {
+      if (releaseLock) {
+        await releaseLock();
+      }
     }
   }
 }

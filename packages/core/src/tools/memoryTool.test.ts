@@ -26,6 +26,9 @@ vi.mock(import('node:fs/promises'), async (importOriginal) => {
     ...actual,
     mkdir: vi.fn(),
     readFile: vi.fn(),
+    open: vi.fn(),
+    unlink: vi.fn(),
+    stat: vi.fn(),
   };
 });
 
@@ -63,6 +66,12 @@ describe('MemoryTool', () => {
     mockFsAdapter.mkdir
       .mockReset()
       .mockResolvedValue(undefined as string | undefined);
+
+    // Mock lock file operations (fs.open + fs.unlink)
+    vi.mocked(fs.open).mockResolvedValue({
+      close: vi.fn().mockResolvedValue(undefined),
+    } as unknown as Awaited<ReturnType<typeof fs.open>>);
+    vi.mocked(fs.unlink).mockResolvedValue(undefined);
   });
 
   afterEach(() => {

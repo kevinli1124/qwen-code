@@ -148,7 +148,7 @@ export class Logger {
     this.logFilePath = path.join(this.qwenDir, LOG_FILE_NAME);
 
     try {
-      await fs.mkdir(this.qwenDir, { recursive: true });
+      await fs.mkdir(this.qwenDir, { recursive: true, mode: 0o700 });
       let fileExisted = true;
       try {
         await fs.access(this.logFilePath);

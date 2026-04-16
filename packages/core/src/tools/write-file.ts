@@ -76,6 +76,8 @@ export interface WriteFileToolParams {
   ai_proposed_content?: string;
 }
 
+const MAX_WRITE_FILE_SIZE = 100 * 1024 * 1024; // 100MB
+
 class WriteFileToolInvocation extends BaseToolInvocation<
   WriteFileToolParams,
   ToolResult
@@ -162,6 +164,21 @@ class WriteFileToolInvocation extends BaseToolInvocation<
   async execute(_abortSignal: AbortSignal): Promise<ToolResult> {
     const { file_path, content, ai_proposed_content, modified_by_user } =
       this.params;
+
+    const contentBytes = Buffer.byteLength(content, 'utf8');
+    if (contentBytes > MAX_WRITE_FILE_SIZE) {
+      const errorMessage =
+        `File content exceeds maximum size: ${contentBytes} bytes (max ${MAX_WRITE_FILE_SIZE}). ` +
+        `Split the content into smaller chunks or use a different approach for large files.`;
+      return {
+        llmContent: `Error: ${errorMessage}`,
+        returnDisplay: `File too large: ${Math.round(contentBytes / 1024 / 1024)}MB (max ${MAX_WRITE_FILE_SIZE / 1024 / 1024}MB)`,
+        error: {
+          message: errorMessage,
+          type: ToolErrorType.FILE_WRITE_FAILURE,
+        },
+      };
+    }
 
     let fileExists = await isFilefileExists(file_path);
     let originalContent = '';
