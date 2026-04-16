@@ -1,7 +1,31 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { randomUUID } from 'node:crypto';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { tmpdir } from 'node:os';
+
+/**
+ * Sanitize a filename from untrusted input. Strips path components,
+ * control characters, and restricts to a safe whitelist.
+ */
+function sanitizeFilename(name: string): string {
+  const stripped = basename(name || '');
+  const cleaned = stripped
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\x00-\x1f\x7f]/g, '')
+    .replace(/[^A-Za-z0-9._() -]/g, '_')
+    .replace(/^\.+/, '')
+    .slice(0, 255);
+  return cleaned || `file_${Date.now()}`;
+}
+
+/**
+ * Atomically create a per-message temp directory. mkdtempSync is a single
+ * syscall (mkdir + random suffix) with mode 0o700 on POSIX, eliminating
+ * the TOCTOU window between mkdir and writeFile where a symlink could be
+ * planted by a co-resident attacker.
+ */
+function makeChannelTempDir(): string {
+  return mkdtempSync(join(tmpdir(), 'channel-files-'));
+}
 import { Bot } from 'grammy';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import {
@@ -121,10 +145,10 @@ export class TelegramChannel extends ChannelBase {
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const buf = Buffer.from(await resp.arrayBuffer());
 
-        // Save to temp dir so the agent can read it via read-file tool
-        const dir = join(tmpdir(), 'channel-files', randomUUID());
-        mkdirSync(dir, { recursive: true });
-        const filePath = join(dir, basename(fileName) || `file_${Date.now()}`);
+        // Save to temp dir so the agent can read it via read-file tool.
+        // mkdtempSync is atomic and eliminates TOCTOU window.
+        const dir = makeChannelTempDir();
+        const filePath = join(dir, sanitizeFilename(fileName));
         writeFileSync(filePath, buf);
 
         envelope.text = msg.caption || '';
@@ -174,10 +198,10 @@ export class TelegramChannel extends ChannelBase {
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const buf = Buffer.from(await resp.arrayBuffer());
 
-        // Save to temp dir so the agent can read it via read-file tool
-        const dir = join(tmpdir(), 'channel-files', randomUUID());
-        mkdirSync(dir, { recursive: true });
-        const filePath = join(dir, fileName);
+        // Save to temp dir so the agent can read it via read-file tool.
+        // mkdtempSync is atomic and eliminates TOCTOU window.
+        const dir = makeChannelTempDir();
+        const filePath = join(dir, sanitizeFilename(fileName));
         writeFileSync(filePath, buf);
 
         envelope.text = msg.caption || '';

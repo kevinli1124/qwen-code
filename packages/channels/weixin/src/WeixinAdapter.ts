@@ -3,10 +3,24 @@
  * Extends ChannelBase with WeChat iLink Bot API integration.
  */
 
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { randomUUID } from 'node:crypto';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { tmpdir } from 'node:os';
+
+function sanitizeFilename(name: string): string {
+  const stripped = basename(name || '');
+  const cleaned = stripped
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\x00-\x1f\x7f]/g, '')
+    .replace(/[^A-Za-z0-9._() -]/g, '_')
+    .replace(/^\.+/, '')
+    .slice(0, 255);
+  return cleaned || `file_${Date.now()}`;
+}
+
+function makeChannelTempDir(): string {
+  return mkdtempSync(join(tmpdir(), 'channel-files-'));
+}
 import { ChannelBase } from '@qwen-code/channel-base';
 import type {
   ChannelConfig,
@@ -130,12 +144,8 @@ export class WeixinChannel extends ChannelBase {
           file.encryptQueryParam,
           file.aesKey,
         );
-        const dir = join(tmpdir(), 'channel-files', randomUUID());
-        mkdirSync(dir, { recursive: true });
-        const filePath = join(
-          dir,
-          basename(file.fileName) || `file_${Date.now()}`,
-        );
+        const dir = makeChannelTempDir();
+        const filePath = join(dir, sanitizeFilename(file.fileName));
         writeFileSync(filePath, fileData);
         envelope.attachments = [
           {

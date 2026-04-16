@@ -1,7 +1,21 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { randomUUID } from 'node:crypto';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { tmpdir } from 'node:os';
+
+function sanitizeFilename(name: string): string {
+  const stripped = basename(name || '');
+  const cleaned = stripped
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\x00-\x1f\x7f]/g, '')
+    .replace(/[^A-Za-z0-9._() -]/g, '_')
+    .replace(/^\.+/, '')
+    .slice(0, 255);
+  return cleaned || `file_${Date.now()}`;
+}
+
+function makeChannelTempDir(): string {
+  return mkdtempSync(join(tmpdir(), 'channel-files-'));
+}
 import { DWClient, TOPIC_ROBOT, EventAck } from 'dingtalk-stream-sdk-nodejs';
 import type { DWClientDownStream } from 'dingtalk-stream-sdk-nodejs';
 import { ChannelBase } from '@qwen-code/channel-base';
@@ -455,11 +469,12 @@ export class DingtalkChannel extends ChannelBase {
         },
       ];
     } else {
-      // Save non-image files to temp dir so the agent can read them
-      const dir = join(tmpdir(), 'channel-files', randomUUID());
-      mkdirSync(dir, { recursive: true });
-      const safeName =
-        basename(fileName || '') || `dingtalk_${mediaType}_${Date.now()}`;
+      // Save non-image files to temp dir so the agent can read them.
+      // mkdtempSync is atomic and eliminates TOCTOU window.
+      const dir = makeChannelTempDir();
+      const safeName = sanitizeFilename(
+        fileName || `dingtalk_${mediaType}_${Date.now()}`,
+      );
       const filePath = join(dir, safeName);
       writeFileSync(filePath, media.buffer);
 
