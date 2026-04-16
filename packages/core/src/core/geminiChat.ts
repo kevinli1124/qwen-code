@@ -172,19 +172,35 @@ export function isValidNonThoughtTextPart(part: Part): boolean {
   );
 }
 
+/**
+ * Cache isValidContent results keyed by Content object reference.
+ * Content objects are treated as immutable after being added to history,
+ * so reuse across retries and follow-up compression passes is safe.
+ */
+const contentValidityCache = new WeakMap<Content, boolean>();
+
 function isValidContent(content: Content): boolean {
+  const cached = contentValidityCache.get(content);
+  if (cached !== undefined) return cached;
+
+  let result = true;
   if (content.parts === undefined || content.parts.length === 0) {
-    return false;
-  }
-  for (const part of content.parts) {
-    if (part === undefined || Object.keys(part).length === 0) {
-      return false;
+    result = false;
+  } else {
+    for (const part of content.parts) {
+      if (part === undefined || Object.keys(part).length === 0) {
+        result = false;
+        break;
+      }
+      if (!isValidContentPart(part)) {
+        result = false;
+        break;
+      }
     }
-    if (!isValidContentPart(part)) {
-      return false;
-    }
   }
-  return true;
+
+  contentValidityCache.set(content, result);
+  return result;
 }
 
 function isValidContentPart(part: Part): boolean {
