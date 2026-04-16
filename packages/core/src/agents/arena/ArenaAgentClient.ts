@@ -23,6 +23,16 @@ const debugLogger = createDebugLogger('ARENA_AGENT_CLIENT');
 const AGENTS_SUBDIR = 'agents';
 const CONTROL_SUBDIR = 'control';
 
+function isValidControlSignal(obj: unknown): obj is ArenaControlSignal {
+  if (!obj || typeof obj !== 'object') return false;
+  const s = obj as Record<string, unknown>;
+  return (
+    (s['type'] === 'shutdown' || s['type'] === 'cancel') &&
+    typeof s['reason'] === 'string' &&
+    typeof s['timestamp'] === 'number'
+  );
+}
+
 /**
  * ArenaAgentClient is used by child agent processes to communicate
  * their status back to the main ArenaManager process via file-based IPC.
@@ -122,9 +132,17 @@ export class ArenaAgentClient {
     try {
       const content = await fs.readFile(this.controlFilePath, 'utf-8');
       // Parse before deleting so a corrupted file isn't silently consumed
-      const signal = JSON.parse(content) as ArenaControlSignal;
+      const parsed: unknown = JSON.parse(content);
+      if (!isValidControlSignal(parsed)) {
+        debugLogger.error(
+          'Invalid control signal schema, deleting file',
+          parsed,
+        );
+        await fs.unlink(this.controlFilePath).catch(() => {});
+        return null;
+      }
       await fs.unlink(this.controlFilePath);
-      return signal;
+      return parsed;
     } catch (error: unknown) {
       // File doesn't exist = no signal pending
       if (isNodeError(error) && error.code === 'ENOENT') {
