@@ -246,19 +246,53 @@ export function isSubpaths(parentPath: string[], childPath: string): boolean {
 }
 
 /**
+ * LRU-like cache for fs.realpathSync results. Stored paths don't change
+ * within a process lifetime except via rare filesystem edits, and this
+ * function is called on the hot permission-check path.
+ */
+const REALPATH_CACHE_MAX = 500;
+const realpathCache = new Map<string, string>();
+
+function getCachedRealpath(p: string): string {
+  const cached = realpathCache.get(p);
+  if (cached !== undefined) {
+    // Move to "most recently used" position
+    realpathCache.delete(p);
+    realpathCache.set(p, cached);
+    return cached;
+  }
+  const resolved = fs.realpathSync(p);
+  if (realpathCache.size >= REALPATH_CACHE_MAX) {
+    const oldestKey = realpathCache.keys().next().value;
+    if (oldestKey !== undefined) {
+      realpathCache.delete(oldestKey);
+    }
+  }
+  realpathCache.set(p, resolved);
+  return resolved;
+}
+
+/**
+ * Clear the realpath cache. Exposed for tests.
+ */
+export function clearRealpathCache(): void {
+  realpathCache.clear();
+}
+
+/**
  * Like isSubpath, but resolves symlinks first to prevent symlink traversal.
  * Falls back to raw path check if the file doesn't exist yet.
  */
 export function isSubpathSafe(parentPath: string, childPath: string): boolean {
   try {
-    const resolvedParent = fs.realpathSync(parentPath);
+    const resolvedParent = getCachedRealpath(parentPath);
     let resolvedChild: string;
     try {
-      resolvedChild = fs.realpathSync(childPath);
+      resolvedChild = getCachedRealpath(childPath);
     } catch {
       const childDir = path.dirname(childPath);
       const childBase = path.basename(childPath);
-      const resolvedDir = fs.realpathSync(childDir);
+      const resolvedDir = getCachedRealpath(childDir);
       resolvedChild = path.join(resolvedDir, childBase);
     }
     return isSubpath(resolvedParent, resolvedChild);

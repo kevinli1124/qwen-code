@@ -177,21 +177,26 @@ export function runWithDebugLogSession<T>(
 export function createDebugLogger(tag?: string): DebugLogger {
   return {
     debug: (...args: unknown[]) => {
+      // Early exit before session lookup and arg formatting when disabled
+      if (!isDebugLogFileEnabled()) return;
       const session = getActiveSession();
       if (!session) return;
       writeLog(session, 'DEBUG', tag, args);
     },
     info: (...args: unknown[]) => {
+      if (!isDebugLogFileEnabled()) return;
       const session = getActiveSession();
       if (!session) return;
       writeLog(session, 'INFO', tag, args);
     },
     warn: (...args: unknown[]) => {
+      if (!isDebugLogFileEnabled()) return;
       const session = getActiveSession();
       if (!session) return;
       writeLog(session, 'WARN', tag, args);
     },
     error: (...args: unknown[]) => {
+      if (!isDebugLogFileEnabled()) return;
       const session = getActiveSession();
       if (!session) return;
       writeLog(session, 'ERROR', tag, args);
