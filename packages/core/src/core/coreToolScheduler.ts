@@ -19,6 +19,7 @@ import type {
   ChatRecordingService,
 } from '../index.js';
 import { createDebugLogger } from '../utils/debugLogger.js';
+import { wrapIfSuspicious } from '../utils/promptInjectionGuard.js';
 import {
   generateToolUseId,
   firePreToolUseHook,
@@ -217,10 +218,14 @@ function createFunctionResponsePart(
   output: string,
   mediaParts?: FunctionResponsePart[],
 ): Part {
+  // Scan the tool output for prompt-injection markers and wrap suspicious
+  // content with an explicit UNTRUSTED_TOOL_OUTPUT boundary before it
+  // reaches the model. Clean output passes through unchanged.
+  const { text: safeOutput } = wrapIfSuspicious(output, toolName);
   const functionResponse: FunctionResponse = {
     id: callId,
     name: toolName,
-    response: { output },
+    response: { output: safeOutput },
     ...(mediaParts && mediaParts.length > 0 ? { parts: mediaParts } : {}),
   };
 
