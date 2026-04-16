@@ -22,7 +22,7 @@ import { FileOperation } from '../telemetry/metrics.js';
 import { getProgrammingLanguage } from '../telemetry/telemetry-utils.js';
 import { logFileOperation } from '../telemetry/loggers.js';
 import { FileOperationEvent } from '../telemetry/types.js';
-import { isSubpaths, isSubpath } from '../utils/paths.js';
+import { isSubpathsSafe, isSubpathSafe } from '../utils/paths.js';
 import { Storage } from '../config/storage.js';
 
 /**
@@ -94,11 +94,11 @@ class ReadFileToolInvocation extends BaseToolInvocation<
 
     if (
       workspaceContext.isPathWithinWorkspace(filePath) ||
-      isSubpath(projectTempDir, filePath) ||
-      isSubpath(globalTempDir, filePath) ||
-      isSubpath(osTempDir, filePath) ||
-      isSubpaths(userSkillsDirs, filePath) ||
-      isSubpath(userExtensionsDir, filePath)
+      isSubpathSafe(projectTempDir, filePath) ||
+      isSubpathSafe(globalTempDir, filePath) ||
+      isSubpathSafe(osTempDir, filePath) ||
+      isSubpathsSafe(userSkillsDirs, filePath) ||
+      isSubpathSafe(userExtensionsDir, filePath)
     ) {
       return 'allow';
     }

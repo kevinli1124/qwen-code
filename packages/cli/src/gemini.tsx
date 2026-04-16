@@ -198,9 +198,8 @@ export async function startInteractiveUI(
     },
   );
 
-  // Check for updates only if enableAutoUpdate is not explicitly disabled.
-  // Using !== false ensures updates are enabled by default when undefined.
-  if (settings.merged.general?.enableAutoUpdate !== false) {
+  // Check for updates only if enableAutoUpdate is explicitly set to true.
+  if (settings.merged.general?.enableAutoUpdate === true) {
     checkForUpdates()
       .then((info) => {
         handleAutoUpdate(info, settings, config.getProjectRoot());

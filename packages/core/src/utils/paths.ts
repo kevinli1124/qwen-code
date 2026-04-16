@@ -246,6 +246,35 @@ export function isSubpaths(parentPath: string[], childPath: string): boolean {
 }
 
 /**
+ * Like isSubpath, but resolves symlinks first to prevent symlink traversal.
+ * Falls back to raw path check if the file doesn't exist yet.
+ */
+export function isSubpathSafe(parentPath: string, childPath: string): boolean {
+  try {
+    const resolvedParent = fs.realpathSync(parentPath);
+    let resolvedChild: string;
+    try {
+      resolvedChild = fs.realpathSync(childPath);
+    } catch {
+      const childDir = path.dirname(childPath);
+      const childBase = path.basename(childPath);
+      const resolvedDir = fs.realpathSync(childDir);
+      resolvedChild = path.join(resolvedDir, childBase);
+    }
+    return isSubpath(resolvedParent, resolvedChild);
+  } catch {
+    return isSubpath(parentPath, childPath);
+  }
+}
+
+export function isSubpathsSafe(
+  parentPaths: string[],
+  childPath: string,
+): boolean {
+  return parentPaths.some((p) => isSubpathSafe(p, childPath));
+}
+
+/**
  * Resolves a path with tilde (~) expansion and relative path resolution.
  * Handles tilde expansion for home directory and resolves relative paths
  * against the provided base directory or current working directory.

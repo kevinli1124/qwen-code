@@ -51,3 +51,22 @@ export function normalizeProxyUrl(
   // HTTP is the default for most proxy configurations
   return `http://${trimmed}`;
 }
+
+/**
+ * Masks credentials in a proxy URL for safe logging.
+ * Replaces the password portion with '***'.
+ */
+export function maskProxyCredentials(
+  proxyUrl: string | undefined,
+): string | undefined {
+  if (!proxyUrl) return undefined;
+  try {
+    const url = new URL(proxyUrl);
+    if (url.password) {
+      url.password = '***';
+    }
+    return url.toString();
+  } catch {
+    return proxyUrl.replace(/:\/\/([^:]+):([^@]+)@/, '://$1:***@');
+  }
+}

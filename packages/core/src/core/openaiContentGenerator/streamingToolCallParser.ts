@@ -278,6 +278,13 @@ export class StreamingToolCallParser {
       }
     }
 
+    for (const entry of completed) {
+      this.buffers.delete(entry.index);
+      this.depths.delete(entry.index);
+      this.inStrings.delete(entry.index);
+      this.escapes.delete(entry.index);
+    }
+
     return completed;
   }
 

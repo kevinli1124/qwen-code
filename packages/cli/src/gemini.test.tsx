@@ -639,9 +639,17 @@ describe('startInteractiveUI', () => {
       geminiMdFileCount: 0,
     };
 
+    // Enable auto-update explicitly (opt-in since default is now false)
+    const settingsWithAutoUpdate = {
+      merged: {
+        ...mockSettings.merged,
+        general: { enableAutoUpdate: true },
+      },
+    } as LoadedSettings;
+
     await startInteractiveUI(
       mockConfig,
-      mockSettings,
+      settingsWithAutoUpdate,
       mockStartupWarnings,
       mockWorkspaceRoot,
       mockInitializationResult,

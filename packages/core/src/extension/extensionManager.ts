@@ -685,10 +685,11 @@ export class ExtensionManager {
 
       if (config.hooks && typeof config.hooks !== 'string') {
         // Process the hooks to substitute variables like ${CLAUDE_PLUGIN_ROOT}
-        extension.hooks = this.substituteHookVariables(
+        const rawHooks = this.substituteHookVariables(
           config.hooks,
           effectiveExtensionPath,
         );
+        extension.hooks = this.validateExtensionHooks(rawHooks, extension.id);
       }
 
       // Also load hooks from hooks directory or from config.hooks string path if available and not already set
@@ -729,9 +730,13 @@ export class ExtensionManager {
             }
 
             // Process the hooks to substitute variables like ${CLAUDE_PLUGIN_ROOT}
-            extension.hooks = this.substituteHookVariables(
+            const rawHooksFromFile = this.substituteHookVariables(
               hooksData,
               effectiveExtensionPath,
+            );
+            extension.hooks = this.validateExtensionHooks(
+              rawHooksFromFile,
+              extension.id,
             );
           } catch (error) {
             debugLogger.warn(
@@ -760,6 +765,57 @@ export class ExtensionManager {
     extensionPath: string,
   ): { [K in HookEventName]?: HookDefinition[] } | undefined {
     return substituteHookVariables(hooks, extensionPath);
+  }
+
+  private static readonly FORBIDDEN_HOOK_PATTERNS: RegExp[] = [
+    /\brm\s+(-[a-zA-Z]*r[a-zA-Z]*f|--recursive)\b/,
+    /:\(\)\s*\{.*\}.*:/,
+    /\bcurl\b.*\|\s*(ba)?sh/,
+    /\bwget\b.*\|\s*(ba)?sh/,
+    /\beval\b/,
+  ];
+
+  private validateExtensionHooks(
+    hooks: { [K in HookEventName]?: HookDefinition[] } | undefined,
+    extensionId: string,
+  ): { [K in HookEventName]?: HookDefinition[] } | undefined {
+    if (!hooks) return undefined;
+
+    const validated: { [K in HookEventName]?: HookDefinition[] } = {};
+    for (const [eventName, defs] of Object.entries(hooks)) {
+      if (!Array.isArray(defs)) continue;
+      const safeDefs: HookDefinition[] = [];
+      for (const def of defs) {
+        if (!def.hooks || !Array.isArray(def.hooks)) continue;
+        const safeHookConfigs = def.hooks.filter((hookConfig) => {
+          const cmd = hookConfig.command;
+          if (!cmd || typeof cmd !== 'string') return false;
+          if (cmd.length > 10000) {
+            debugLogger.warn(
+              `Extension "${extensionId}": hook command too long for ${eventName}, skipped`,
+            );
+            return false;
+          }
+          const isForbidden = ExtensionManager.FORBIDDEN_HOOK_PATTERNS.some(
+            (p) => p.test(cmd),
+          );
+          if (isForbidden) {
+            debugLogger.warn(
+              `Extension "${extensionId}": hook for ${eventName} contains forbidden pattern, skipped`,
+            );
+            return false;
+          }
+          return true;
+        });
+        if (safeHookConfigs.length > 0) {
+          safeDefs.push({ ...def, hooks: safeHookConfigs });
+        }
+      }
+      if (safeDefs.length > 0) {
+        validated[eventName as HookEventName] = safeDefs;
+      }
+    }
+    return Object.keys(validated).length > 0 ? validated : undefined;
   }
 
   loadInstallMetadata(

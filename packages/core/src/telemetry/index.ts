@@ -4,6 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+// OpenTelemetry and QwenLogger (Aliyun RUM) have been removed.
+// TelemetryTarget enum and related utilities are retained for config compatibility.
+
 export enum TelemetryTarget {
   GCP = 'gcp',
   LOCAL = 'local',
@@ -88,11 +91,8 @@ export type {
   ArenaAgentCompletedStatus,
 } from './types.js';
 export type { TelemetryEvent } from './types.js';
-export { SpanStatusCode, ValueType } from '@opentelemetry/api';
-export { SemanticAttributes } from '@opentelemetry/semantic-conventions';
 export * from './uiTelemetry.js';
 export {
-  // Core metrics functions
   recordToolCallMetrics,
   recordTokenUsageMetrics,
   recordApiResponseMetrics,
@@ -101,7 +101,6 @@ export {
   recordInvalidChunk,
   recordContentRetry,
   recordContentRetryFailure,
-  // Performance monitoring functions
   recordStartupPerformance,
   recordMemoryUsage,
   recordCpuUsage,
@@ -113,16 +112,13 @@ export {
   recordPerformanceRegression,
   recordBaselineComparison,
   isPerformanceMonitoringActive,
-  // Arena metrics functions
   recordArenaSessionStartedMetrics,
   recordArenaAgentCompletedMetrics,
   recordArenaSessionEndedMetrics,
-  // Performance monitoring types
   PerformanceMetricType,
   MemoryMetricType,
   ToolExecutionPhase,
   ApiRequestPhase,
   FileOperation,
 } from './metrics.js';
-export { QwenLogger } from './qwen-logger/qwen-logger.js';
 export { sanitizeHookName } from './sanitize.js';

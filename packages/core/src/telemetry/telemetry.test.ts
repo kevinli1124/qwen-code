@@ -4,60 +4,35 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import {
-  initializeTelemetry,
-  shutdownTelemetry,
-  isTelemetrySdkInitialized,
-} from './sdk.js';
-import { Config } from '../config/config.js';
-import { NodeSDK } from '@opentelemetry/sdk-node';
+/**
+ * OpenTelemetry SDK has been removed. Telemetry is now fully disabled by default.
+ * This file verifies that telemetry-related exports compile correctly.
+ */
 
-vi.mock('@opentelemetry/sdk-node');
-vi.mock('../config/config.js');
+import { describe, it, expect } from 'vitest';
+import {
+  TelemetryTarget,
+  DEFAULT_TELEMETRY_TARGET,
+  DEFAULT_OTLP_ENDPOINT,
+  isTelemetrySdkInitialized,
+} from './index.js';
 
 describe('telemetry', () => {
-  let mockConfig: Config;
-  let mockNodeSdk: NodeSDK;
-
-  beforeEach(() => {
-    vi.resetAllMocks();
-
-    mockConfig = new Config({
-      model: 'test-model',
-      targetDir: '/test/dir',
-      debugMode: false,
-      cwd: '/test/dir',
-    });
-    vi.spyOn(mockConfig, 'getTelemetryEnabled').mockReturnValue(true);
-    vi.spyOn(mockConfig, 'getTelemetryOtlpEndpoint').mockReturnValue(
-      'http://localhost:4317',
-    );
-    vi.spyOn(mockConfig, 'getSessionId').mockReturnValue('test-session-id');
-    mockNodeSdk = {
-      start: vi.fn(),
-      shutdown: vi.fn().mockResolvedValue(undefined),
-    } as unknown as NodeSDK;
-    vi.mocked(NodeSDK).mockImplementation(() => mockNodeSdk);
+  it('TelemetryTarget enum has expected values', () => {
+    expect(TelemetryTarget.LOCAL).toBe('local');
+    expect(TelemetryTarget.GCP).toBe('gcp');
+    expect(TelemetryTarget.QWEN).toBe('qwen');
   });
 
-  afterEach(async () => {
-    // Ensure we shut down telemetry even if a test fails.
-    if (isTelemetrySdkInitialized()) {
-      await shutdownTelemetry();
-    }
+  it('DEFAULT_TELEMETRY_TARGET is LOCAL', () => {
+    expect(DEFAULT_TELEMETRY_TARGET).toBe(TelemetryTarget.LOCAL);
   });
 
-  it('should initialize the telemetry service', () => {
-    initializeTelemetry(mockConfig);
-    expect(NodeSDK).toHaveBeenCalled();
-    expect(mockNodeSdk.start).toHaveBeenCalled();
+  it('DEFAULT_OTLP_ENDPOINT is localhost', () => {
+    expect(DEFAULT_OTLP_ENDPOINT).toBe('http://localhost:4317');
   });
 
-  it('should shutdown the telemetry service', async () => {
-    initializeTelemetry(mockConfig);
-    await shutdownTelemetry();
-
-    expect(mockNodeSdk.shutdown).toHaveBeenCalled();
+  it('SDK is never initialized (no-op stubs)', () => {
+    expect(isTelemetrySdkInitialized()).toBe(false);
   });
 });

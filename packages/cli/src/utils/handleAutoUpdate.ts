@@ -25,9 +25,9 @@ export function handleAutoUpdate(
   }
 
   // enableAutoUpdate is checked in gemini.tsx before calling this function,
-  // so if we get here, auto-update is enabled (or undefined, which defaults to enabled).
+  // so if we get here, auto-update is explicitly enabled.
   const isAutoUpdateEnabled =
-    settings.merged.general?.enableAutoUpdate !== false;
+    settings.merged.general?.enableAutoUpdate === true;
 
   const installationInfo = getInstallationInfo(
     projectRoot,

@@ -49,7 +49,7 @@ import type {
   PartListUnion,
 } from '@google/genai';
 import { ToolNames } from '../tools/tool-names.js';
-import { CONCURRENCY_SAFE_KINDS } from '../tools/tools.js';
+import { CONCURRENCY_SAFE_KINDS, MUTATOR_KINDS } from '../tools/tools.js';
 import { isShellCommandReadOnly } from '../utils/shellReadOnlyChecker.js';
 import { stripShellWrapper } from '../utils/shell-utils.js';
 import {
@@ -76,6 +76,28 @@ const TRUNCATION_PARAM_GUIDANCE =
   'Please retry the tool call with complete parameters. ' +
   'If the content is too large for a single response, ' +
   'consider splitting it into smaller parts.';
+
+const YOLO_DENY_PATTERNS: RegExp[] = [
+  /\brm\s+(-[a-zA-Z]*r[a-zA-Z]*f|--recursive)\b/,
+  /\brm\s+(-[a-zA-Z]*f[a-zA-Z]*r)\b/,
+  /\bdd\b.*\bof=/,
+  /\bmkfs\b/,
+  /\bshutdown\b/,
+  /\breboot\b/,
+  /\b(chmod|chown)\s+(-R|--recursive)\b/,
+  />\s*\/dev\//,
+  /\bgit\s+push\s+.*--force\b/,
+  /\bgit\s+reset\s+--hard\b/,
+];
+
+function isYoloDenied(
+  toolName: string,
+  args: Record<string, unknown>,
+): boolean {
+  if (toolName !== 'run_shell_command' && toolName !== 'Bash') return false;
+  const command = (args['command'] ?? args['input'] ?? '') as string;
+  return YOLO_DENY_PATTERNS.some((pattern) => pattern.test(command));
+}
 
 const TRUNCATION_EDIT_REJECTION =
   'Your previous response was truncated due to max_tokens limit, ' +
@@ -850,7 +872,10 @@ export class CoreToolScheduler {
 
         // Reject file-modifying calls when truncated to prevent
         // writing incomplete content.
-        if (reqInfo.wasOutputTruncated && toolInstance.kind === Kind.Edit) {
+        if (
+          reqInfo.wasOutputTruncated &&
+          MUTATOR_KINDS.includes(toolInstance.kind)
+        ) {
           const truncationError = new Error(TRUNCATION_EDIT_REJECTION);
           newToolCalls.push({
             status: 'error',
@@ -961,7 +986,12 @@ export class CoreToolScheduler {
             reqInfo.name === ToolNames.ASK_USER_QUESTION;
           let confirmationDetails: ToolCallConfirmationDetails | undefined;
 
-          if (approvalMode === ApprovalMode.YOLO && !isAskUserQuestionTool) {
+          const shouldAutoApproveYolo =
+            approvalMode === ApprovalMode.YOLO &&
+            !isAskUserQuestionTool &&
+            !isYoloDenied(reqInfo.name, reqInfo.args);
+
+          if (shouldAutoApproveYolo) {
             this.setToolCallOutcome(
               reqInfo.callId,
               ToolConfirmationOutcome.ProceedAlways,
@@ -1419,9 +1449,15 @@ export class CoreToolScheduler {
     const executing = new Set<Promise<void>>();
 
     for (const call of calls) {
-      const p = this.executeSingleToolCall(call, signal).finally(() => {
-        executing.delete(p);
-      });
+      const p = this.executeSingleToolCall(call, signal)
+        .catch((err) => {
+          debugLogger.error(
+            `Unhandled error in concurrent tool execution: ${err}`,
+          );
+        })
+        .finally(() => {
+          executing.delete(p);
+        });
       executing.add(p);
       if (executing.size >= maxConcurrency) {
         await Promise.race(executing);

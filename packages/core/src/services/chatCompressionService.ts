@@ -46,15 +46,24 @@ export const MIN_COMPRESSION_FRACTION = 0.05;
  *
  * Exported for testing purposes.
  */
+/**
+ * Pre-compute character counts for content array (one JSON.stringify per item).
+ * Reuse the returned array to avoid redundant serialization.
+ */
+export function computeCharCounts(contents: Content[]): number[] {
+  return contents.map((content) => JSON.stringify(content).length);
+}
+
 export function findCompressSplitPoint(
   contents: Content[],
   fraction: number,
+  precomputedCharCounts?: number[],
 ): number {
   if (fraction <= 0 || fraction >= 1) {
     throw new Error('Fraction must be between 0 and 1');
   }
 
-  const charCounts = contents.map((content) => JSON.stringify(content).length);
+  const charCounts = precomputedCharCounts ?? computeCharCounts(contents);
   const totalCharCount = charCounts.reduce((a, b) => a + b, 0);
   const targetCharCount = totalCharCount * fraction;
 
@@ -174,9 +183,13 @@ export class ChatCompressionService {
       ? curatedHistory.slice(0, -1)
       : curatedHistory;
 
+    // Pre-compute char counts once, reuse in split point and guard check
+    const cachedCharCounts = computeCharCounts(historyForSplit);
+
     const splitPoint = findCompressSplitPoint(
       historyForSplit,
       1 - COMPRESSION_PRESERVE_THRESHOLD,
+      cachedCharCounts,
     );
 
     const historyToCompress = historyForSplit.slice(0, splitPoint);
@@ -194,20 +207,11 @@ export class ChatCompressionService {
     }
 
     // Guard: if historyToCompress is too small relative to the total history,
-    // skip compression. This prevents futile API calls where the model receives
-    // almost no context and generates a useless "summary" that inflates tokens.
-    //
-    // Note: findCompressSplitPoint already computes charCounts internally but
-    // returns only the split index. We intentionally recompute here to keep
-    // the function signature simple; this is a minor, acceptable duplication.
-    const compressCharCount = historyToCompress.reduce(
-      (sum, c) => sum + JSON.stringify(c).length,
-      0,
-    );
-    const totalCharCount = historyForSplit.reduce(
-      (sum, c) => sum + JSON.stringify(c).length,
-      0,
-    );
+    // skip compression.
+    const compressCharCount = cachedCharCounts
+      .slice(0, splitPoint)
+      .reduce((a, b) => a + b, 0);
+    const totalCharCount = cachedCharCounts.reduce((a, b) => a + b, 0);
     if (
       totalCharCount > 0 &&
       compressCharCount / totalCharCount < MIN_COMPRESSION_FRACTION

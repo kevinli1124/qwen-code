@@ -50,13 +50,26 @@ describe('WebFetchTool', () => {
       );
     });
 
-    it('should return WEB_FETCH_FALLBACK_FAILED on fetch failure', async () => {
+    it('should block requests to private IPs', async () => {
       vi.spyOn(fetchUtils, 'isPrivateIp').mockReturnValue(true);
+      const tool = new WebFetchTool(mockConfig);
+      const params = { url: 'https://private.ip', prompt: 'summarize this' };
+      const invocation = tool.build(params);
+      const result = await invocation.execute(new AbortController().signal);
+      expect(result.error?.type).toBe(ToolErrorType.EXECUTION_DENIED);
+      expect(result.error?.message).toContain('private/internal address');
+    });
+
+    it('should return WEB_FETCH_FALLBACK_FAILED on fetch failure', async () => {
+      vi.spyOn(fetchUtils, 'isPrivateIp').mockReturnValue(false);
       vi.spyOn(fetchUtils, 'fetchWithTimeout').mockRejectedValue(
         new Error('fetch failed'),
       );
       const tool = new WebFetchTool(mockConfig);
-      const params = { url: 'https://private.ip', prompt: 'summarize this' };
+      const params = {
+        url: 'https://example.com',
+        prompt: 'summarize this',
+      };
       const invocation = tool.build(params);
       const result = await invocation.execute(new AbortController().signal);
       expect(result.error?.type).toBe(ToolErrorType.WEB_FETCH_FALLBACK_FAILED);

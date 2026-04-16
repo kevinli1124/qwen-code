@@ -34,27 +34,34 @@ export async function initializeApp(
   config: Config,
   settings: LoadedSettings,
 ): Promise<InitializationResult> {
-  // Initialize i18n system
+  // Initialize i18n system (must complete before UI renders)
   const languageSetting =
     process.env['QWEN_CODE_LANG'] ||
     (settings.merged.general?.language as string) ||
     'auto';
   await initializeI18n(languageSetting as SupportedLanguage | 'auto');
 
-  // Use authType from modelsConfig which respects CLI --auth-type argument
-  // over settings.security.auth.selectedType
+  // Parallelize independent initialization tasks
   const authType = config.getModelsConfig().getCurrentAuthType();
-  const authError = await performInitialAuth(config, authType);
-
-  const themeError = validateTheme(settings);
+  const [authError, themeError] = await Promise.all([
+    performInitialAuth(config, authType),
+    Promise.resolve(validateTheme(settings)),
+  ]);
 
   const shouldOpenAuthDialog =
     !config.getModelsConfig().wasAuthTypeExplicitlyProvided() || !!authError;
 
+  // IDE connection is non-blocking — don't delay startup
   if (config.getIdeMode()) {
-    const ideClient = await IdeClient.getInstance();
-    await ideClient.connect();
-    logIdeConnection(config, new IdeConnectionEvent(IdeConnectionType.START));
+    IdeClient.getInstance()
+      .then(async (ideClient) => {
+        await ideClient.connect();
+        logIdeConnection(
+          config,
+          new IdeConnectionEvent(IdeConnectionType.START),
+        );
+      })
+      .catch(() => {});
   }
 
   return {

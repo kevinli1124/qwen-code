@@ -191,17 +191,19 @@ ${textContent}
   }
 
   async execute(signal: AbortSignal): Promise<ToolResult> {
-    // Check if URL is private/localhost
-    const isPrivate = isPrivateIp(this.params.url);
-
-    if (isPrivate) {
-      this.debugLogger.debug(
-        `[WebFetchTool] Private IP detected for ${this.params.url}, using direct fetch`,
-      );
-    } else {
-      this.debugLogger.debug(
-        `[WebFetchTool] Public URL detected for ${this.params.url}, using direct fetch`,
-      );
+    if (isPrivateIp(this.params.url)) {
+      const errorMessage =
+        `Blocked request to private/internal address: ${this.params.url}. ` +
+        `WebFetch cannot access private network addresses for security reasons.`;
+      this.debugLogger.warn(`[WebFetchTool] ${errorMessage}`);
+      return {
+        llmContent: `Error: ${errorMessage}`,
+        returnDisplay: `Error: ${errorMessage}`,
+        error: {
+          message: errorMessage,
+          type: ToolErrorType.EXECUTION_DENIED,
+        },
+      };
     }
 
     return this.executeDirectFetch(signal);

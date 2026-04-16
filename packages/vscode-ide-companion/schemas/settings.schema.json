@@ -49,7 +49,7 @@
         "enableAutoUpdate": {
           "description": "Enable automatic update checks and installations on startup.",
           "type": "boolean",
-          "default": true
+          "default": false
         },
         "gitCoAuthor": {
           "description": "Automatically add a Co-authored-by trailer to git commit messages when commits are made through Qwen Code.",
@@ -73,9 +73,10 @@
           "default": false
         },
         "language": {
-          "description": "The language for the user interface. Use \"auto\" to detect from system settings. You can also use custom language codes (e.g., \"es\", \"fr\") by placing JS language files in ~/.qwen/locales/ (e.g., ~/.qwen/locales/es.js). Options: auto, en, zh, ru, de, ja, pt, fr",
+          "description": "The language for the user interface. Use \"auto\" to detect from system settings. You can also use custom language codes (e.g., \"es\", \"fr\") by placing JS language files in ~/.qwen/locales/ (e.g., ~/.qwen/locales/es.js). Options: auto, zh-TW, en, zh, ru, de, ja, pt, fr",
           "enum": [
             "auto",
+            "zh-TW",
             "en",
             "zh",
             "ru",

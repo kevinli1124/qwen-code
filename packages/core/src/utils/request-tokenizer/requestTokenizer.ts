@@ -60,11 +60,13 @@ export class RequestTokenizer {
         };
       }
 
-      // Calculate tokens for each content type serially
-      const textTokens = await this.calculateTextTokens(textContents);
-      const imageTokens = await this.calculateImageTokens(imageContents);
-      const audioTokens = await this.calculateAudioTokens(audioContents);
-      const otherTokens = await this.calculateOtherTokens(otherContents);
+      const [textTokens, imageTokens, audioTokens, otherTokens] =
+        await Promise.all([
+          this.calculateTextTokens(textContents),
+          this.calculateImageTokens(imageContents),
+          this.calculateAudioTokens(audioContents),
+          this.calculateOtherTokens(otherContents),
+        ]);
 
       const totalTokens = textTokens + imageTokens + audioTokens + otherTokens;
       const processingTime = performance.now() - startTime;

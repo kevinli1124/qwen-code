@@ -13,6 +13,9 @@ import {
   type FunctionDeclaration,
   type GenerateContentResponseUsageMetadata,
 } from '@google/genai';
+import { createDebugLogger } from '../utils/debugLogger.js';
+
+const debugLogger = createDebugLogger('TURN');
 import type {
   ToolCallConfirmationDetails,
   ToolResult,
@@ -402,11 +405,25 @@ export class Turn {
   private handlePendingFunctionCall(
     fnCall: FunctionCall,
   ): ServerGeminiStreamEvent | null {
-    const callId =
-      fnCall.id ??
-      `${fnCall.name}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    let callId = fnCall.id;
+    if (!callId) {
+      callId = `${fnCall.name}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      debugLogger.warn(
+        `Tool call missing id, generated synthetic: ${callId} for ${fnCall.name ?? 'unknown'}`,
+      );
+    }
     const name = fnCall.name || 'undefined_tool_name';
+    if (!fnCall.name) {
+      debugLogger.warn(
+        `Tool call ${callId} has no function name, using fallback`,
+      );
+    }
     const args = (fnCall.args || {}) as Record<string, unknown>;
+    if (!fnCall.args) {
+      debugLogger.warn(
+        `Tool call ${callId} (${name}) has no args, defaulting to empty object`,
+      );
+    }
 
     const toolCallRequest: ToolCallRequestInfo = {
       callId,

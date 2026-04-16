@@ -60,6 +60,22 @@ interface GrepMatch {
   line: string;
 }
 
+const MAX_PATTERN_LENGTH = 1000;
+
+const REDOS_PATTERNS = [/\(.+\+\)\+/, /\(.+\*\)\*/, /\(.+\+\)\*/, /\(.+\*\)\+/];
+
+function validateRegexPattern(pattern: string): string | null {
+  if (pattern.length > MAX_PATTERN_LENGTH) {
+    return `Pattern is too long (${pattern.length} chars, max ${MAX_PATTERN_LENGTH})`;
+  }
+  for (const redos of REDOS_PATTERNS) {
+    if (redos.test(pattern)) {
+      return 'Pattern contains nested quantifiers that could cause excessive backtracking';
+    }
+  }
+  return null;
+}
+
 class GrepToolInvocation extends BaseToolInvocation<
   GrepToolParams,
   ToolResult
@@ -94,6 +110,18 @@ class GrepToolInvocation extends BaseToolInvocation<
   }
 
   async execute(signal: AbortSignal): Promise<ToolResult> {
+    const patternError = validateRegexPattern(this.params.pattern);
+    if (patternError) {
+      return {
+        llmContent: `Error: ${patternError}. Please simplify the regex pattern.`,
+        returnDisplay: `Regex validation failed: ${patternError}`,
+        error: {
+          message: patternError,
+          type: ToolErrorType.INVALID_TOOL_PARAMS,
+        },
+      };
+    }
+
     try {
       // Determine which directories to search
       const searchDirs: string[] = [];

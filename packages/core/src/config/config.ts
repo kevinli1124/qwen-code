@@ -81,7 +81,6 @@ import type { SubagentConfig } from '../subagents/types.js';
 import {
   DEFAULT_OTLP_ENDPOINT,
   DEFAULT_TELEMETRY_TARGET,
-  initializeTelemetry,
   logStartSession,
   logRipgrepFallback,
   RipgrepFallbackEvent,
@@ -113,7 +112,10 @@ import { shouldDefaultToNodePty } from '../utils/shell-utils.js';
 import { WorkspaceContext } from '../utils/workspaceContext.js';
 import { type ToolName } from '../utils/tool-utils.js';
 import { getErrorMessage } from '../utils/errors.js';
-import { normalizeProxyUrl } from '../utils/proxyUtils.js';
+import {
+  normalizeProxyUrl,
+  maskProxyCredentials,
+} from '../utils/proxyUtils.js';
 
 // Local config modules
 import type { FileFilteringOptions } from './constants.js';
@@ -684,7 +686,7 @@ export class Config {
       name: 'Qwen-Coder',
       email: 'qwen-coder@alibabacloud.com',
     };
-    this.usageStatisticsEnabled = params.usageStatisticsEnabled ?? true;
+    this.usageStatisticsEnabled = params.usageStatisticsEnabled ?? false;
     this.outputLanguageFilePath = params.outputLanguageFilePath;
 
     this.fileFiltering = {
@@ -780,13 +782,16 @@ export class Config {
       onModelChange: this.handleModelChange.bind(this),
     });
 
-    if (this.telemetrySettings.enabled) {
-      initializeTelemetry(this);
-    }
-
     const proxyUrl = this.getProxy();
     if (proxyUrl) {
-      setGlobalDispatcher(new ProxyAgent(proxyUrl));
+      try {
+        setGlobalDispatcher(new ProxyAgent(proxyUrl));
+      } catch (e) {
+        const safeUrl = maskProxyCredentials(proxyUrl);
+        throw new Error(
+          `Failed to initialize proxy agent (${safeUrl}): ${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
     }
     this.geminiClient = new GeminiClient(this);
     this.chatRecordingService = this.chatRecordingEnabled

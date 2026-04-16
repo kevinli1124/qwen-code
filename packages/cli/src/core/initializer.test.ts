@@ -167,6 +167,10 @@ describe('initializeApp', () => {
 
     await initializeApp(mockConfig as never, mockSettings as never);
 
+    // IDE connection is non-blocking (fire-and-forget) — flush microtasks
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+
     expect(mockGetInstance).toHaveBeenCalled();
     expect(mockConnect).toHaveBeenCalled();
     expect(mockLogIdeConnection).toHaveBeenCalled();

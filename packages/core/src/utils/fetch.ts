@@ -8,12 +8,16 @@ import { getErrorMessage, isNodeError } from './errors.js';
 import { URL } from 'node:url';
 
 const PRIVATE_IP_RANGES = [
+  /^0\.0\.0\.0$/,
   /^10\./,
   /^127\./,
+  /^169\.254\./,
   /^172\.(1[6-9]|2[0-9]|3[0-1])\./,
   /^192\.168\./,
+  /^::$/,
   /^::1$/,
   /^fc00:/,
+  /^fd/,
   /^fe80:/,
 ];
 
@@ -50,6 +54,9 @@ export class FetchError extends Error {
 export function isPrivateIp(url: string): boolean {
   try {
     const hostname = new URL(url).hostname;
+    if (hostname === 'localhost' || hostname === '[::1]') {
+      return true;
+    }
     return PRIVATE_IP_RANGES.some((range) => range.test(hostname));
   } catch (_e) {
     return false;
