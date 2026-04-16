@@ -174,6 +174,13 @@ Signal: Signal number or \`(none)\` if no signal was received.
 export class ToolRegistry {
   // The tools keyed by tool name as seen by the LLM.
   private tools: Map<string, AnyDeclarativeTool> = new Map();
+  private declarationCache: FunctionDeclaration[] | null = null;
+  private sortedToolsCache: AnyDeclarativeTool[] | null = null;
+
+  private invalidateToolCaches(): void {
+    this.declarationCache = null;
+    this.sortedToolsCache = null;
+  }
   private config: Config;
   private mcpClientManager: McpClientManager;
 
@@ -207,6 +214,7 @@ export class ToolRegistry {
       }
     }
     this.tools.set(tool.name, tool);
+    this.invalidateToolCaches();
   }
 
   /**
@@ -221,16 +229,20 @@ export class ToolRegistry {
         !this.tools.has(tool.name)
       ) {
         this.tools.set(tool.name, tool);
+        this.invalidateToolCaches();
       }
     }
   }
 
   private removeDiscoveredTools(): void {
+    let changed = false;
     for (const tool of this.tools.values()) {
       if (tool instanceof DiscoveredTool || tool instanceof DiscoveredMCPTool) {
         this.tools.delete(tool.name);
+        changed = true;
       }
     }
+    if (changed) this.invalidateToolCaches();
   }
 
   /**
@@ -238,11 +250,14 @@ export class ToolRegistry {
    * @param serverName The name of the server to remove tools from.
    */
   removeMcpToolsByServer(serverName: string): void {
+    let changed = false;
     for (const [name, tool] of this.tools.entries()) {
       if (tool instanceof DiscoveredMCPTool && tool.serverName === serverName) {
         this.tools.delete(name);
+        changed = true;
       }
     }
+    if (changed) this.invalidateToolCaches();
   }
 
   /**
@@ -328,11 +343,14 @@ export class ToolRegistry {
    */
   async discoverToolsForServer(serverName: string): Promise<void> {
     // Remove any previously discovered tools from this server
+    let changed = false;
     for (const [name, tool] of this.tools.entries()) {
       if (tool instanceof DiscoveredMCPTool && tool.serverName === serverName) {
         this.tools.delete(name);
+        changed = true;
       }
     }
+    if (changed) this.invalidateToolCaches();
 
     this.config.getPromptRegistry().removePromptsByServer(serverName);
 
@@ -471,10 +489,14 @@ export class ToolRegistry {
    * @returns An array of FunctionDeclarations.
    */
   getFunctionDeclarations(): FunctionDeclaration[] {
+    if (this.declarationCache) {
+      return this.declarationCache;
+    }
     const declarations: FunctionDeclaration[] = [];
     this.tools.forEach((tool) => {
       declarations.push(tool.schema);
     });
+    this.declarationCache = declarations;
     return declarations;
   }
 
@@ -505,9 +527,13 @@ export class ToolRegistry {
    * Returns an array of all registered and discovered tool instances.
    */
   getAllTools(): AnyDeclarativeTool[] {
-    return Array.from(this.tools.values()).sort((a, b) =>
+    if (this.sortedToolsCache) {
+      return this.sortedToolsCache;
+    }
+    this.sortedToolsCache = Array.from(this.tools.values()).sort((a, b) =>
       a.displayName.localeCompare(b.displayName),
     );
+    return this.sortedToolsCache;
   }
 
   /**
