@@ -28,7 +28,12 @@ these (in combination with the built-in `Explore`, `general-purpose`, and
 
 - **`code-reviewer`** — independent read-only review after implementation.
   Returns a structured issue list.
-- **`test-engineer`** — reproduce bugs, verify fixes. Runs the CLI.
+- **`test-runner`** — run a specific test command and report PASS/FAIL with
+  evidence. Use after implementation or refactoring to confirm nothing
+  broke. Fast, simple, focused.
+- **`test-engineer`** — reproduce a user-reported bug end-to-end or verify
+  that a fix resolved it. Has an issue-file workflow; heavier than
+  test-runner. Use when you have a bug ticket, not for routine test runs.
 
 ### Diagnosis
 
@@ -42,18 +47,26 @@ these (in combination with the built-in `Explore`, `general-purpose`, and
 ```
 1. Explore            → locate the relevant code
 2. implementer        → make the change
-3. test-engineer      → verify it works
+3. test-runner        → run the affected tests
 4. code-reviewer      → final QA before commit
 ```
 
-### Fix a reported bug
+### Fix a reported bug (with an issue ticket)
 
 ```
-1. test-engineer      → reproduce the bug
+1. test-engineer      → reproduce the bug (reads & updates issue file)
 2. debugger           → find root cause
 3. implementer        → apply the fix (scope: single root cause)
-4. test-engineer      → verify the fix
+4. test-engineer      → verify the fix (updates issue file)
 5. code-reviewer      → optional, for risky fixes
+```
+
+### Routine change + test confirmation (no issue ticket)
+
+```
+1. implementer        → make the change
+2. test-runner        → run the affected tests
+3. (optional) code-reviewer
 ```
 
 ### Large refactor (rename / restructure)
@@ -94,6 +107,7 @@ Each agent has been designed so its scope does NOT overlap with the others:
 | debugger         | ✓     | ✗      | read-only | find root cause            |
 | implementer      | ✓     | ✓      | ✗         | execute bounded change     |
 | refactorer       | ✓     | ✓      | ✗         | behavior-preserving change |
+| test-runner      | ✓     | ✗      | ✓         | run tests, report verdict  |
 | test-engineer    | ✓     | ✓      | ✓         | reproduce / verify bugs    |
 | statusline-setup | ✓     | ✓      | ✗         | status line config         |
 

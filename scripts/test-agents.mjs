@@ -62,11 +62,11 @@ const TESTS = [
     forbiddenMarkers: [],
   },
   {
-    agent: 'test-engineer',
-    description: 'Verify an existing passing test runs green.',
-    prompt: `Spawn the test-engineer agent with this task: "Run exactly this command from the repository root and report PASS/FAIL based on exit code and final summary: 'npx vitest run packages/core/src/utils/paths.test.ts'. Do not modify any code. Work directory: ${CWD}". Relay its output verbatim.`,
-    expectHeaders: [],
-    expectOneOf: ['PASS', 'passed', 'green'],
+    agent: 'test-runner',
+    description: 'Run an existing green test and report PASS with evidence.',
+    prompt: `Spawn the test-runner agent with this task: "Run exactly this command from the repository root: 'npx vitest run packages/core/src/utils/paths.test.ts'. Working directory: ${CWD}". Relay its full output (Verdict / Command / Summary / Evidence) verbatim.`,
+    expectHeaders: ['## Verdict', '## Summary'],
+    expectOneOf: ['PASS'],
     forbiddenMarkers: [],
   },
 ];

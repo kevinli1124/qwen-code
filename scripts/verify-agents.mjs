@@ -36,6 +36,11 @@ const EXPECTED_AGENTS = {
     tools: ['read_file', 'edit', 'write_file', 'glob', 'grep_search', 'run_shell_command', 'skill', 'web_fetch', 'web_search'],
     forbidden: [],
   },
+  'test-runner': {
+    readOnly: false, // has shell
+    tools: ['read_file', 'grep_search', 'glob', 'list_directory', 'run_shell_command', 'ask_user_question'],
+    forbidden: ['edit', 'write_file'],
+  },
 };
 
 const config = new Config({
