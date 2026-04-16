@@ -38,19 +38,19 @@ const TESTS = [
   {
     agent: 'debugger',
     description: 'Diagnose a fake bug symptom, read-only access.',
-    prompt: `Spawn the debugger agent to analyze this symptom: "loadToolDiscoveryCache returns null even though a fresh cache file exists". Point it at ${path.resolve(CWD, 'packages/core/src/tools/toolDiscoveryCache.ts')}. It should examine readToolDiscoveryCache (line ~75) and explain the invalidation conditions in the expected Root Cause / Evidence / Confidence format. After it returns, relay its output verbatim.`,
-    expectHeaders: ['## Root Cause', '## Confidence'],
+    prompt: `Spawn the debugger agent to analyze this symptom: "isSubpathSafe returns true even when the resolved child path is outside the resolved parent, when realpathSync throws partway through". Point it at ${path.resolve(CWD, 'packages/core/src/utils/paths.ts')}. The function lives around line 270-290. Explain in the expected Root Cause / Evidence / Confidence format. After it returns, relay its output verbatim.`,
+    expectHeaders: ['## Root Cause'],
     forbiddenMarkers: ['## Changes', 'edit applied', 'Applying fix'],
   },
   {
     agent: 'implementer',
-    description: 'A trivial bounded change (no-op verification target).',
-    prompt: `Spawn the implementer agent with this task: "Add a short JSDoc comment above the getCacheDir function in ${path.resolve(CWD, 'packages/core/src/tools/toolDiscoveryCache.ts')}. The comment should say 'Returns the directory where cache files live.' — exactly that, one line." After it returns, relay its Result / Changes / Verification output verbatim.`,
+    description: 'A trivial bounded change on an existing file.',
+    prompt: `Spawn the implementer agent with this task: "Add exactly one short JSDoc comment line ('/** Clears the realpath cache; exposed for tests. */') immediately above the 'export function clearRealpathCache' function in ${path.resolve(CWD, 'packages/core/src/utils/paths.ts')}. Do not change anything else." After it returns, relay its Result / Changes / Verification output verbatim.`,
     expectHeaders: ['## Result', '## Changes'],
     forbiddenMarkers: [],
     cleanup: async () => {
       // Revert whatever the implementer did.
-      await run('git', ['checkout', '--', 'packages/core/src/tools/toolDiscoveryCache.ts']);
+      await run('git', ['checkout', '--', 'packages/core/src/utils/paths.ts']);
     },
   },
   {
@@ -64,7 +64,7 @@ const TESTS = [
   {
     agent: 'test-engineer',
     description: 'Verify an existing passing test runs green.',
-    prompt: `Spawn the test-engineer agent with this task: "Run the tests in packages/core/src/tools/toolDiscoveryCache.test.ts and report PASS/FAIL. Do not modify any code." Relay its output verbatim.`,
+    prompt: `Spawn the test-engineer agent with this task: "Run exactly this command from the repository root and report PASS/FAIL based on exit code and final summary: 'npx vitest run packages/core/src/utils/paths.test.ts'. Do not modify any code. Work directory: ${CWD}". Relay its output verbatim.`,
     expectHeaders: [],
     expectOneOf: ['PASS', 'passed', 'green'],
     forbiddenMarkers: [],
@@ -91,7 +91,7 @@ async function runTest(test) {
   const startMs = Date.now();
   const { code, stdout, stderr } = await run(
     'node',
-    [CLI, '-p', test.prompt, '--approval-mode', 'auto_edit'],
+    [CLI, '-p', test.prompt, '--yolo'],
     { timeout: 240000 },
   );
   const elapsed = Math.round((Date.now() - startMs) / 1000);
@@ -103,10 +103,15 @@ async function runTest(test) {
     console.log(`\n--- STDERR ---\n${stderr}\n--- END STDERR ---`);
   }
 
-  // Shape validation
+  // Shape validation — accept either "## Header" or "Header:" prose form
   const problems = [];
   for (const h of test.expectHeaders ?? []) {
-    if (!stdout.includes(h)) problems.push(`missing expected header "${h}"`);
+    const headerText = h.replace(/^#+\s*/, '');
+    const mdForm = new RegExp(`^##\\s*${headerText}\\b`, 'm');
+    const proseForm = new RegExp(`^${headerText}:\\s`, 'm');
+    if (!mdForm.test(stdout) && !proseForm.test(stdout)) {
+      problems.push(`missing expected header "${h}" (neither "## ${headerText}" nor "${headerText}:" form found)`);
+    }
   }
   if (test.expectOneOf && !test.expectOneOf.some((m) => stdout.includes(m))) {
     problems.push(`none of expected markers found: ${test.expectOneOf.join(' | ')}`);
