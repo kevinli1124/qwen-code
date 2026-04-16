@@ -96,12 +96,40 @@ export class OpenAIContentGenerator implements ContentGenerator {
         error,
       );
 
-      // Fallback to original simple method
-      const content = JSON.stringify(request.contents);
-      const totalTokens = Math.ceil(content.length / 4); // Rough estimate: 1 token ≈ 4 characters
-
+      // Fallback: count text characters only (skip inlineData/fileData
+      // binary payloads and tool-call JSON to avoid serializing the whole
+      // request — large images/files would inflate the estimate drastically).
+      let textLength = 0;
+      const contents = request.contents;
+      if (Array.isArray(contents)) {
+        for (const content of contents) {
+          if (typeof content === 'string') {
+            textLength += content.length;
+          } else if (
+            content &&
+            typeof content === 'object' &&
+            'parts' in content &&
+            content.parts
+          ) {
+            for (const part of content.parts) {
+              if (typeof (part as unknown) === 'string') {
+                textLength += (part as unknown as string).length;
+              } else if (
+                part &&
+                typeof part === 'object' &&
+                'text' in part &&
+                typeof part.text === 'string'
+              ) {
+                textLength += part.text.length;
+              }
+            }
+          }
+        }
+      } else if (typeof contents === 'string') {
+        textLength = contents.length;
+      }
       return {
-        totalTokens,
+        totalTokens: Math.ceil(textLength / 4),
       };
     }
   }
