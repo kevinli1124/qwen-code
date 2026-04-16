@@ -25,6 +25,8 @@
     "dev": "node scripts/dev.js",
     "debug": "cross-env DEBUG=1 node --inspect-brk scripts/start.js",
     "generate": "node scripts/generate-git-commit-info.js",
+    "verify:agents": "node scripts/verify-agents.mjs",
+    "test:agents": "node scripts/test-agents.mjs",
     "generate:settings-schema": "tsx scripts/generate-settings-schema.ts",
     "build": "node scripts/build.js",
     "build-and-start": "npm run build && npm run start",
