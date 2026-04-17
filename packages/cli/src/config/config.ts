@@ -743,14 +743,40 @@ export async function loadCliConfig(
     outputLanguageFilePath = globalOutputLanguagePath;
   }
 
-  // Automatically load soul.md (personality overlay) if it exists
+  // Automatically load soul.md (personality overlay) if it exists.
+  // Project-level takes precedence over global. soul.md is injected into the
+  // LLM system context, so we cap size and surface the source on startup to
+  // reduce prompt-injection surface from untrusted files.
+  const SOUL_MAX_BYTES = 8 * 1024;
   const projectSoulPath = path.join(projectStorage.getQwenDir(), 'soul.md');
   const globalSoulPath = path.join(Storage.getGlobalQwenDir(), 'soul.md');
   let soulFilePath: string | undefined;
+  let soulSource: 'project' | 'global' | undefined;
   if (fs.existsSync(projectSoulPath)) {
     soulFilePath = projectSoulPath;
+    soulSource = 'project';
   } else if (fs.existsSync(globalSoulPath)) {
     soulFilePath = globalSoulPath;
+    soulSource = 'global';
+  }
+  if (soulFilePath) {
+    try {
+      const size = fs.statSync(soulFilePath).size;
+      if (size > SOUL_MAX_BYTES) {
+        console.warn(
+          `[soul] ${soulFilePath} is ${size} bytes (> ${SOUL_MAX_BYTES}); skipping to avoid prompt bloat.`,
+        );
+        soulFilePath = undefined;
+        soulSource = undefined;
+      } else if (soulSource === 'project') {
+        console.warn(
+          `[soul] project-level soul.md loaded from ${soulFilePath} (personality overlay is injected into system context).`,
+        );
+      }
+    } catch {
+      soulFilePath = undefined;
+      soulSource = undefined;
+    }
   }
 
   const fileService = new FileDiscoveryService(cwd);
