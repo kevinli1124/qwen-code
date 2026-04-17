@@ -103,6 +103,7 @@ vi.mock('./core/initializer.js', () => ({
     themeError: null,
     shouldOpenAuthDialog: false,
     geminiMdFileCount: 0,
+    needsSetup: false,
   }),
 }));
 
@@ -302,6 +303,7 @@ describe('gemini.tsx main function', () => {
       themeError: null,
       shouldOpenAuthDialog: false,
       geminiMdFileCount: 0,
+      needsSetup: false,
     });
     vi.spyOn(startupWarningsModule, 'getStartupWarnings').mockResolvedValue([]);
     vi.spyOn(
@@ -603,6 +605,7 @@ describe('startInteractiveUI', () => {
       themeError: null,
       shouldOpenAuthDialog: false,
       geminiMdFileCount: 0,
+      needsSetup: false,
     };
 
     await startInteractiveUI(
@@ -637,6 +640,7 @@ describe('startInteractiveUI', () => {
       themeError: null,
       shouldOpenAuthDialog: false,
       geminiMdFileCount: 0,
+      needsSetup: false,
     };
 
     // Enable auto-update explicitly (opt-in since default is now false)
@@ -688,6 +692,7 @@ describe('startInteractiveUI', () => {
       themeError: null,
       shouldOpenAuthDialog: false,
       geminiMdFileCount: 0,
+      needsSetup: false,
     };
 
     await startInteractiveUI(

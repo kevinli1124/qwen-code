@@ -1212,7 +1212,7 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
       ) : showYoloStyling ? (
         '*'
       ) : (
-        '>'
+        config.getAgentName() ?? '>'
       )}{' '}
     </Text>
   );

@@ -87,6 +87,7 @@ import { useVim } from './hooks/vim.js';
 import { isBtwCommand } from './utils/commandUtils.js';
 import { type LoadedSettings, SettingScope } from '../config/settings.js';
 import { type InitializationResult } from '../core/initializer.js';
+import { SetupWizard } from './components/setup/SetupWizard.js';
 import { useFocus } from './hooks/useFocus.js';
 import { useBracketedPaste } from './hooks/useBracketedPaste.js';
 import { useKeypress, type Key } from './hooks/useKeypress.js';
@@ -167,6 +168,9 @@ const SHELL_HEIGHT_PADDING = 10;
 
 export const AppContainer = (props: AppContainerProps) => {
   const { settings, config, initializationResult } = props;
+  const [showWizard, setShowWizard] = useState(
+    initializationResult.needsSetup,
+  );
   const historyManager = useHistory();
   useMemoryMonitor(historyManager);
   const [debugMessage, setDebugMessage] = useState<string>('');
@@ -2210,6 +2214,16 @@ export const AppContainer = (props: AppContainerProps) => {
     () => ({ compactMode, frozenSnapshot }),
     [compactMode, frozenSnapshot],
   );
+
+  if (showWizard) {
+    return (
+      <SetupWizard
+        config={config}
+        settings={settings}
+        onComplete={(_agentName) => setShowWizard(false)}
+      />
+    );
+  }
 
   return (
     <UIStateContext.Provider value={uiState}>

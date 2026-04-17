@@ -21,6 +21,7 @@ export interface InitializationResult {
   themeError: string | null;
   shouldOpenAuthDialog: boolean;
   geminiMdFileCount: number;
+  needsSetup: boolean;
 }
 
 /**
@@ -64,10 +65,13 @@ export async function initializeApp(
       .catch(() => {});
   }
 
+  const needsSetup = settings.merged.general?.setupCompleted !== true;
+
   return {
     authError,
     themeError,
     shouldOpenAuthDialog,
     geminiMdFileCount: config.getGeminiMdFileCount(),
+    needsSetup,
   };
 }

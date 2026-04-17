@@ -386,6 +386,7 @@ export interface ConfigParameters {
   model?: string;
   outputLanguageFilePath?: string;
   soulFilePath?: string;
+  agentName?: string;
   maxSessionTurns?: number;
   clearContextOnIdle?: ClearContextOnIdleSettings;
   sessionTokenLimit?: number;
@@ -571,6 +572,7 @@ export class Config {
   private readonly bugCommand: BugCommandSettings | undefined;
   private readonly outputLanguageFilePath?: string;
   private readonly soulFilePath?: string;
+  private readonly agentName?: string;
   private readonly noBrowser: boolean;
   private readonly folderTrustFeature: boolean;
   private readonly folderTrust: boolean;
@@ -691,6 +693,7 @@ export class Config {
     this.usageStatisticsEnabled = params.usageStatisticsEnabled ?? false;
     this.outputLanguageFilePath = params.outputLanguageFilePath;
     this.soulFilePath = params.soulFilePath;
+    this.agentName = params.agentName;
 
     this.fileFiltering = {
       respectGitIgnore: params.fileFiltering?.respectGitIgnore ?? true,
@@ -1861,6 +1864,10 @@ export class Config {
 
   getUsageStatisticsEnabled(): boolean {
     return this.usageStatisticsEnabled;
+  }
+
+  getAgentName(): string | undefined {
+    return this.agentName;
   }
 
   getExtensionContextFilePaths(): string[] {

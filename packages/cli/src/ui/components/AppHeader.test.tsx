@@ -34,6 +34,7 @@ const createMockConfig = (overrides = {}) => ({
   getBlockedMcpServers: vi.fn(() => []),
   getDebugMode: vi.fn(() => false),
   getScreenReader: vi.fn(() => false),
+  getAgentName: vi.fn(() => undefined),
   ...overrides,
 });
 

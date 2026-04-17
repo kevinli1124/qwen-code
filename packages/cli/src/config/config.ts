@@ -1094,6 +1094,7 @@ export async function loadCliConfig(
     model: resolvedModel,
     outputLanguageFilePath,
     soulFilePath,
+    agentName: settings.general?.agentName,
     sessionTokenLimit: settings.model?.sessionTokenLimit ?? -1,
     maxSessionTurns:
       argv.maxSessionTurns ?? settings.model?.maxSessionTurns ?? -1,

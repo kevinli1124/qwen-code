@@ -68,6 +68,7 @@ export const AppHeader = ({ version }: AppHeaderProps) => {
           authDisplayType={authDisplayType}
           model={model}
           workingDirectory={targetDir}
+          agentName={config.getAgentName()}
         />
       )}
       {showTips && <Tips />}

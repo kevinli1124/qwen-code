@@ -30,6 +30,7 @@ interface HeaderProps {
   authDisplayType?: AuthDisplayType;
   model: string;
   workingDirectory: string;
+  agentName?: string;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -38,6 +39,7 @@ export const Header: React.FC<HeaderProps> = ({
   authDisplayType,
   model,
   workingDirectory,
+  agentName,
 }) => {
   const { columns: terminalWidth } = useTerminalSize();
 
@@ -134,10 +136,10 @@ export const Header: React.FC<HeaderProps> = ({
         flexGrow={showLogo ? 0 : 1}
         width={showLogo ? availableInfoPanelWidth : undefined}
       >
-        {/* Title line: >_ Qwen Code (v{version}) */}
+        {/* Title line: >_ AgentName (v{version}) */}
         <Text>
           <Text bold color={theme.text.accent}>
-            &gt;_ Qwen Code
+            &gt;_ {agentName ?? 'Qwen Code'}
           </Text>
           <Text color={theme.text.secondary}> (v{version})</Text>
         </Text>
