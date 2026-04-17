@@ -743,6 +743,16 @@ export async function loadCliConfig(
     outputLanguageFilePath = globalOutputLanguagePath;
   }
 
+  // Automatically load soul.md (personality overlay) if it exists
+  const projectSoulPath = path.join(projectStorage.getQwenDir(), 'soul.md');
+  const globalSoulPath = path.join(Storage.getGlobalQwenDir(), 'soul.md');
+  let soulFilePath: string | undefined;
+  if (fs.existsSync(projectSoulPath)) {
+    soulFilePath = projectSoulPath;
+  } else if (fs.existsSync(globalSoulPath)) {
+    soulFilePath = globalSoulPath;
+  }
+
   const fileService = new FileDiscoveryService(cwd);
 
   const includeDirectories = (settings.context?.includeDirectories || [])
@@ -1083,6 +1093,7 @@ export async function loadCliConfig(
     bugCommand: settings.advanced?.bugCommand,
     model: resolvedModel,
     outputLanguageFilePath,
+    soulFilePath,
     sessionTokenLimit: settings.model?.sessionTokenLimit ?? -1,
     maxSessionTurns:
       argv.maxSessionTurns ?? settings.model?.maxSessionTurns ?? -1,

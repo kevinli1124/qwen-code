@@ -245,6 +245,20 @@ describe('Configuration Integration Tests', () => {
         outputLanguageFilePath,
       );
     });
+
+    it('should correctly store and return extension context file paths with soulFilePath', () => {
+      const soulFilePath = '/path/to/soul.md';
+      const configParams: ConfigParameters = {
+        cwd: '/tmp',
+        generationConfig: TEST_CONTENT_GENERATOR_CONFIG,
+        embeddingModel: 'test-embedding-model',
+        targetDir: tempDir,
+        debugMode: false,
+        soulFilePath,
+      };
+      const config = new Config(configParams);
+      expect(config.getExtensionContextFilePaths()).toContain(soulFilePath);
+    });
   });
 
   describe('Approval Mode Integration Tests', () => {

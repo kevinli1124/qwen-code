@@ -385,6 +385,7 @@ export interface ConfigParameters {
   bugCommand?: BugCommandSettings;
   model?: string;
   outputLanguageFilePath?: string;
+  soulFilePath?: string;
   maxSessionTurns?: number;
   clearContextOnIdle?: ClearContextOnIdleSettings;
   sessionTokenLimit?: number;
@@ -569,6 +570,7 @@ export class Config {
   private readonly cwd: string;
   private readonly bugCommand: BugCommandSettings | undefined;
   private readonly outputLanguageFilePath?: string;
+  private readonly soulFilePath?: string;
   private readonly noBrowser: boolean;
   private readonly folderTrustFeature: boolean;
   private readonly folderTrust: boolean;
@@ -688,6 +690,7 @@ export class Config {
     };
     this.usageStatisticsEnabled = params.usageStatisticsEnabled ?? false;
     this.outputLanguageFilePath = params.outputLanguageFilePath;
+    this.soulFilePath = params.soulFilePath;
 
     this.fileFiltering = {
       respectGitIgnore: params.fileFiltering?.respectGitIgnore ?? true,
@@ -1867,6 +1870,7 @@ export class Config {
     return [
       ...extensionContextFilePaths,
       ...(this.outputLanguageFilePath ? [this.outputLanguageFilePath] : []),
+      ...(this.soulFilePath ? [this.soulFilePath] : []),
     ];
   }
 
