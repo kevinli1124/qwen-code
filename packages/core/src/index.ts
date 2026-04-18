@@ -100,6 +100,22 @@ export * from './tools/write-file.js';
 export * from './tools/cron-create.js';
 export * from './tools/cron-list.js';
 export * from './tools/cron-delete.js';
+export * from './tools/trigger-create.js';
+export * from './tools/trigger-list.js';
+export * from './tools/trigger-delete.js';
+export * from './tools/trigger-toggle.js';
+export * from './tools/memory-write.js';
+export * from './tools/memory-remove.js';
+export * from './memory/types.js';
+export { MemoryStore } from './memory/memory-store.js';
+export * from './triggers/types.js';
+export { TriggerManager } from './triggers/trigger-manager.js';
+export { BaseTrigger } from './triggers/base-trigger.js';
+export { CronTrigger } from './triggers/cron-trigger.js';
+export { FileTrigger } from './triggers/file-trigger.js';
+export { WebhookTrigger } from './triggers/webhook-trigger.js';
+export { ChatTrigger } from './triggers/chat-trigger.js';
+export { SystemTrigger } from './triggers/system-trigger.js';
 
 // ============================================================================
 // Services

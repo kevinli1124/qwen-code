@@ -634,6 +634,30 @@ export class SubagentManager {
     try {
       const runtimeConfig = this.convertToRuntimeConfig(config);
 
+      // Append memory context to the subagent's system prompt:
+      //   - agent-scoped memories (`.qwen/memory/<...>` with `agent: <name>`) are
+      //     expanded fully, since they were specifically tagged for this agent.
+      //   - the general memory index is appended as hooks only, so the subagent
+      //     can decide to `read_file` further memories when relevant.
+      // Failure here is non-fatal — fork should still succeed without memory.
+      try {
+        const suffix = await this.composeAgentMemorySuffix(
+          config.name,
+          runtimeContext,
+        );
+        if (suffix) {
+          runtimeConfig.promptConfig.systemPrompt =
+            (runtimeConfig.promptConfig.systemPrompt ?? '').trimEnd() +
+            '\n\n' +
+            suffix;
+        }
+      } catch (err) {
+        debugLogger.warn(
+          `Failed to compose memory suffix for "${config.name}":`,
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+
       // When the model selector specifies a different provider, build a
       // per-agent Config with a dedicated ContentGenerator so the subagent
       // talks to the right API without affecting the parent process.
@@ -662,6 +686,78 @@ export class SubagentManager {
       }
       throw error;
     }
+  }
+
+  /**
+   * Builds the memory block appended to a forked subagent's system prompt.
+   *
+   * Layout:
+   *   --- Agent memories: <name> (loaded in full) ---
+   *   <each tagged memory as a section>
+   *   --- End agent memories ---
+   *
+   *   --- Memory index (user): ... ---
+   *   <general user-scope index hooks>
+   *   --- End of memory index (user) ---
+   *   ... (project index if present)
+   *
+   * Returns '' when there is nothing to append. Never throws — callers should
+   * treat absence of memory as harmless.
+   */
+  private async composeAgentMemorySuffix(
+    agentName: string,
+    runtimeContext: Config,
+  ): Promise<string> {
+    // MemoryStore is an optional Config capability; guard for older Config
+    // shapes used in narrow tests.
+    const getStore = (
+      runtimeContext as unknown as {
+        getMemoryStore?: () => {
+          listForAgent: (name: string) => Promise<
+            Array<{
+              name: string;
+              description: string;
+              content: string;
+              title?: string;
+            }>
+          >;
+          loadIndexContent: () => Promise<string>;
+        };
+      }
+    ).getMemoryStore;
+    if (typeof getStore !== 'function') return '';
+
+    const store = getStore.call(runtimeContext);
+    const [agentMemories, generalIndex] = await Promise.all([
+      store.listForAgent(agentName),
+      store.loadIndexContent(),
+    ]);
+
+    const blocks: string[] = [];
+
+    if (agentMemories.length > 0) {
+      const lines: string[] = [
+        `--- Agent memories: ${agentName} (loaded in full) ---`,
+        '',
+        'These memories were tagged for this agent and are relevant on every run.',
+        '',
+      ];
+      for (const m of agentMemories) {
+        const title = m.title ?? m.name;
+        lines.push(`## ${title} — ${m.description}`);
+        lines.push('');
+        lines.push(m.content.trim());
+        lines.push('');
+      }
+      lines.push('--- End agent memories ---');
+      blocks.push(lines.join('\n'));
+    }
+
+    if (generalIndex) {
+      blocks.push(generalIndex);
+    }
+
+    return blocks.join('\n\n');
   }
 
   /**

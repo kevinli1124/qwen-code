@@ -36,6 +36,7 @@ import { planCommand } from '../ui/commands/planCommand.js';
 import { permissionsCommand } from '../ui/commands/permissionsCommand.js';
 import { trustCommand } from '../ui/commands/trustCommand.js';
 import { quitCommand } from '../ui/commands/quitCommand.js';
+import { reloadCommand } from '../ui/commands/reloadCommand.js';
 import { restoreCommand } from '../ui/commands/restoreCommand.js';
 import { resumeCommand } from '../ui/commands/resumeCommand.js';
 import { settingsCommand } from '../ui/commands/settingsCommand.js';
@@ -109,6 +110,7 @@ export class BuiltinCommandLoader implements ICommandLoader {
       permissionsCommand,
       ...(this.config?.getFolderTrust() ? [trustCommand] : []),
       quitCommand,
+      reloadCommand,
       restoreCommand(this.config),
       resumeCommand,
       skillsCommand,

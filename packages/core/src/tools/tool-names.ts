@@ -29,6 +29,12 @@ export const ToolNames = {
   CRON_CREATE: 'cron_create',
   CRON_LIST: 'cron_list',
   CRON_DELETE: 'cron_delete',
+  TRIGGER_CREATE: 'trigger_create',
+  TRIGGER_LIST: 'trigger_list',
+  TRIGGER_DELETE: 'trigger_delete',
+  TRIGGER_TOGGLE: 'trigger_toggle',
+  MEMORY_WRITE: 'memory_write',
+  MEMORY_REMOVE: 'memory_remove',
 } as const;
 
 /**
@@ -56,6 +62,12 @@ export const ToolDisplayNames = {
   CRON_CREATE: 'CronCreate',
   CRON_LIST: 'CronList',
   CRON_DELETE: 'CronDelete',
+  TRIGGER_CREATE: 'TriggerCreate',
+  TRIGGER_LIST: 'TriggerList',
+  TRIGGER_DELETE: 'TriggerDelete',
+  TRIGGER_TOGGLE: 'TriggerToggle',
+  MEMORY_WRITE: 'MemoryWrite',
+  MEMORY_REMOVE: 'MemoryRemove',
 } as const;
 
 // Migration from old tool names to new tool names

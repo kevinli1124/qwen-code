@@ -7,7 +7,6 @@
 import {
   getErrorMessage,
   getAllGeminiMdFilenames,
-  loadServerHierarchicalMemory,
   QWEN_DIR,
 } from '@qwen-code/qwen-code-core';
 import path from 'node:path';
@@ -308,20 +307,13 @@ export const memoryCommand: SlashCommand = {
         try {
           const config = context.services.config;
           if (config) {
-            const { memoryContent, fileCount } =
-              await loadServerHierarchicalMemory(
-                config.getWorkingDir(),
-                config.shouldLoadMemoryFromIncludeDirectories()
-                  ? config.getWorkspaceContext().getDirectories()
-                  : [],
-                config.getFileService(),
-                config.getExtensionContextFilePaths(),
-                config.getFolderTrust(),
-                context.services.settings.merged.context?.importFormat ||
-                  'tree', // Use setting or default to 'tree'
-              );
-            config.setUserMemory(memoryContent);
-            config.setGeminiMdFileCount(fileCount);
+            // Route through Config.refreshHierarchicalMemory so the structured
+            // memory index (.qwen/memory/MEMORY.md) is appended to userMemory
+            // in addition to the QWEN.md hierarchy. Bypassing this (calling
+            // loadServerHierarchicalMemory directly) drops the memory index.
+            await config.refreshHierarchicalMemory();
+            const memoryContent = config.getUserMemory() ?? '';
+            const fileCount = config.getGeminiMdFileCount?.() ?? 0;
 
             const successMessage =
               memoryContent.length > 0

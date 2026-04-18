@@ -19,5 +19,7 @@ export default {
   hooks: 'Hooks',
   'status-line': 'Status Line',
   'scheduled-tasks': 'Scheduled Tasks',
+  triggers: 'Triggers',
+  'triggers-cookbook': 'Triggers Cookbook',
   tips: 'Contextual Tips',
 };

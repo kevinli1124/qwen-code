@@ -68,6 +68,14 @@ import { LspTool } from '../tools/lsp.js';
 import { CronCreateTool } from '../tools/cron-create.js';
 import { CronListTool } from '../tools/cron-list.js';
 import { CronDeleteTool } from '../tools/cron-delete.js';
+import { TriggerCreateTool } from '../tools/trigger-create.js';
+import { TriggerListTool } from '../tools/trigger-list.js';
+import { TriggerDeleteTool } from '../tools/trigger-delete.js';
+import { TriggerToggleTool } from '../tools/trigger-toggle.js';
+import { TriggerManager } from '../triggers/trigger-manager.js';
+import { MemoryWriteTool } from '../tools/memory-write.js';
+import { MemoryRemoveTool } from '../tools/memory-remove.js';
+import { MemoryStore } from '../memory/memory-store.js';
 import type { LspClient } from '../lsp/types.js';
 
 // Other modules
@@ -556,6 +564,8 @@ export class Config {
   private geminiClient!: GeminiClient;
   private baseLlmClient!: BaseLlmClient;
   private cronScheduler: CronScheduler | null = null;
+  private triggerManager: TriggerManager | null = null;
+  private memoryStore: MemoryStore | null = null;
   private readonly fileFiltering: {
     respectGitIgnore: boolean;
     respectQwenIgnore: boolean;
@@ -1047,7 +1057,26 @@ export class Config {
       this.isTrustedFolder(),
       this.getImportFormat(),
     );
-    this.setUserMemory(memoryContent);
+    // Append the structured-memory index (from `.qwen/memory/MEMORY.md` at
+    // user and project scope) so agents can see available memories without
+    // loading every body. Individual memories are loaded on demand via
+    // `read_file` when the hook is relevant.
+    let mergedMemory = memoryContent;
+    try {
+      const indexContent = await this.getMemoryStore().loadIndexContent();
+      if (indexContent) {
+        mergedMemory = memoryContent
+          ? `${memoryContent}\n\n${indexContent}`
+          : indexContent;
+      }
+    } catch (err) {
+      this.debugLogger.warn(
+        'Failed to load memory index:',
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+
+    this.setUserMemory(mergedMemory);
     this.setGeminiMdFileCount(fileCount);
   }
 
@@ -1796,6 +1825,20 @@ export class Config {
     return this.cronScheduler;
   }
 
+  getTriggerManager(): TriggerManager {
+    if (!this.triggerManager) {
+      this.triggerManager = new TriggerManager(this, this.getSubagentManager());
+    }
+    return this.triggerManager;
+  }
+
+  getMemoryStore(): MemoryStore {
+    if (!this.memoryStore) {
+      this.memoryStore = new MemoryStore(this.getProjectRoot());
+    }
+    return this.memoryStore;
+  }
+
   isCronEnabled(): boolean {
     // Cron is experimental and opt-in: enabled via settings or env var
     if (process.env['QWEN_CODE_ENABLE_CRON'] === '1') return true;
@@ -2328,6 +2371,20 @@ export class Config {
       await registerCoreTool(CronListTool, this);
       await registerCoreTool(CronDeleteTool, this);
     }
+
+    // Register unified trigger tools (gated by the same cron flag — the
+    // trigger system is experimental and lives in the same scope).
+    if (this.isCronEnabled()) {
+      await registerCoreTool(TriggerCreateTool, this);
+      await registerCoreTool(TriggerListTool, this);
+      await registerCoreTool(TriggerDeleteTool, this);
+      await registerCoreTool(TriggerToggleTool, this);
+    }
+
+    // Structured memory tools — complement the legacy save_memory (QWEN.md
+    // bullet append) with topic-scoped memory files and an on-demand index.
+    await registerCoreTool(MemoryWriteTool, this);
+    await registerCoreTool(MemoryRemoveTool, this);
 
     if (!options?.skipDiscovery) {
       await registry.discoverAllTools();

@@ -16,11 +16,9 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   getErrorMessage,
-  loadServerHierarchicalMemory,
   QWEN_DIR,
   setGeminiMdFilename,
   type FileDiscoveryService,
-  type LoadServerHierarchicalMemoryResponse,
 } from '@qwen-code/qwen-code-core';
 
 vi.mock('@qwen-code/qwen-code-core', async (importOriginal) => {
@@ -32,7 +30,6 @@ vi.mock('@qwen-code/qwen-code-core', async (importOriginal) => {
       if (error instanceof Error) return error.message;
       return String(error);
     }),
-    loadServerHierarchicalMemory: vi.fn(),
   };
 });
 
@@ -46,7 +43,6 @@ vi.mock('node:fs/promises', () => {
   };
 });
 
-const mockLoadServerHierarchicalMemory = loadServerHierarchicalMemory as Mock;
 const mockReadFile = readFile as unknown as Mock;
 
 describe('memoryCommand', () => {
@@ -380,16 +376,19 @@ describe('memoryCommand', () => {
 
   describe('/memory refresh', () => {
     let refreshCommand: SlashCommand;
-    let mockSetUserMemory: Mock;
-    let mockSetGeminiMdFileCount: Mock;
+    let mockRefreshHierarchicalMemory: Mock;
+    let mockGetUserMemory: Mock;
+    let mockGetGeminiMdFileCount: Mock;
 
     beforeEach(() => {
       refreshCommand = getSubCommand('refresh');
-      mockSetUserMemory = vi.fn();
-      mockSetGeminiMdFileCount = vi.fn();
+      mockRefreshHierarchicalMemory = vi.fn().mockResolvedValue(undefined);
+      mockGetUserMemory = vi.fn().mockReturnValue('');
+      mockGetGeminiMdFileCount = vi.fn().mockReturnValue(0);
       const mockConfig = {
-        setUserMemory: mockSetUserMemory,
-        setGeminiMdFileCount: mockSetGeminiMdFileCount,
+        refreshHierarchicalMemory: mockRefreshHierarchicalMemory,
+        getUserMemory: mockGetUserMemory,
+        getGeminiMdFileCount: mockGetGeminiMdFileCount,
         getWorkingDir: () => '/test/dir',
         getDebugMode: () => false,
         getFileService: () => ({}) as FileDiscoveryService,
@@ -413,17 +412,13 @@ describe('memoryCommand', () => {
           } as LoadedSettings,
         },
       });
-      mockLoadServerHierarchicalMemory.mockClear();
     });
 
     it('should display success message when memory is refreshed with content', async () => {
       if (!refreshCommand.action) throw new Error('Command has no action');
 
-      const refreshResult: LoadServerHierarchicalMemoryResponse = {
-        memoryContent: 'new memory content',
-        fileCount: 2,
-      };
-      mockLoadServerHierarchicalMemory.mockResolvedValue(refreshResult);
+      mockGetUserMemory.mockReturnValue('new memory content');
+      mockGetGeminiMdFileCount.mockReturnValue(2);
 
       await refreshCommand.action(mockContext, '');
 
@@ -435,13 +430,7 @@ describe('memoryCommand', () => {
         expect.any(Number),
       );
 
-      expect(loadServerHierarchicalMemory).toHaveBeenCalledOnce();
-      expect(mockSetUserMemory).toHaveBeenCalledWith(
-        refreshResult.memoryContent,
-      );
-      expect(mockSetGeminiMdFileCount).toHaveBeenCalledWith(
-        refreshResult.fileCount,
-      );
+      expect(mockRefreshHierarchicalMemory).toHaveBeenCalledOnce();
 
       expect(mockContext.ui.addItem).toHaveBeenCalledWith(
         {
@@ -455,14 +444,12 @@ describe('memoryCommand', () => {
     it('should display success message when memory is refreshed with no content', async () => {
       if (!refreshCommand.action) throw new Error('Command has no action');
 
-      const refreshResult = { memoryContent: '', fileCount: 0 };
-      mockLoadServerHierarchicalMemory.mockResolvedValue(refreshResult);
+      mockGetUserMemory.mockReturnValue('');
+      mockGetGeminiMdFileCount.mockReturnValue(0);
 
       await refreshCommand.action(mockContext, '');
 
-      expect(loadServerHierarchicalMemory).toHaveBeenCalledOnce();
-      expect(mockSetUserMemory).toHaveBeenCalledWith('');
-      expect(mockSetGeminiMdFileCount).toHaveBeenCalledWith(0);
+      expect(mockRefreshHierarchicalMemory).toHaveBeenCalledOnce();
 
       expect(mockContext.ui.addItem).toHaveBeenCalledWith(
         {
@@ -477,13 +464,11 @@ describe('memoryCommand', () => {
       if (!refreshCommand.action) throw new Error('Command has no action');
 
       const error = new Error('Failed to read memory files.');
-      mockLoadServerHierarchicalMemory.mockRejectedValue(error);
+      mockRefreshHierarchicalMemory.mockRejectedValue(error);
 
       await refreshCommand.action(mockContext, '');
 
-      expect(loadServerHierarchicalMemory).toHaveBeenCalledOnce();
-      expect(mockSetUserMemory).not.toHaveBeenCalled();
-      expect(mockSetGeminiMdFileCount).not.toHaveBeenCalled();
+      expect(mockRefreshHierarchicalMemory).toHaveBeenCalledOnce();
 
       expect(mockContext.ui.addItem).toHaveBeenCalledWith(
         {
@@ -515,7 +500,7 @@ describe('memoryCommand', () => {
         expect.any(Number),
       );
 
-      expect(loadServerHierarchicalMemory).not.toHaveBeenCalled();
+      expect(mockRefreshHierarchicalMemory).not.toHaveBeenCalled();
     });
   });
 });

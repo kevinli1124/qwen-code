@@ -12,6 +12,7 @@ import type {
 } from '@google/genai';
 import type {
   Config,
+  CronJob,
   GeminiChat,
   ToolCallConfirmationDetails,
   ToolResult,
@@ -263,7 +264,7 @@ export class Session implements SessionContext {
     try {
       const result = await this.#executePrompt(params, pendingSend);
       this.pendingPrompt = null;
-      this.#startCronSchedulerIfNeeded();
+      await this.#startCronSchedulerIfNeeded();
       // Drain any cron prompts that queued while the prompt was active
       void this.#drainCronQueue();
       return result;
@@ -305,6 +306,20 @@ export class Session implements SessionContext {
 
         // record user message for session management
         this.config.getChatRecordingService()?.recordUserMessage(promptText);
+
+        // Fan out to chat-kind triggers. Runs concurrently with the main
+        // prompt — each matching trigger forks its own subagent.
+        if (this.config.isCronEnabled() && promptText) {
+          void this.config
+            .getTriggerManager()
+            .evaluateChatMessage(promptText)
+            .catch((err: unknown) => {
+              debugLogger.warn(
+                'evaluateChatMessage failed:',
+                err instanceof Error ? err.message : String(err),
+              );
+            });
+        }
 
         // Check if the input contains a slash command
         // Extract text from the first text block if present
@@ -462,17 +477,41 @@ export class Session implements SessionContext {
 
   /**
    * Starts the cron scheduler if cron is enabled and jobs exist.
-   * The scheduler runs in the background, pushing fired prompts into
-   * `cronQueue` and triggering `#drainCronQueue`.
+   * Also loads persisted triggers (`.qwen/triggers/`) on first call so their
+   * cron-kind jobs land in the shared scheduler. The onFire callback routes
+   * trigger-owned jobs to `TriggerManager` (which forks a subagent) and
+   * falls back to the legacy `cronQueue` path for plain `CronCreate` jobs.
    */
-  #startCronSchedulerIfNeeded(): void {
+  async #startCronSchedulerIfNeeded(): Promise<void> {
     if (!this.config.isCronEnabled()) return;
+
+    const triggerManager = this.config.getTriggerManager();
+    if (!triggerManager.isStarted) {
+      try {
+        await triggerManager.startAll();
+      } catch (err) {
+        // Non-fatal: triggers are optional. Continue with cron-only path.
+        debugLogger.warn(
+          'TriggerManager.startAll failed:',
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+    }
+
     const scheduler = this.config.getCronScheduler();
     if (scheduler.size === 0) return;
 
-    scheduler.start((job: { prompt: string }) => {
-      this.cronQueue.push(job.prompt);
-      void this.#drainCronQueue();
+    scheduler.start((job: CronJob) => {
+      void (async () => {
+        try {
+          const handled = await triggerManager.tryHandleCronFire(job);
+          if (handled) return;
+        } catch {
+          // Fall through to legacy path on dispatcher error.
+        }
+        this.cronQueue.push(job.prompt);
+        void this.#drainCronQueue();
+      })();
     });
   }
 
