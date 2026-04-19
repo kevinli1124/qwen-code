@@ -4,15 +4,25 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import type { Config } from '../config/config.js';
 import type { CronScheduler } from '../services/cronScheduler.js';
+import type { SubagentManager } from '../subagents/subagent-manager.js';
 import type { TriggerConfig, TriggerContext, TriggerKind } from './types.js';
 
 /**
  * Shared dependencies passed to every trigger instance. Kept as a single
  * object so the factory signature stays stable as new kinds are added.
+ *
+ * `config` and `subagentManager` are optional because some trigger kinds
+ * (cron, file, webhook, chat, system) operate purely through the onFire
+ * callback and let TriggerManager handle the agent fork. MessageTrigger is
+ * the exception — it owns a conversational loop and needs direct access to
+ * fork subagents and read conversation state.
  */
 export interface TriggerDeps {
   cronScheduler: CronScheduler;
+  config?: Config;
+  subagentManager?: SubagentManager;
 }
 
 export type OnFireCallback = (ctx: TriggerContext) => void | Promise<void>;

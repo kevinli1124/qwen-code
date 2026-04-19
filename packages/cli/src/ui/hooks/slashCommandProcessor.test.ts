@@ -166,6 +166,7 @@ describe('useSlashCommandProcessor', () => {
           addConfirmUpdateExtensionRequest: vi.fn(),
           openSubagentCreateDialog: vi.fn(),
           openAgentsManagerDialog: vi.fn(),
+          openSetupGatewayDialog: vi.fn(),
         },
         new Map(), // extensionsUpdateState
         true, // isConfigInitialized

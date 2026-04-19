@@ -116,6 +116,15 @@ export { FileTrigger } from './triggers/file-trigger.js';
 export { WebhookTrigger } from './triggers/webhook-trigger.js';
 export { ChatTrigger } from './triggers/chat-trigger.js';
 export { SystemTrigger } from './triggers/system-trigger.js';
+export { MessageTrigger } from './triggers/message-trigger.js';
+export * from './messaging/types.js';
+export { ConversationStore } from './messaging/conversation-store.js';
+export { MessageDispatcher } from './messaging/dispatcher.js';
+export { TelegramGateway } from './messaging/telegram-gateway.js';
+export {
+  DEFAULT_AGENT_NAME as DEFAULT_MESSAGING_AGENT_NAME,
+  defaultAssistantConfig,
+} from './messaging/default-agent.js';
 
 // ============================================================================
 // Services

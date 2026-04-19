@@ -120,6 +120,7 @@ import { useWelcomeBack } from './hooks/useWelcomeBack.js';
 import { useDialogClose } from './hooks/useDialogClose.js';
 import { useInitializationAuthError } from './hooks/useInitializationAuthError.js';
 import { useSubagentCreateDialog } from './hooks/useSubagentCreateDialog.js';
+import { useSetupGatewayDialog } from './hooks/useSetupGatewayDialog.js';
 import { useAgentsManagerDialog } from './hooks/useAgentsManagerDialog.js';
 import { useExtensionsManagerDialog } from './hooks/useExtensionsManagerDialog.js';
 import { useMcpDialog } from './hooks/useMcpDialog.js';
@@ -168,9 +169,7 @@ const SHELL_HEIGHT_PADDING = 10;
 
 export const AppContainer = (props: AppContainerProps) => {
   const { settings, config, initializationResult } = props;
-  const [showWizard, setShowWizard] = useState(
-    initializationResult.needsSetup,
-  );
+  const [showWizard, setShowWizard] = useState(initializationResult.needsSetup);
   const historyManager = useHistory();
   useMemoryMonitor(historyManager);
   const [debugMessage, setDebugMessage] = useState<string>('');
@@ -577,6 +576,12 @@ export const AppContainer = (props: AppContainerProps) => {
   const { isMcpDialogOpen, openMcpDialog, closeMcpDialog } = useMcpDialog();
   const { isHooksDialogOpen, openHooksDialog, closeHooksDialog } =
     useHooksDialog();
+  const {
+    isSetupGatewayDialogOpen,
+    setupGatewayInitialChannel,
+    openSetupGatewayDialog,
+    closeSetupGatewayDialog,
+  } = useSetupGatewayDialog();
 
   const slashCommandActions = useMemo(
     () => ({
@@ -605,6 +610,7 @@ export const AppContainer = (props: AppContainerProps) => {
       openMcpDialog,
       openHooksDialog,
       openResumeDialog,
+      openSetupGatewayDialog,
     }),
     [
       openAuthDialog,
@@ -625,6 +631,7 @@ export const AppContainer = (props: AppContainerProps) => {
       openMcpDialog,
       openHooksDialog,
       openResumeDialog,
+      openSetupGatewayDialog,
     ],
   );
 
@@ -1854,7 +1861,8 @@ export const AppContainer = (props: AppContainerProps) => {
     isHooksDialogOpen ||
     isApprovalModeDialogOpen ||
     isResumeDialogOpen ||
-    isExtensionsManagerDialogOpen;
+    isExtensionsManagerDialogOpen ||
+    isSetupGatewayDialogOpen;
   dialogsVisibleRef.current = dialogsVisible;
 
   const {
@@ -1972,6 +1980,9 @@ export const AppContainer = (props: AppContainerProps) => {
       isMcpDialogOpen,
       // Hooks dialog
       isHooksDialogOpen,
+      // Messaging gateway setup dialog
+      isSetupGatewayDialogOpen,
+      setupGatewayInitialChannel,
       // Feedback dialog
       isFeedbackDialogOpen,
       // Per-task token tracking
@@ -2079,6 +2090,9 @@ export const AppContainer = (props: AppContainerProps) => {
       isMcpDialogOpen,
       // Hooks dialog
       isHooksDialogOpen,
+      // Messaging gateway setup dialog
+      isSetupGatewayDialogOpen,
+      setupGatewayInitialChannel,
       // Feedback dialog
       isFeedbackDialogOpen,
       // Per-task token tracking
@@ -2140,6 +2154,8 @@ export const AppContainer = (props: AppContainerProps) => {
       openHooksDialog,
       // Hooks dialog
       closeHooksDialog,
+      // Messaging gateway setup dialog
+      closeSetupGatewayDialog,
       // Resume session dialog
       openResumeDialog,
       closeResumeDialog,
@@ -2198,6 +2214,8 @@ export const AppContainer = (props: AppContainerProps) => {
       openHooksDialog,
       // Hooks dialog
       closeHooksDialog,
+      // Messaging gateway setup dialog
+      closeSetupGatewayDialog,
       // Resume session dialog
       openResumeDialog,
       closeResumeDialog,

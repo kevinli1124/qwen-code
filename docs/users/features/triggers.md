@@ -43,7 +43,7 @@ File ${changedPath} was ${event}d. Review the diff and flag risks.
 
 - `id` — stable slug, letters/digits/dot/dash/underscore, becomes the filename.
 - `name` — human-readable label.
-- `kind` — one of `cron`, `file`, `webhook`, `chat`, `system`.
+- `kind` — one of `cron`, `file`, `webhook`, `chat`, `system`, `message`.
 - `enabled` — defaults to `true`. Disabled triggers stay in the file but don't register at session start.
 - `agentRef` — the [subagent](sub-agents.md) name, resolved from `.qwen/agents/<name>.md`.
 - `spec` — kind-specific parameters (see each kind below).
@@ -200,6 +200,38 @@ Branch changed from ${previous} to ${current}. Summarize open work on the new br
 The first poll after the trigger starts only establishes a baseline; nothing fires until the value actually changes. Transient git errors (not a repo, detached HEAD, etc.) are logged and the next poll retries — a single failure doesn't kill the trigger.
 
 Payload: `{ event, previous, current }` where `previous` and `current` are either commit SHAs or branch names depending on `on`.
+
+### `message` — two-way messaging gateway
+
+Bridges a messaging platform (Telegram in phase 1) to a subagent. Unlike the
+other kinds, the agent's reply is routed back to the same chat and per-chat
+history is persisted under `.qwen/conversations/`.
+
+```yaml
+---
+id: telegram
+name: Telegram personal assistant
+kind: message
+enabled: true
+spec:
+  channel: telegram
+---
+```
+
+- `spec.channel` — `telegram` (only supported channel in phase 1).
+- `spec.allowedUserIds` — optional list of sender ids. Falls back to
+  `TELEGRAM_ALLOWED_USER_IDS` env. Empty = accept everyone (dangerous for
+  public bots).
+- `spec.historyWindow` — `{ maxMessages, maxChars }`; defaults
+  `{ 20, 8000 }`.
+- `spec.promptPrefix`, `spec.errorReply` — optional UX knobs.
+- `agentRef` — optional for this kind. Omit to use the built-in default
+  assistant.
+
+Payload passed to `onFire` for observability: `{ channel, chatId, senderId }`
+(the dispatcher runs its own full pipeline in parallel). See the
+[messaging gateway guide](messaging.md) for the Telegram BotFather
+walkthrough, systemd examples, and spec reference.
 
 ## Prompt templates
 

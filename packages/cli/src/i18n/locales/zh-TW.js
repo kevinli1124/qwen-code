@@ -1832,4 +1832,141 @@ export default {
     '未處於規劃模式。請先使用 "/plan" 進入規劃模式。',
 
   "Set up Qwen Code's status line UI": '設定 Qwen Code 的狀態列',
+
+  // ============================================================================
+  // /setup-gateway — Messaging gateway wizard
+  // ============================================================================
+  'Messaging gateway setup': '訊息閘道設定',
+  'Values you enter here stay local — saved to ~/.qwen/settings.json, never sent to the model.':
+    '此處輸入的內容僅保留在本機 — 儲存到 ~/.qwen/settings.json，不會傳送給模型。',
+  'Which channel do you want to set up?': '要設定哪一個訊息平台？',
+  'Telegram — long-polling bot (works now)':
+    'Telegram — 長輪詢機器人（已可使用）',
+  'Discord — not yet implemented': 'Discord — 尚未實作',
+  'Slack — not yet implemented': 'Slack — 尚未實作',
+  '↑/↓ to move, Enter to pick, Escape to cancel.':
+    '↑/↓ 移動，Enter 選擇，Escape 取消。',
+  'The {{channel}} gateway is not yet implemented. Nothing was saved.':
+    '{{channel}} 閘道尚未實作，未儲存任何設定。',
+  'Track progress in docs/users/features/messaging.md, or run /setup-gateway to pick a different channel. Press Escape to close.':
+    '請追蹤 docs/users/features/messaging.md 的進度，或執行 /setup-gateway 選擇其他平台。按 Escape 關閉。',
+  'Step 1 / 2 — Bot token (from @BotFather /newbot):':
+    '步驟 1 / 2 — Bot token（從 @BotFather /newbot 取得）：',
+  'paste token, then Enter': '貼上 token 後按 Enter',
+  'The token is shown in plain text so you can verify the paste succeeded. Clear your terminal scrollback after finishing.':
+    'Token 會以明碼顯示以便你確認貼上正確。完成後請清除終端機歷史紀錄（scrollback）。',
+  'That does not look like a Telegram bot token. Format: <digits>:<letters/digits/underscores/dashes>.':
+    '這看起來不像 Telegram bot token。格式應為：<數字>:<字母/數字/底線/連字號>。',
+  'Enter to continue, Escape to cancel.': 'Enter 繼續，Escape 取消。',
+  'Step 2 / 2 — Allowed Telegram user IDs (comma-separated; get yours from @userinfobot).':
+    '步驟 2 / 2 — 允許的 Telegram user ID（逗號分隔；可從 @userinfobot 取得你的 ID）。',
+  'e.g. 123456789, 987654321': '例如：123456789, 987654321',
+  'Leave empty to accept every Telegram user (insecure for public bots). Enter to save and validate, Escape to cancel.':
+    '留空代表接受所有 Telegram 使用者（公開 bot 不建議）。Enter 儲存並驗證，Escape 取消。',
+  'Contacting api.telegram.org/getMe to verify the token…':
+    '正在連線 api.telegram.org/getMe 驗證 token…',
+  'Connected to Telegram as @{{username}}. Credentials saved.':
+    '已以 @{{username}} 身分連線 Telegram。憑證已儲存。',
+  'Restart qwen-code so the MessageTrigger picks up the new credentials. Then send a message to your bot.':
+    '請重新啟動 qwen-code 以讓 MessageTrigger 讀取新憑證，然後傳訊息給你的 bot 測試。',
+  'Press Escape to close.': '按 Escape 關閉。',
+  'Press Escape to close, then re-run /setup-gateway telegram.':
+    '按 Escape 關閉，再執行一次 /setup-gateway telegram。',
+  'HTTP {{status}} — token likely invalid': 'HTTP {{status}} — token 可能無效',
+  'Telegram rejected the token': 'Telegram 拒絕了此 token',
+  'Request timed out ({{ms}}ms)': '請求在 {{ms}}ms 後逾時',
+  'Network error: {{message}}': '網路錯誤：{{message}}',
+  'Failed to save settings: {{message}}': '儲存設定失敗：{{message}}',
+  'Trigger file created: {{file}}': '已建立 trigger 檔：{{file}}',
+  'Trigger file already existed, left untouched: {{file}}':
+    'Trigger 檔已存在，未覆蓋：{{file}}',
+
+  // /setup-gateway — command-level text (description, listProviders)
+  'Scaffold a messaging gateway (Telegram today; Discord/Slack soon) and verify the setup.':
+    '設定訊息閘道（目前支援 Telegram；Discord/Slack 開發中）並驗證連線。',
+  'Messaging gateway providers:': '訊息閘道 Provider：',
+  '[OK]  ': '[可用]',
+  '[TODO]': '[待做]',
+  'Usage:': '用法：',
+  'open the interactive picker': '開啟互動式選單',
+  'jump to a channel (e.g. telegram)': '直接跳到指定平台（例如 telegram）',
+  'write a trigger YAML template instead of opening the dialog':
+    '寫入 trigger YAML 模板檔，不開啟對話框',
+  'sanity-check the setup': '檢查設定是否正確',
+  'reprint this list': '重新顯示此清單',
+  'Unknown channel "{{channel}}". Known: {{list}}.':
+    '未知的平台「{{channel}}」。可用：{{list}}。',
+  'Unknown channel "{{channel}}".': '未知的平台「{{channel}}」。',
+  '{{label}} gateway is on the roadmap but not yet implemented — no scaffold will be written.':
+    '{{label}} 閘道在路線圖上但尚未實作，不會寫入任何檔案。',
+  '{{label}} scaffold failed: {{error}}': '{{label}} 建立失敗：{{error}}',
+  'No gateway providers are available to verify.':
+    '沒有可用的 gateway provider 可驗證。',
+  '{{label}} is not yet implemented — skipping verify.':
+    '{{label}} 尚未實作，跳過驗證。',
+  '{{label}} verify crashed: {{error}}': '{{label}} 驗證失敗：{{error}}',
+  '{{label}} is on the roadmap but not yet implemented. Run /setup-gateway to see the picker.':
+    '{{label}} 在路線圖上但尚未實作。執行 /setup-gateway 開啟選單。',
+
+  // /setup-gateway telegram-setup provider — label, summary, scaffold + verify output
+  Telegram: 'Telegram',
+  'Long-polling bot (via @BotFather). Good fit for personal assistant use from mobile.':
+    '以 long-polling 方式與 Telegram 溝通（需先向 @BotFather 申請）。適合當成從手機呼叫的個人助理。',
+  'Telegram setup': 'Telegram 設定',
+  'No project root is available — is qwen-code being run with a config?':
+    '找不到專案根目錄 — qwen-code 是不是沒有載入設定？',
+  'Trigger file already exists: {{file}}': 'Trigger 檔已存在：{{file}}',
+  'Re-run with `/setup-gateway telegram --scaffold-only --overwrite` to replace it.':
+    '執行 `/setup-gateway telegram --scaffold-only --overwrite` 即可覆蓋。',
+  'Overwrote trigger file: {{file}}': '已覆蓋 trigger 檔：{{file}}',
+  'Wrote trigger template: {{file}}': '已寫入 trigger 模板：{{file}}',
+  'Failed to write {{file}}': '無法寫入 {{file}}',
+  'The trigger system is currently disabled': 'Trigger 系統目前未啟用',
+  'Triggers only run when `experimental.cron: true` is set in settings, or when the env var QWEN_CODE_ENABLE_CRON=1 is exported before launch.':
+    'Trigger 系統需在 settings.json 設 `experimental.cron: true`，或啟動前設定環境變數 QWEN_CODE_ENABLE_CRON=1 才會執行。',
+  'TELEGRAM_BOT_TOKEN is set in the current environment':
+    '目前環境已設定 TELEGRAM_BOT_TOKEN',
+  'Next: set TELEGRAM_BOT_TOKEN (from @BotFather /newbot)':
+    '下一步：設定 TELEGRAM_BOT_TOKEN（從 @BotFather /newbot 取得）',
+  'TELEGRAM_ALLOWED_USER_IDS is set': 'TELEGRAM_ALLOWED_USER_IDS 已設定',
+  'Next: set TELEGRAM_ALLOWED_USER_IDS (comma-separated; get yours from @userinfobot)':
+    '下一步：設定 TELEGRAM_ALLOWED_USER_IDS（逗號分隔；可從 @userinfobot 取得你的 ID）',
+  'Leaving this empty means ANY Telegram user who finds your bot can drive it.':
+    '留空代表任何找到此 bot 的 Telegram 使用者都能使用它。',
+  'Telegram gateway — setup scaffold': 'Telegram 閘道 — 建立設定檔',
+  'Run `/setup-gateway verify telegram` once env vars are set to check the token + connectivity.':
+    '環境變數設定完後，執行 `/setup-gateway verify telegram` 驗證 token 與連線。',
+  'Telegram gateway — verification': 'Telegram 閘道 — 驗證結果',
+  'Trigger file exists: {{file}}': 'Trigger 檔存在：{{file}}',
+  'Trigger file missing: {{file}}': '找不到 trigger 檔：{{file}}',
+  'Run `/setup-gateway telegram` to create it.':
+    '執行 `/setup-gateway telegram` 建立檔案。',
+  'Trigger system is enabled': 'Trigger 系統已啟用',
+  'Trigger system is disabled — triggers will not register':
+    'Trigger 系統未啟用 — triggers 不會註冊',
+  'Set `experimental.cron: true` in settings.json, or export QWEN_CODE_ENABLE_CRON=1, then restart.':
+    '在 settings.json 設定 `experimental.cron: true`，或 export QWEN_CODE_ENABLE_CRON=1，然後重新啟動。',
+  'TELEGRAM_BOT_TOKEN is not set in this process':
+    '此程序未設定 TELEGRAM_BOT_TOKEN',
+  'TELEGRAM_BOT_TOKEN is set but does not look like a valid token':
+    'TELEGRAM_BOT_TOKEN 已設定，但格式看起來不像有效的 token',
+  'Expected format: <digits>:<letters/digits/underscores/dashes>':
+    '預期格式：<數字>:<字母/數字/底線/連字號>',
+  'TELEGRAM_BOT_TOKEN is set': 'TELEGRAM_BOT_TOKEN 已設定',
+  'Connected to Telegram as @{{username}}':
+    '已以 @{{username}} 身分連線 Telegram',
+  'Could not reach Telegram with this token': '此 token 無法連線 Telegram',
+  'TELEGRAM_ALLOWED_USER_IDS is empty — bot is open to any sender':
+    'TELEGRAM_ALLOWED_USER_IDS 為空 — bot 對任何人開放',
+  'Highly recommended for a personal assistant; find your id via @userinfobot.':
+    '個人助理強烈建議設定；可從 @userinfobot 取得你的 ID。',
+  'Allowlist has {{count}} user id(s)': '白名單有 {{count}} 個 user id',
+  'All checks passed. If triggers are already running, send a message to your bot to test end-to-end.':
+    '所有檢查通過。如果 triggers 已在執行，傳訊息給你的 bot 端到端測試。',
+
+  // telegram-setup — getMe error translations (duplicates dialog-layer keys)
+  'Telegram returned HTTP {{status}} — token likely invalid':
+    'Telegram 回傳 HTTP {{status}} — token 可能無效',
+  'Telegram error: {{description}}': 'Telegram 錯誤：{{description}}',
+  'getMe timed out after {{ms}}ms': 'getMe 在 {{ms}}ms 後逾時',
 };

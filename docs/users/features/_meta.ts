@@ -21,5 +21,6 @@ export default {
   'scheduled-tasks': 'Scheduled Tasks',
   triggers: 'Triggers',
   'triggers-cookbook': 'Triggers Cookbook',
+  messaging: 'Messaging Gateway',
   tips: 'Contextual Tips',
 };

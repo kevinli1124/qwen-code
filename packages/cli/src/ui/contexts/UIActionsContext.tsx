@@ -87,6 +87,8 @@ export interface UIActions {
   // Subagent dialogs
   closeSubagentCreateDialog: () => void;
   closeAgentsManagerDialog: () => void;
+  // Messaging gateway setup dialog
+  closeSetupGatewayDialog: () => void;
   // Extensions manager dialog
   closeExtensionsManagerDialog: () => void;
   // MCP dialog

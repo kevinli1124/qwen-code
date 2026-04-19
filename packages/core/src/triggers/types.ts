@@ -12,7 +12,13 @@
  * chat (keyword match in user turn), system (git / process events).
  */
 
-export type TriggerKind = 'cron' | 'file' | 'webhook' | 'chat' | 'system';
+export type TriggerKind =
+  | 'cron'
+  | 'file'
+  | 'webhook'
+  | 'chat'
+  | 'system'
+  | 'message';
 
 export type TriggerLevel = 'project' | 'user' | 'session';
 

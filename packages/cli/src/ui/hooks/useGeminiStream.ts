@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import * as fsSync from 'node:fs';
+import * as os from 'node:os';
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import type {
   Config,
@@ -1813,17 +1815,144 @@ export const useGeminiStream = (
   const cronQueueRef = useRef<string[]>([]);
   const [cronTrigger, setCronTrigger] = useState(0);
 
-  // Start the scheduler on mount, stop on unmount
+  // Start the scheduler + persisted triggers on mount, stop on unmount.
+  //
+  // Two things are wired here:
+  //   1. CronScheduler — shared between the legacy CronCreate flow (feeds
+  //      cronQueue) and the TriggerManager. When a cron fires we ask the
+  //      TriggerManager first; if it owns the job, the subagent fork path
+  //      runs in the background. Otherwise it falls through to the in-REPL
+  //      cronQueue so older behavior stays intact.
+  //   2. TriggerManager.startAll() — registers every .qwen/triggers/*.md
+  //      entry (file watchers, message gateways, system pollers, …). Before
+  //      this wiring existed the interactive mode needed a manual
+  //      `/reload triggers` after launch, which is easy to forget.
   useEffect(() => {
-    if (!config.isCronEnabled()) return;
+    // Ink owns stdout and usually swallows stderr too, so we tee startup
+    // signals to ~/.qwen/logs/triggers.log where they're always readable.
+    // Path + writer are kept lazy so requiring fs doesn't bloat cold start.
+    // Test environments skip the file write to avoid polluting the user's
+    // real log when running vitest locally.
+    const isTest =
+      process.env['NODE_ENV'] === 'test' || !!process.env['VITEST'];
+    const log = (line: string) => {
+      if (!isTest) {
+        try {
+          const logDir = path.join(os.homedir(), '.qwen', 'logs');
+          fsSync.mkdirSync(logDir, { recursive: true });
+          fsSync.appendFileSync(
+            path.join(logDir, 'triggers.log'),
+            `${new Date().toISOString()} ${line}\n`,
+          );
+        } catch {
+          /* best effort */
+        }
+      }
+      process.stderr.write(line + '\n');
+    };
+
+    log('[triggers] useEffect fired');
+
+    if (!config.isCronEnabled()) {
+      log(
+        '[triggers] cron/triggers disabled — set experimental.cron=true in ~/.qwen/settings.json or QWEN_CODE_ENABLE_CRON=1',
+      );
+      return;
+    }
+
+    // Config.initialize() populates subagentManager asynchronously. If the
+    // effect fires before it finishes, poll briefly until ready — we can't
+    // register a MessageTrigger without a SubagentManager to fork
+    // subagents. Cap the wait so we fail loudly rather than hang forever.
+    let cancelled = false;
+    const POLL_MS = 200;
+    const MAX_WAIT_MS = 15000;
+    const waitStart = Date.now();
+    const waitForReady = async (): Promise<boolean> => {
+      while (!cancelled) {
+        if (config.getSubagentManager()) return true;
+        if (Date.now() - waitStart > MAX_WAIT_MS) {
+          log(
+            `[triggers] subagentManager still undefined after ${MAX_WAIT_MS}ms — Config.initialize() never finished; triggers will not auto-start`,
+          );
+          return false;
+        }
+        await new Promise((r) => setTimeout(r, POLL_MS));
+      }
+      return false;
+    };
+
     const scheduler = config.getCronScheduler();
+    const triggerManager = config.getTriggerManager();
+
+    log('[triggers] starting TriggerManager…');
+    void (async () => {
+      if (!config.getSubagentManager()) {
+        log('[triggers] waiting for Config.initialize() to finish…');
+      }
+      const ready = await waitForReady();
+      if (!ready || cancelled) return;
+      log(`[triggers] subagentManager ready after ${Date.now() - waitStart}ms`);
+      await triggerManager.startAll();
+    })()
+      .then(async () => {
+        // listTriggers reads disk — it doesn't tell us whether the trigger
+        // actually registered. TriggerManager.register() catches per-trigger
+        // errors (token missing, invalid spec, network failure during start)
+        // and just logs via debugLogger, which Ink swallows. We reconcile
+        // against runtime state here so the operator sees failures loudly.
+        const configs = await triggerManager.listTriggers({
+          enabled: true,
+          force: true,
+        });
+        const running: typeof configs = [];
+        const failed: typeof configs = [];
+        for (const cfg of configs) {
+          if (triggerManager.getTrigger(cfg.id)) {
+            running.push(cfg);
+          } else {
+            failed.push(cfg);
+          }
+        }
+        log(
+          `[triggers] running ${running.length}/${configs.length}: ${
+            running.map((c) => `${c.kind}/${c.id}`).join(', ') || '(none)'
+          }`,
+        );
+        const errors = triggerManager.getLastRegistrationErrors();
+        for (const f of failed) {
+          const err = errors.get(f.id);
+          log(
+            `[triggers] FAILED to register ${f.kind}/${f.id}: ${err?.message ?? '(unknown reason)'}`,
+          );
+        }
+      })
+      .catch((err: unknown) => {
+        log(
+          `[triggers] startAll failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      });
+
     scheduler.start((job: { prompt: string }) => {
-      cronQueueRef.current.push(job.prompt);
-      setCronTrigger((n) => n + 1);
+      void (async () => {
+        try {
+          const handled = await triggerManager.tryHandleCronFire(job as never);
+          if (handled) return;
+        } catch {
+          // Trigger dispatch error — fall through to the legacy in-REPL path.
+        }
+        cronQueueRef.current.push(job.prompt);
+        setCronTrigger((n) => n + 1);
+      })();
     });
+
     return () => {
+      cancelled = true;
       const summary = scheduler.getExitSummary();
       scheduler.stop();
+      void triggerManager.stopAll().catch(() => {
+        /* shutdown path — nothing useful to do on failure */
+      });
       if (summary) {
         process.stderr.write(summary + '\n');
       }

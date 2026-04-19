@@ -2050,4 +2050,149 @@ export default {
     'Not in plan mode. Use "/plan" to enter plan mode first.',
 
   "Set up Qwen Code's status line UI": "Set up Qwen Code's status line UI",
+
+  // ============================================================================
+  // /setup-gateway — Messaging gateway wizard
+  // ============================================================================
+  'Messaging gateway setup': 'Messaging gateway setup',
+  'Values you enter here stay local — saved to ~/.qwen/settings.json, never sent to the model.':
+    'Values you enter here stay local — saved to ~/.qwen/settings.json, never sent to the model.',
+  'Which channel do you want to set up?':
+    'Which channel do you want to set up?',
+  'Telegram — long-polling bot (works now)':
+    'Telegram — long-polling bot (works now)',
+  'Discord — not yet implemented': 'Discord — not yet implemented',
+  'Slack — not yet implemented': 'Slack — not yet implemented',
+  '↑/↓ to move, Enter to pick, Escape to cancel.':
+    '↑/↓ to move, Enter to pick, Escape to cancel.',
+  'The {{channel}} gateway is not yet implemented. Nothing was saved.':
+    'The {{channel}} gateway is not yet implemented. Nothing was saved.',
+  'Track progress in docs/users/features/messaging.md, or run /setup-gateway to pick a different channel. Press Escape to close.':
+    'Track progress in docs/users/features/messaging.md, or run /setup-gateway to pick a different channel. Press Escape to close.',
+  'Step 1 / 2 — Bot token (from @BotFather /newbot):':
+    'Step 1 / 2 — Bot token (from @BotFather /newbot):',
+  'paste token, then Enter': 'paste token, then Enter',
+  'The token is shown in plain text so you can verify the paste succeeded. Clear your terminal scrollback after finishing.':
+    'The token is shown in plain text so you can verify the paste succeeded. Clear your terminal scrollback after finishing.',
+  'That does not look like a Telegram bot token. Format: <digits>:<letters/digits/underscores/dashes>.':
+    'That does not look like a Telegram bot token. Format: <digits>:<letters/digits/underscores/dashes>.',
+  'Enter to continue, Escape to cancel.':
+    'Enter to continue, Escape to cancel.',
+  'Step 2 / 2 — Allowed Telegram user IDs (comma-separated; get yours from @userinfobot).':
+    'Step 2 / 2 — Allowed Telegram user IDs (comma-separated; get yours from @userinfobot).',
+  'e.g. 123456789, 987654321': 'e.g. 123456789, 987654321',
+  'Leave empty to accept every Telegram user (insecure for public bots). Enter to save and validate, Escape to cancel.':
+    'Leave empty to accept every Telegram user (insecure for public bots). Enter to save and validate, Escape to cancel.',
+  'Contacting api.telegram.org/getMe to verify the token…':
+    'Contacting api.telegram.org/getMe to verify the token…',
+  'Connected to Telegram as @{{username}}. Credentials saved.':
+    'Connected to Telegram as @{{username}}. Credentials saved.',
+  'Restart qwen-code so the MessageTrigger picks up the new credentials. Then send a message to your bot.':
+    'Restart qwen-code so the MessageTrigger picks up the new credentials. Then send a message to your bot.',
+  'Press Escape to close.': 'Press Escape to close.',
+  'Press Escape to close, then re-run /setup-gateway telegram.':
+    'Press Escape to close, then re-run /setup-gateway telegram.',
+  'HTTP {{status}} — token likely invalid':
+    'HTTP {{status}} — token likely invalid',
+  'Telegram rejected the token': 'Telegram rejected the token',
+  'Request timed out ({{ms}}ms)': 'Request timed out ({{ms}}ms)',
+  'Network error: {{message}}': 'Network error: {{message}}',
+  'Failed to save settings: {{message}}':
+    'Failed to save settings: {{message}}',
+  'Trigger file created: {{file}}': 'Trigger file created: {{file}}',
+  'Trigger file already existed, left untouched: {{file}}':
+    'Trigger file already existed, left untouched: {{file}}',
+
+  // /setup-gateway — command-level text
+  'Scaffold a messaging gateway (Telegram today; Discord/Slack soon) and verify the setup.':
+    'Scaffold a messaging gateway (Telegram today; Discord/Slack soon) and verify the setup.',
+  'Messaging gateway providers:': 'Messaging gateway providers:',
+  '[OK]  ': '[OK]  ',
+  '[TODO]': '[TODO]',
+  'Usage:': 'Usage:',
+  'open the interactive picker': 'open the interactive picker',
+  'jump to a channel (e.g. telegram)': 'jump to a channel (e.g. telegram)',
+  'write a trigger YAML template instead of opening the dialog':
+    'write a trigger YAML template instead of opening the dialog',
+  'sanity-check the setup': 'sanity-check the setup',
+  'reprint this list': 'reprint this list',
+  'Unknown channel "{{channel}}". Known: {{list}}.':
+    'Unknown channel "{{channel}}". Known: {{list}}.',
+  'Unknown channel "{{channel}}".': 'Unknown channel "{{channel}}".',
+  '{{label}} gateway is on the roadmap but not yet implemented — no scaffold will be written.':
+    '{{label}} gateway is on the roadmap but not yet implemented — no scaffold will be written.',
+  '{{label}} scaffold failed: {{error}}':
+    '{{label}} scaffold failed: {{error}}',
+  'No gateway providers are available to verify.':
+    'No gateway providers are available to verify.',
+  '{{label}} is not yet implemented — skipping verify.':
+    '{{label}} is not yet implemented — skipping verify.',
+  '{{label}} verify crashed: {{error}}': '{{label}} verify crashed: {{error}}',
+  '{{label}} is on the roadmap but not yet implemented. Run /setup-gateway to see the picker.':
+    '{{label}} is on the roadmap but not yet implemented. Run /setup-gateway to see the picker.',
+
+  // /setup-gateway telegram-setup provider
+  Telegram: 'Telegram',
+  'Long-polling bot (via @BotFather). Good fit for personal assistant use from mobile.':
+    'Long-polling bot (via @BotFather). Good fit for personal assistant use from mobile.',
+  'Telegram setup': 'Telegram setup',
+  'No project root is available — is qwen-code being run with a config?':
+    'No project root is available — is qwen-code being run with a config?',
+  'Trigger file already exists: {{file}}':
+    'Trigger file already exists: {{file}}',
+  'Re-run with `/setup-gateway telegram --scaffold-only --overwrite` to replace it.':
+    'Re-run with `/setup-gateway telegram --scaffold-only --overwrite` to replace it.',
+  'Overwrote trigger file: {{file}}': 'Overwrote trigger file: {{file}}',
+  'Wrote trigger template: {{file}}': 'Wrote trigger template: {{file}}',
+  'Failed to write {{file}}': 'Failed to write {{file}}',
+  'The trigger system is currently disabled':
+    'The trigger system is currently disabled',
+  'Triggers only run when `experimental.cron: true` is set in settings, or when the env var QWEN_CODE_ENABLE_CRON=1 is exported before launch.':
+    'Triggers only run when `experimental.cron: true` is set in settings, or when the env var QWEN_CODE_ENABLE_CRON=1 is exported before launch.',
+  'TELEGRAM_BOT_TOKEN is set in the current environment':
+    'TELEGRAM_BOT_TOKEN is set in the current environment',
+  'Next: set TELEGRAM_BOT_TOKEN (from @BotFather /newbot)':
+    'Next: set TELEGRAM_BOT_TOKEN (from @BotFather /newbot)',
+  'TELEGRAM_ALLOWED_USER_IDS is set': 'TELEGRAM_ALLOWED_USER_IDS is set',
+  'Next: set TELEGRAM_ALLOWED_USER_IDS (comma-separated; get yours from @userinfobot)':
+    'Next: set TELEGRAM_ALLOWED_USER_IDS (comma-separated; get yours from @userinfobot)',
+  'Leaving this empty means ANY Telegram user who finds your bot can drive it.':
+    'Leaving this empty means ANY Telegram user who finds your bot can drive it.',
+  'Telegram gateway — setup scaffold': 'Telegram gateway — setup scaffold',
+  'Run `/setup-gateway verify telegram` once env vars are set to check the token + connectivity.':
+    'Run `/setup-gateway verify telegram` once env vars are set to check the token + connectivity.',
+  'Telegram gateway — verification': 'Telegram gateway — verification',
+  'Trigger file exists: {{file}}': 'Trigger file exists: {{file}}',
+  'Trigger file missing: {{file}}': 'Trigger file missing: {{file}}',
+  'Run `/setup-gateway telegram` to create it.':
+    'Run `/setup-gateway telegram` to create it.',
+  'Trigger system is enabled': 'Trigger system is enabled',
+  'Trigger system is disabled — triggers will not register':
+    'Trigger system is disabled — triggers will not register',
+  'Set `experimental.cron: true` in settings.json, or export QWEN_CODE_ENABLE_CRON=1, then restart.':
+    'Set `experimental.cron: true` in settings.json, or export QWEN_CODE_ENABLE_CRON=1, then restart.',
+  'TELEGRAM_BOT_TOKEN is not set in this process':
+    'TELEGRAM_BOT_TOKEN is not set in this process',
+  'TELEGRAM_BOT_TOKEN is set but does not look like a valid token':
+    'TELEGRAM_BOT_TOKEN is set but does not look like a valid token',
+  'Expected format: <digits>:<letters/digits/underscores/dashes>':
+    'Expected format: <digits>:<letters/digits/underscores/dashes>',
+  'TELEGRAM_BOT_TOKEN is set': 'TELEGRAM_BOT_TOKEN is set',
+  'Connected to Telegram as @{{username}}':
+    'Connected to Telegram as @{{username}}',
+  'Could not reach Telegram with this token':
+    'Could not reach Telegram with this token',
+  'TELEGRAM_ALLOWED_USER_IDS is empty — bot is open to any sender':
+    'TELEGRAM_ALLOWED_USER_IDS is empty — bot is open to any sender',
+  'Highly recommended for a personal assistant; find your id via @userinfobot.':
+    'Highly recommended for a personal assistant; find your id via @userinfobot.',
+  'Allowlist has {{count}} user id(s)': 'Allowlist has {{count}} user id(s)',
+  'All checks passed. If triggers are already running, send a message to your bot to test end-to-end.':
+    'All checks passed. If triggers are already running, send a message to your bot to test end-to-end.',
+
+  // telegram-setup — getMe errors
+  'Telegram returned HTTP {{status}} — token likely invalid':
+    'Telegram returned HTTP {{status}} — token likely invalid',
+  'Telegram error: {{description}}': 'Telegram error: {{description}}',
+  'getMe timed out after {{ms}}ms': 'getMe timed out after {{ms}}ms',
 };

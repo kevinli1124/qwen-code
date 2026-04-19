@@ -400,6 +400,17 @@ export interface ConfigParameters {
   sessionTokenLimit?: number;
   experimentalZedIntegration?: boolean;
   cronEnabled?: boolean;
+  /**
+   * Messaging gateway credentials, sourced from user-scope settings.json.
+   * Never serialized to prompts or project repos; read by MessageTrigger /
+   * TelegramGateway as a fallback when env vars are not set.
+   */
+  messagingCredentials?: {
+    telegram?: {
+      token?: string;
+      allowedUserIds?: readonly string[];
+    };
+  };
   listExtensions?: boolean;
   overrideExtensions?: string[];
   allowedMcpServers?: string[];
@@ -597,6 +608,12 @@ export class Config {
   private readonly cliVersion?: string;
   private readonly experimentalZedIntegration: boolean = false;
   private readonly cronEnabled: boolean = false;
+  private readonly messagingCredentials: {
+    telegram?: {
+      token?: string;
+      allowedUserIds?: readonly string[];
+    };
+  } = {};
   private readonly chatRecordingEnabled: boolean;
   private readonly loadMemoryFromIncludeDirectories: boolean = false;
   private readonly importFormat: 'tree' | 'flat';
@@ -730,6 +747,7 @@ export class Config {
     this.experimentalZedIntegration =
       params.experimentalZedIntegration ?? false;
     this.cronEnabled = params.cronEnabled ?? false;
+    this.messagingCredentials = params.messagingCredentials ?? {};
     this.listExtensions = params.listExtensions ?? false;
     this.overrideExtensions = params.overrideExtensions;
     this.noBrowser = params.noBrowser ?? false;
@@ -1827,7 +1845,11 @@ export class Config {
 
   getTriggerManager(): TriggerManager {
     if (!this.triggerManager) {
-      this.triggerManager = new TriggerManager(this, this.getSubagentManager());
+      // Intentionally omit subagentManager — TriggerManager pulls it lazily
+      // from Config at register time. If we passed it now, we'd snapshot an
+      // undefined reference (Config.initialize() populates subagentManager
+      // asynchronously).
+      this.triggerManager = new TriggerManager(this);
     }
     return this.triggerManager;
   }
@@ -1843,6 +1865,19 @@ export class Config {
     // Cron is experimental and opt-in: enabled via settings or env var
     if (process.env['QWEN_CODE_ENABLE_CRON'] === '1') return true;
     return this.cronEnabled;
+  }
+
+  /**
+   * Returns Telegram bot credentials from user-scope settings, when present.
+   * Callers (MessageTrigger, TelegramGateway) still prefer env vars over
+   * this — env is transient and hardest to accidentally leak into project
+   * repos; settings.json is user-scoped but persistent.
+   */
+  getTelegramCredentials(): {
+    token?: string;
+    allowedUserIds?: readonly string[];
+  } {
+    return this.messagingCredentials.telegram ?? {};
   }
 
   getEnableRecursiveFileSearch(): boolean {

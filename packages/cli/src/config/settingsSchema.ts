@@ -390,7 +390,8 @@ const SETTINGS_SCHEMA = {
         category: 'General',
         requiresRestart: false,
         default: undefined as string | undefined,
-        description: 'Custom name for the AI agent shown in the header and prompt prefix.',
+        description:
+          'Custom name for the AI agent shown in the header and prompt prefix.',
         showInDialog: true,
       },
       setupCompleted: {
@@ -1725,6 +1726,55 @@ const SETTINGS_SCHEMA = {
         description:
           'Enable in-session cron/loop tools (experimental). When enabled, the model can create recurring prompts using cron_create, cron_list, and cron_delete tools. Can also be enabled via QWEN_CODE_ENABLE_CRON=1 environment variable.',
         showInDialog: true,
+      },
+    },
+  },
+
+  messaging: {
+    type: 'object',
+    label: 'Messaging gateways',
+    category: 'Messaging',
+    requiresRestart: true,
+    default: {},
+    description:
+      'Credentials and allowlists for messaging gateways (Telegram today). Prefer storing these in user-scope settings (~/.qwen/settings.json) so they do not land in project repos.',
+    showInDialog: false,
+    properties: {
+      telegram: {
+        type: 'object',
+        label: 'Telegram gateway',
+        category: 'Messaging',
+        requiresRestart: true,
+        default: {},
+        description:
+          'Telegram bot credentials. Env vars TELEGRAM_BOT_TOKEN and TELEGRAM_ALLOWED_USER_IDS take precedence when set.',
+        showInDialog: false,
+        properties: {
+          token: {
+            type: 'string',
+            label: 'Bot token',
+            category: 'Messaging',
+            requiresRestart: true,
+            default: '',
+            description:
+              'Telegram bot token obtained from @BotFather. Treated as sensitive — never displayed in plain text in dialogs.',
+            showInDialog: false,
+          },
+          allowedUserIds: {
+            type: 'array',
+            label: 'Allowed Telegram user IDs',
+            category: 'Messaging',
+            requiresRestart: true,
+            default: [],
+            description:
+              'Array of Telegram user ids (as strings) permitted to drive the bot. Empty = accept every sender (insecure for public bots).',
+            showInDialog: false,
+            items: {
+              type: 'string',
+              description: 'A single Telegram user id.',
+            },
+          },
+        },
       },
     },
   },

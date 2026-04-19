@@ -10,12 +10,13 @@ import { FileTrigger } from './file-trigger.js';
 import { WebhookTrigger } from './webhook-trigger.js';
 import { ChatTrigger } from './chat-trigger.js';
 import { SystemTrigger } from './system-trigger.js';
+import { MessageTrigger } from './message-trigger.js';
 import { TriggerError, TriggerErrorCode, type TriggerConfig } from './types.js';
 
 /**
  * Constructs a trigger instance for the given config. Callers must invoke
  * `trigger.validate()` before `trigger.start()`.
- * Supported kinds: cron, file, webhook, chat, system.
+ * Supported kinds: cron, file, webhook, chat, system, message.
  */
 export function createTrigger(
   cfg: TriggerConfig,
@@ -32,6 +33,8 @@ export function createTrigger(
       return new ChatTrigger(cfg, deps);
     case 'system':
       return new SystemTrigger(cfg, deps);
+    case 'message':
+      return new MessageTrigger(cfg, deps);
     default:
       throw new TriggerError(
         `Unknown trigger kind: ${String(cfg.kind)}`,

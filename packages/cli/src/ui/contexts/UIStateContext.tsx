@@ -133,6 +133,9 @@ export interface UIState {
   // Subagent dialogs
   isSubagentCreateDialogOpen: boolean;
   isAgentsManagerDialogOpen: boolean;
+  // Messaging gateway setup dialog
+  isSetupGatewayDialogOpen: boolean;
+  setupGatewayInitialChannel: string | undefined;
   // Extensions manager dialog
   isExtensionsManagerDialogOpen: boolean;
   // MCP dialog

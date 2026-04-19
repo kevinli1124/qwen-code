@@ -166,7 +166,9 @@ export interface OpenDialogActionReturn {
     | 'resume'
     | 'extensions_manage'
     | 'hooks'
-    | 'mcp';
+    | 'mcp'
+    | 'setup_gateway'
+    | 'setup_gateway_telegram';
 }
 
 /**

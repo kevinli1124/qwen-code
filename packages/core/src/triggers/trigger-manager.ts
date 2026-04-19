@@ -62,11 +62,28 @@ export class TriggerManager {
   private configsCache: Map<TriggerLevel, TriggerConfig[]> | null = null;
   private activeAgentCount = 0;
   private started = false;
+  /**
+   * Registration errors from the last `startAll()` call. Keyed by trigger id,
+   * cleared on the next `startAll()`. Exposed so the host can surface failures
+   * to the operator — `debugLogger.warn` alone gets lost inside Ink.
+   */
+  private lastRegistrationErrors: Map<string, Error> = new Map();
 
   constructor(
     private readonly config: Config,
-    private readonly subagentManager: SubagentManager,
+    /**
+     * Optional explicit override. When undefined, we fetch the current
+     * SubagentManager from Config each time we need it — important because
+     * Config.initialize() populates `subagentManager` asynchronously, and a
+     * TriggerManager built before that would otherwise cache `undefined` and
+     * fail every future `register()` with "host is not wired".
+     */
+    private readonly subagentManagerOverride?: SubagentManager,
   ) {}
+
+  private get subagentManager(): SubagentManager {
+    return this.subagentManagerOverride ?? this.config.getSubagentManager();
+  }
 
   // ─── Lifecycle ──────────────────────────────────────────────
 
@@ -86,20 +103,32 @@ export class TriggerManager {
         await this.unregister(id);
       }
     }
+    this.lastRegistrationErrors.clear();
     for (const cfg of all) {
       if (!this.triggers.has(cfg.id)) {
         try {
           await this.register(cfg);
         } catch (err) {
+          const error = err instanceof Error ? err : new Error(String(err));
+          this.lastRegistrationErrors.set(cfg.id, error);
           debugLogger.warn(
             `Failed to register trigger "${cfg.id}":`,
-            err instanceof Error ? err.message : String(err),
+            error.message,
           );
         }
       }
     }
     this.started = true;
     debugLogger.debug(`Started ${this.triggers.size} triggers.`);
+  }
+
+  /**
+   * Errors thrown by trigger.start() or validate() during the last startAll().
+   * The host uses this to surface real reasons (e.g. "TELEGRAM_BOT_TOKEN is
+   * not set") — bare `debugLogger.warn` is invisible inside Ink's TUI.
+   */
+  getLastRegistrationErrors(): ReadonlyMap<string, Error> {
+    return this.lastRegistrationErrors;
   }
 
   async stopAll(): Promise<void> {
@@ -121,7 +150,11 @@ export class TriggerManager {
         cfg.id,
       );
     }
-    const deps = { cronScheduler: this.config.getCronScheduler() };
+    const deps = {
+      cronScheduler: this.config.getCronScheduler(),
+      config: this.config,
+      subagentManager: this.subagentManager,
+    };
     const trigger = createTrigger(cfg, deps);
     trigger.validate();
     await trigger.start((ctx) => this.handleFire(cfg, ctx));
@@ -289,7 +322,11 @@ export class TriggerManager {
   ): Promise<void> {
     validateConfigShape(cfg);
     // Pre-validate the trigger kind spec (throws TriggerError on bad spec).
-    const deps = { cronScheduler: this.config.getCronScheduler() };
+    const deps = {
+      cronScheduler: this.config.getCronScheduler(),
+      config: this.config,
+      subagentManager: this.subagentManager,
+    };
     const probe = createTrigger(cfg, deps);
     probe.validate();
 
@@ -485,8 +522,16 @@ function parseTriggerContent(
   if (typeof kindRaw !== 'string') {
     throw new Error('missing "kind" in frontmatter');
   }
-  const agentRef = frontmatter['agentRef'];
-  if (typeof agentRef !== 'string' || !agentRef) {
+  const agentRefRaw = frontmatter['agentRef'];
+  // Message triggers may omit agentRef and fall back to the default
+  // conversational assistant; all other kinds must name a subagent.
+  const isMessageKind = kindRaw === 'message';
+  let agentRef: string;
+  if (typeof agentRefRaw === 'string' && agentRefRaw) {
+    agentRef = agentRefRaw;
+  } else if (isMessageKind) {
+    agentRef = '';
+  } else {
     throw new Error('missing "agentRef" in frontmatter');
   }
   const enabled = frontmatter['enabled'] !== false; // default true
@@ -552,7 +597,7 @@ function validateConfigShape(cfg: TriggerConfig): void {
       cfg.id,
     );
   }
-  if (!cfg.agentRef) {
+  if (!cfg.agentRef && cfg.kind !== 'message') {
     throw new TriggerError(
       `Trigger "${cfg.id}" is missing agentRef`,
       TriggerErrorCode.INVALID_CONFIG,

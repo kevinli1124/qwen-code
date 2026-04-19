@@ -763,12 +763,14 @@ export async function loadCliConfig(
     try {
       const size = fs.statSync(soulFilePath).size;
       if (size > SOUL_MAX_BYTES) {
+        // eslint-disable-next-line no-console
         console.warn(
           `[soul] ${soulFilePath} is ${size} bytes (> ${SOUL_MAX_BYTES}); skipping to avoid prompt bloat.`,
         );
         soulFilePath = undefined;
         soulSource = undefined;
       } else if (soulSource === 'project') {
+        // eslint-disable-next-line no-console
         console.warn(
           `[soul] project-level soul.md loaded from ${soulFilePath} (personality overlay is injected into system context).`,
         );
@@ -1126,6 +1128,14 @@ export async function loadCliConfig(
       argv.maxSessionTurns ?? settings.model?.maxSessionTurns ?? -1,
     experimentalZedIntegration: argv.acp || argv.experimentalAcp || false,
     cronEnabled: settings.experimental?.cron ?? false,
+    messagingCredentials: {
+      telegram: {
+        token: settings.messaging?.telegram?.token || undefined,
+        allowedUserIds: settings.messaging?.telegram?.allowedUserIds as
+          | readonly string[]
+          | undefined,
+      },
+    },
     listExtensions: argv.listExtensions || false,
     overrideExtensions: overrideExtensions || argv.extensions,
     noBrowser: !!process.env['NO_BROWSER'],

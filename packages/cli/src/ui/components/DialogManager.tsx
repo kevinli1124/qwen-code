@@ -38,6 +38,7 @@ import { type UseHistoryManagerReturn } from '../hooks/useHistoryManager.js';
 import { IdeTrustChangeDialog } from './IdeTrustChangeDialog.js';
 import { WelcomeBackDialog } from './WelcomeBackDialog.js';
 import { AgentCreationWizard } from './subagents/create/AgentCreationWizard.js';
+import { SetupGatewayDialog } from './setup-gateway/SetupGatewayDialog.js';
 import { AgentsManagerDialog } from './subagents/manage/AgentsManagerDialog.js';
 import { ExtensionsManagerDialog } from './extensions/ExtensionsManagerDialog.js';
 import { MCPManagementDialog } from './mcp/MCPManagementDialog.js';
@@ -340,6 +341,16 @@ export const DialogManager = ({
       <AgentCreationWizard
         onClose={uiActions.closeSubagentCreateDialog}
         config={config}
+      />
+    );
+  }
+
+  if (uiState.isSetupGatewayDialogOpen) {
+    return (
+      <SetupGatewayDialog
+        settings={settings}
+        initialChannel={uiState.setupGatewayInitialChannel}
+        onClose={uiActions.closeSetupGatewayDialog}
       />
     );
   }
