@@ -109,15 +109,35 @@ function normalizePathEnvForWindows(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
 }
 
 /**
- * On Windows with PowerShell, prefix the command with a statement that forces
- * UTF-8 output encoding so that CJK and other non-ASCII characters are emitted
- * as UTF-8 regardless of the system codepage.
+ * On Windows with PowerShell, prefix the command with statements that force
+ * UTF-8 for both console output AND file writes. Without this prefix:
+ *   - `[Console]::OutputEncoding` default is the system OEM codepage (Big5
+ *     cp950 in Taiwan, GBK cp936 in mainland China), which mangles stdout
+ *     when we read it back.
+ *   - `$OutputEncoding` controls what bytes `>` / `|` send downstream —
+ *     default is ASCII in Windows PS 5.1, dropping every non-ASCII char.
+ *   - `$PSDefaultParameterValues['Out-File:Encoding']` — default is
+ *     `Unicode` (UTF-16 LE with BOM) in PS 5.1, so `... > file.txt` produces
+ *     a UTF-16 file. Tools on the receiving end (Linux, most web services)
+ *     see garbage.
+ *   - `Set-Content` / `Add-Content` default to ANSI, which mangles CJK.
+ *
+ * Covering all four lines is the difference between "agent writes files
+ * that open cleanly everywhere" and "agent emits mojibake and gives up".
  */
 function applyPowerShellUtf8Prefix(command: string, shell: string): string {
-  if (os.platform() === 'win32' && shell === 'powershell') {
-    return '[Console]::OutputEncoding=[System.Text.Encoding]::UTF8;' + command;
+  if (os.platform() !== 'win32' || shell !== 'powershell') {
+    return command;
   }
-  return command;
+  const utf8Setup = [
+    '[Console]::OutputEncoding=[System.Text.Encoding]::UTF8',
+    '[Console]::InputEncoding=[System.Text.Encoding]::UTF8',
+    '$OutputEncoding=[System.Text.Encoding]::UTF8',
+    "$PSDefaultParameterValues['Out-File:Encoding']='utf8'",
+    "$PSDefaultParameterValues['Set-Content:Encoding']='utf8'",
+    "$PSDefaultParameterValues['Add-Content:Encoding']='utf8'",
+  ].join(';');
+  return `${utf8Setup};${command}`;
 }
 
 /** A structured result from a shell command execution. */

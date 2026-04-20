@@ -378,7 +378,17 @@ export class WriteFileTool
       ToolDisplayNames.WRITE_FILE,
       `Writes content to a specified file in the local filesystem.
 
-      The user has the ability to modify \`content\`. If modified, this will be stated in the response.`,
+Use this tool for ALL file creation and modification. Do NOT fall back to
+shell commands (\`Out-File\`, \`Set-Content\`, \`Add-Content\`, \`echo > file\`,
+\`tee\`, here-docs, …) to write files — this tool handles encoding (UTF-8 /
+BOM preservation / CJK) correctly across Windows, macOS, and Linux, while
+shell redirects default to system-specific encodings (Windows PowerShell
+5.1 uses UTF-16 LE with BOM for \`>\`, breaking anything that later reads
+the file as UTF-8). The tool also persists the edit through the approval
+and diff-display pipeline; shell redirects bypass that.
+
+The user has the ability to modify \`content\`. If modified, this will be
+stated in the response.`,
       Kind.Edit,
       {
         properties: {

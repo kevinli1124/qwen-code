@@ -636,7 +636,9 @@ describe('ShellExecutionService', () => {
         [
           '-NoProfile',
           '-Command',
-          '[Console]::OutputEncoding=[System.Text.Encoding]::UTF8;Test-Path "C:\\Temp\\"',
+          expect.stringMatching(
+            /^\[Console\]::OutputEncoding=\[System\.Text\.Encoding\]::UTF8;.*Test-Path/,
+          ),
         ],
         expect.any(Object),
       );
@@ -1108,7 +1110,9 @@ describe('ShellExecutionService child_process fallback', () => {
         [
           '-NoProfile',
           '-Command',
-          '[Console]::OutputEncoding=[System.Text.Encoding]::UTF8;Test-Path "C:\\Temp\\"',
+          expect.stringMatching(
+            /^\[Console\]::OutputEncoding=\[System\.Text\.Encoding\]::UTF8;.*Test-Path/,
+          ),
         ],
         expect.objectContaining({
           detached: false,
