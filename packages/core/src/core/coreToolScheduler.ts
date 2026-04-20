@@ -358,6 +358,20 @@ interface CoreToolSchedulerOptions {
    * Optional recording service. If provided, tool results will be recorded.
    */
   chatRecordingService?: ChatRecordingService;
+  /** Fires immediately before a tool invocation's execute() is called. */
+  onToolStart?: (
+    callId: string,
+    name: string,
+    args: Record<string, unknown>,
+    invocation: AnyToolInvocation,
+  ) => void;
+  /** Fires after a tool invocation completes (success or error). */
+  onToolComplete?: (
+    callId: string,
+    name: string,
+    success: boolean,
+    durationMs: number,
+  ) => void;
 }
 
 // ─── Tool Concurrency Helpers ────────────────────────────────
@@ -422,6 +436,8 @@ export class CoreToolScheduler {
   private config: Config;
   private onEditorClose: () => void;
   private chatRecordingService?: ChatRecordingService;
+  private onToolStart?: CoreToolSchedulerOptions['onToolStart'];
+  private onToolComplete?: CoreToolSchedulerOptions['onToolComplete'];
   private isFinalizingToolCalls = false;
   private isScheduling = false;
   private requestQueue: Array<{
@@ -440,6 +456,8 @@ export class CoreToolScheduler {
     this.getPreferredEditor = options.getPreferredEditor;
     this.onEditorClose = options.onEditorClose;
     this.chatRecordingService = options.chatRecordingService;
+    this.onToolStart = options.onToolStart;
+    this.onToolComplete = options.onToolComplete;
   }
 
   private setStatusInternal(
@@ -1516,6 +1534,8 @@ export class CoreToolScheduler {
     }
 
     this.setStatusInternal(callId, 'executing');
+    this.onToolStart?.(callId, toolName, toolInput, invocation);
+    const toolStartMs = Date.now();
 
     const liveOutputCallback = scheduledCall.tool.canUpdateOutput
       ? (outputChunk: ToolResultDisplay) => {
@@ -1649,6 +1669,7 @@ export class CoreToolScheduler {
             ? { modelOverride: toolResult.modelOverride }
             : {}),
         };
+        this.onToolComplete?.(callId, toolName, true, Date.now() - toolStartMs);
         this.setStatusInternal(callId, 'success', successResponse);
       } else {
         // It is a failure
@@ -1676,6 +1697,12 @@ export class CoreToolScheduler {
           scheduledCall.request,
           error,
           toolResult.error.type,
+        );
+        this.onToolComplete?.(
+          callId,
+          toolName,
+          false,
+          Date.now() - toolStartMs,
         );
         this.setStatusInternal(callId, 'error', errorResponse);
       }
@@ -1731,6 +1758,12 @@ export class CoreToolScheduler {
             exceptionErrorMessage += `\n\n${failureHookResult.additionalContext}`;
           }
         }
+        this.onToolComplete?.(
+          callId,
+          toolName,
+          false,
+          Date.now() - toolStartMs,
+        );
         this.setStatusInternal(
           callId,
           'error',

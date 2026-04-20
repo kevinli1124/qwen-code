@@ -804,6 +804,21 @@ export class AgentCore {
       },
       getPreferredEditor: () => undefined,
       onEditorClose: () => {},
+      onToolStart: (callId, name, _args, invocation) => {
+        // Inject parent context into AgentToolInvocation via duck typing to
+        // avoid circular imports (agent.ts imports agent-core.ts).
+        if (name === ToolNames.AGENT) {
+          const maybeAgent = invocation as unknown as Record<string, unknown>;
+          if (typeof maybeAgent['setSpawnContext'] === 'function') {
+            (
+              maybeAgent['setSpawnContext'] as (
+                parentAgentId: string,
+                callId: string,
+              ) => void
+            )(this.subagentId, callId);
+          }
+        }
+      },
     });
 
     // Prepare requests and emit TOOL_CALL events

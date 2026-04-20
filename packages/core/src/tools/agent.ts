@@ -32,6 +32,7 @@ import type {
   AgentFinishEvent,
   AgentErrorEvent,
   AgentApprovalRequestEvent,
+  AgentSpawnEvent,
 } from '../agents/runtime/agent-events.js';
 import { BuiltinAgentRegistry } from '../subagents/builtin-agents.js';
 import { createDebugLogger } from '../utils/debugLogger.js';
@@ -368,6 +369,7 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
   readonly eventEmitter: AgentEventEmitter = new AgentEventEmitter();
   private currentDisplay: AgentResultDisplay | null = null;
   private currentToolCalls: AgentResultDisplay['toolCalls'] = [];
+  private spawnContext?: { parentAgentId: string; parentToolCallId: string };
 
   constructor(
     private readonly config: Config,
@@ -375,6 +377,11 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
     params: AgentParams,
   ) {
     super(params);
+  }
+
+  /** Called by AgentCore (via duck typing) before execute() to wire hierarchy context. */
+  setSpawnContext(parentAgentId: string, parentToolCallId: string): void {
+    this.spawnContext = { parentAgentId, parentToolCallId };
   }
 
   /**
@@ -751,6 +758,17 @@ class AgentToolInvocation extends BaseToolInvocation<AgentParams, ToolResult> {
         agentConfig,
         { eventEmitter: this.eventEmitter },
       );
+
+      // Emit AGENT_SPAWN so consumers can reconstruct the agent hierarchy tree.
+      if (this.spawnContext) {
+        this.eventEmitter.emit(AgentEventType.AGENT_SPAWN, {
+          subagentId: subagent.getCore().subagentId,
+          parentAgentId: this.spawnContext.parentAgentId,
+          parentToolCallId: this.spawnContext.parentToolCallId,
+          subagentType: this.params.subagent_type ?? 'fork',
+          timestamp: Date.now(),
+        } as AgentSpawnEvent);
+      }
 
       // Create context state with the task prompt
       // For fork agents, use the fork directive (with boilerplate) as the task
