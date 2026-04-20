@@ -37,7 +37,8 @@ export type AgentEvent =
   | 'usage_metadata'
   | 'finish'
   | 'error'
-  | 'status_change';
+  | 'status_change'
+  | 'agent_spawn';
 
 export enum AgentEventType {
   START = 'start',
@@ -54,6 +55,7 @@ export enum AgentEventType {
   FINISH = 'finish',
   ERROR = 'error',
   STATUS_CHANGE = 'status_change',
+  AGENT_SPAWN = 'agent_spawn',
 }
 
 // ─── Event Payloads ─────────────────────────────────────────
@@ -181,6 +183,18 @@ export interface AgentStatusChangeEvent {
   timestamp: number;
 }
 
+export interface AgentSpawnEvent {
+  /** ID of the newly spawned subagent. */
+  subagentId: string;
+  /** ID of the parent agent that spawned this one. */
+  parentAgentId: string;
+  /** Tool call ID in the parent agent that triggered this spawn. */
+  parentToolCallId: string;
+  /** Logical subagent type (e.g. "general-purpose", "implementer"). */
+  subagentType: string;
+  timestamp: number;
+}
+
 // ─── Event Map ──────────────────────────────────────────────
 
 /**
@@ -200,6 +214,7 @@ export interface AgentEventMap {
   [AgentEventType.FINISH]: AgentFinishEvent;
   [AgentEventType.ERROR]: AgentErrorEvent;
   [AgentEventType.STATUS_CHANGE]: AgentStatusChangeEvent;
+  [AgentEventType.AGENT_SPAWN]: AgentSpawnEvent;
 }
 
 // ─── Event Emitter ──────────────────────────────────────────
