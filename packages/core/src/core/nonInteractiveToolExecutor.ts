@@ -8,6 +8,7 @@ import type {
   ToolCallRequestInfo,
   ToolCallResponseInfo,
   Config,
+  AnyToolInvocation,
 } from '../index.js';
 import {
   CoreToolScheduler,
@@ -20,6 +21,18 @@ export interface ExecuteToolCallOptions {
   outputUpdateHandler?: OutputUpdateHandler;
   onAllToolCallsComplete?: AllToolCallsCompleteHandler;
   onToolCallsUpdate?: ToolCallsUpdateHandler;
+  onToolStart?: (
+    callId: string,
+    name: string,
+    args: Record<string, unknown>,
+    invocation: AnyToolInvocation,
+  ) => void;
+  onToolComplete?: (
+    callId: string,
+    name: string,
+    success: boolean,
+    durationMs: number,
+  ) => void;
 }
 
 /**
@@ -43,6 +56,8 @@ export async function executeToolCall(
         resolve(completedToolCalls[0].response);
       },
       onToolCallsUpdate: options.onToolCallsUpdate,
+      onToolStart: options.onToolStart,
+      onToolComplete: options.onToolComplete,
       getPreferredEditor: () => undefined,
       onEditorClose: () => {},
     })

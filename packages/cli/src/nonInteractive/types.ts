@@ -466,6 +466,43 @@ export type ControlMessage =
   | CLIControlResponse
   | ControlCancelRequest;
 
+// ─── Execution Event Messages ─────────────────────────────────────────────────
+// Real-time events emitted in STREAM_JSON mode to expose tool lifecycle and
+// subagent hierarchy to SDK consumers and UI layers.
+
+export interface CLIToolStartMessage {
+  type: 'tool_start';
+  session_id: string;
+  call_id: string;
+  tool_name: string;
+  args: Record<string, unknown>;
+  /** 'main' for the top-level agent, subagentId for nested agents. */
+  agent_id: string;
+  timestamp: number;
+}
+
+export interface CLIToolCompleteMessage {
+  type: 'tool_complete';
+  session_id: string;
+  call_id: string;
+  tool_name: string;
+  success: boolean;
+  error?: string;
+  duration_ms: number;
+  agent_id: string;
+  timestamp: number;
+}
+
+export interface CLIAgentSpawnMessage {
+  type: 'agent_spawn';
+  session_id: string;
+  subagent_id: string;
+  parent_agent_id: string;
+  parent_tool_call_id: string;
+  subagent_type: string;
+  timestamp: number;
+}
+
 /**
  * Union of all CLI message types
  */

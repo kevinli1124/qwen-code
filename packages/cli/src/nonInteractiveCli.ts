@@ -4,7 +4,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { Config, ToolCallRequestInfo } from '@qwen-code/qwen-code-core';
+import type {
+  Config,
+  ToolCallRequestInfo,
+  AnyToolInvocation,
+  AgentEventEmitter,
+  AgentSpawnEvent,
+} from '@qwen-code/qwen-code-core';
 import { isSlashCommand } from './ui/utils/commandUtils.js';
 import type { LoadedSettings } from './config/settings.js';
 import {
@@ -20,9 +26,16 @@ import {
   parseAndFormatApiError,
   createDebugLogger,
   SendMessageType,
+  AgentEventType,
 } from '@qwen-code/qwen-code-core';
 import type { Content, Part, PartListUnion } from '@google/genai';
-import type { CLIUserMessage, PermissionMode } from './nonInteractive/types.js';
+import type {
+  CLIUserMessage,
+  PermissionMode,
+  CLIToolStartMessage,
+  CLIToolCompleteMessage,
+  CLIAgentSpawnMessage,
+} from './nonInteractive/types.js';
 import type { JsonOutputAdapterInterface } from './nonInteractive/io/BaseJsonOutputAdapter.js';
 import { JsonOutputAdapter } from './nonInteractive/io/JsonOutputAdapter.js';
 import { StreamJsonOutputAdapter } from './nonInteractive/io/StreamJsonOutputAdapter.js';
@@ -334,12 +347,82 @@ export async function runNonInteractive(
                 )
               : createToolProgressHandler(finalRequestInfo, adapter);
 
+            // In STREAM_JSON mode, wire onToolStart / onToolComplete so SDK
+            // consumers receive real-time execution events via stdout.
+            const isStreamJson = outputFormat === OutputFormat.STREAM_JSON;
+            const onToolStart = isStreamJson
+              ? (
+                  callId: string,
+                  toolName: string,
+                  args: Record<string, unknown>,
+                  invocation: AnyToolInvocation,
+                ) => {
+                  const msg: CLIToolStartMessage = {
+                    type: 'tool_start',
+                    session_id: sessionId,
+                    call_id: callId,
+                    tool_name: toolName,
+                    args,
+                    agent_id: 'main',
+                    timestamp: Date.now(),
+                  };
+                  process.stdout.write(`${JSON.stringify(msg)}\n`);
+
+                  // For the agent tool, forward AGENT_SPAWN events to stdout.
+                  if (toolName === 'agent') {
+                    const maybeAgent = invocation as unknown as {
+                      eventEmitter?: AgentEventEmitter;
+                    };
+                    if (maybeAgent.eventEmitter) {
+                      maybeAgent.eventEmitter.on(
+                        AgentEventType.AGENT_SPAWN,
+                        (event: AgentSpawnEvent) => {
+                          const spawnMsg: CLIAgentSpawnMessage = {
+                            type: 'agent_spawn',
+                            session_id: sessionId,
+                            subagent_id: event.subagentId,
+                            parent_agent_id: event.parentAgentId,
+                            parent_tool_call_id: event.parentToolCallId,
+                            subagent_type: event.subagentType,
+                            timestamp: event.timestamp,
+                          };
+                          process.stdout.write(`${JSON.stringify(spawnMsg)}\n`);
+                        },
+                      );
+                    }
+                  }
+                }
+              : undefined;
+
+            const onToolComplete = isStreamJson
+              ? (
+                  callId: string,
+                  toolName: string,
+                  success: boolean,
+                  durationMs: number,
+                ) => {
+                  const msg: CLIToolCompleteMessage = {
+                    type: 'tool_complete',
+                    session_id: sessionId,
+                    call_id: callId,
+                    tool_name: toolName,
+                    success,
+                    duration_ms: durationMs,
+                    agent_id: 'main',
+                    timestamp: Date.now(),
+                  };
+                  process.stdout.write(`${JSON.stringify(msg)}\n`);
+                }
+              : undefined;
+
             const toolResponse = await executeToolCall(
               config,
               finalRequestInfo,
               abortController.signal,
               {
                 outputUpdateHandler,
+                onToolStart,
+                onToolComplete,
                 ...(toolCallUpdateCallback && {
                   onToolCallsUpdate: toolCallUpdateCallback,
                 }),

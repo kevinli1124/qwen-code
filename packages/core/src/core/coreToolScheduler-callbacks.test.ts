@@ -34,10 +34,10 @@ class SuccessInvocation extends BaseToolInvocation<
   getDescription() {
     return 'success tool';
   }
-  async execute(): Promise<ToolResult> {
-    return { llmContent: 'ok' };
+  override async execute(): Promise<ToolResult> {
+    return { llmContent: 'ok', returnDisplay: 'ok' };
   }
-  async getDefaultPermission(): Promise<PermissionDecision> {
+  override async getDefaultPermission(): Promise<PermissionDecision> {
     return 'allow';
   }
 }
@@ -49,10 +49,14 @@ class FailInvocation extends BaseToolInvocation<
   getDescription() {
     return 'fail tool';
   }
-  async execute(): Promise<ToolResult> {
-    return { llmContent: '', error: { message: 'boom', type: undefined } };
+  override async execute(): Promise<ToolResult> {
+    return {
+      llmContent: '',
+      returnDisplay: '',
+      error: { message: 'boom', type: undefined },
+    };
   }
-  async getDefaultPermission(): Promise<PermissionDecision> {
+  override async getDefaultPermission(): Promise<PermissionDecision> {
     return 'allow';
   }
 }
@@ -62,7 +66,7 @@ class SuccessTool extends BaseDeclarativeTool<
   ToolResult
 > {
   constructor() {
-    super('success_tool', 'Success Tool', 'does nothing', Kind.ReadOnly, {
+    super('success_tool', 'Success Tool', 'does nothing', Kind.Read, {
       type: 'object',
       properties: {},
       additionalProperties: false,
@@ -80,7 +84,7 @@ class FailTool extends BaseDeclarativeTool<
   ToolResult
 > {
   constructor() {
-    super('fail_tool', 'Fail Tool', 'always fails', Kind.ReadOnly, {
+    super('fail_tool', 'Fail Tool', 'always fails', Kind.Read, {
       type: 'object',
       properties: {},
       additionalProperties: false,
@@ -152,7 +156,13 @@ describe('CoreToolScheduler onToolStart / onToolComplete callbacks', () => {
     const signal = new AbortController().signal;
 
     await scheduler.schedule(
-      { callId: 'c1', name: 'success_tool', args: {}, isClientInitiated: true },
+      {
+        callId: 'c1',
+        name: 'success_tool',
+        args: {},
+        isClientInitiated: true,
+        prompt_id: '',
+      },
       signal,
     );
 
@@ -174,7 +184,13 @@ describe('CoreToolScheduler onToolStart / onToolComplete callbacks', () => {
     const signal = new AbortController().signal;
 
     await scheduler.schedule(
-      { callId: 'c2', name: 'success_tool', args: {}, isClientInitiated: true },
+      {
+        callId: 'c2',
+        name: 'success_tool',
+        args: {},
+        isClientInitiated: true,
+        prompt_id: '',
+      },
       signal,
     );
 
@@ -192,7 +208,13 @@ describe('CoreToolScheduler onToolStart / onToolComplete callbacks', () => {
     const signal = new AbortController().signal;
 
     await scheduler.schedule(
-      { callId: 'c3', name: 'fail_tool', args: {}, isClientInitiated: true },
+      {
+        callId: 'c3',
+        name: 'fail_tool',
+        args: {},
+        isClientInitiated: true,
+        prompt_id: '',
+      },
       signal,
     );
 
@@ -211,7 +233,13 @@ describe('CoreToolScheduler onToolStart / onToolComplete callbacks', () => {
     const signal = new AbortController().signal;
 
     await scheduler.schedule(
-      { callId: 'c4', name: 'success_tool', args: {}, isClientInitiated: true },
+      {
+        callId: 'c4',
+        name: 'success_tool',
+        args: {},
+        isClientInitiated: true,
+        prompt_id: '',
+      },
       signal,
     );
 
@@ -230,6 +258,7 @@ describe('CoreToolScheduler onToolStart / onToolComplete callbacks', () => {
           name: 'success_tool',
           args: {},
           isClientInitiated: true,
+          prompt_id: '',
         },
         signal,
       ),
