@@ -27,6 +27,10 @@ import {
   isSDKSystemMessage,
   isSDKResultMessage,
   isSDKPartialAssistantMessage,
+  isSDKToolStartMessage,
+  isSDKToolCompleteMessage,
+  isSDKToolOutputChunkMessage,
+  isSDKAgentSpawnMessage,
   isControlRequest,
   isControlResponse,
   isControlCancel,
@@ -384,6 +388,17 @@ export class Query implements AsyncIterable<SDKMessage> {
       isSDKAssistantMessage(message) ||
       isSDKUserMessage(message) ||
       isSDKPartialAssistantMessage(message)
+    ) {
+      this.inputStream.enqueue(message);
+      return;
+    }
+
+    // Execution event messages — real-time tool and agent lifecycle telemetry.
+    if (
+      isSDKToolStartMessage(message) ||
+      isSDKToolCompleteMessage(message) ||
+      isSDKToolOutputChunkMessage(message) ||
+      isSDKAgentSpawnMessage(message)
     ) {
       this.inputStream.enqueue(message);
       return;
