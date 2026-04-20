@@ -439,6 +439,59 @@ export type ControlMessage =
   | CLIControlResponse
   | ControlCancelRequest;
 
+// ─── Execution Event Messages ────────────────────────────────
+// These messages carry real-time tool and agent execution state,
+// enabling consumers to build live progress UIs and agent-hierarchy trees.
+
+export interface SDKToolStartMessage {
+  type: 'tool_start';
+  session_id: string;
+  /** Unique ID for this tool invocation (matches tool_complete/tool_output_chunk). */
+  call_id: string;
+  tool_name: string;
+  args: Record<string, unknown>;
+  /** ID of the agent that invoked this tool. */
+  agent_id: string;
+  timestamp: number;
+}
+
+export interface SDKToolCompleteMessage {
+  type: 'tool_complete';
+  session_id: string;
+  call_id: string;
+  tool_name: string;
+  success: boolean;
+  /** Present when success is false. */
+  error?: string;
+  duration_ms: number;
+  agent_id: string;
+  timestamp: number;
+}
+
+export interface SDKToolOutputChunkMessage {
+  type: 'tool_output_chunk';
+  session_id: string;
+  call_id: string;
+  tool_name: string;
+  chunk: unknown;
+  agent_id: string;
+  timestamp: number;
+}
+
+export interface SDKAgentSpawnMessage {
+  type: 'agent_spawn';
+  session_id: string;
+  /** ID of the newly created subagent. */
+  subagent_id: string;
+  /** ID of the agent that spawned this one. */
+  parent_agent_id: string;
+  /** Tool call ID in the parent that triggered the spawn. */
+  parent_tool_call_id: string;
+  /** Logical subagent type (e.g. "general-purpose", "fork"). */
+  subagent_type: string;
+  timestamp: number;
+}
+
 /**
  * Union of all SDK message types
  */
@@ -447,7 +500,11 @@ export type SDKMessage =
   | SDKAssistantMessage
   | SDKSystemMessage
   | SDKResultMessage
-  | SDKPartialAssistantMessage;
+  | SDKPartialAssistantMessage
+  | SDKToolStartMessage
+  | SDKToolCompleteMessage
+  | SDKToolOutputChunkMessage
+  | SDKAgentSpawnMessage;
 
 export function isSDKUserMessage(msg: any): msg is SDKUserMessage {
   return (
@@ -503,6 +560,26 @@ export function isSDKPartialAssistantMessage(
     'event' in msg &&
     'parent_tool_use_id' in msg
   );
+}
+
+export function isSDKToolStartMessage(msg: any): msg is SDKToolStartMessage {
+  return msg && typeof msg === 'object' && msg.type === 'tool_start';
+}
+
+export function isSDKToolCompleteMessage(
+  msg: any,
+): msg is SDKToolCompleteMessage {
+  return msg && typeof msg === 'object' && msg.type === 'tool_complete';
+}
+
+export function isSDKToolOutputChunkMessage(
+  msg: any,
+): msg is SDKToolOutputChunkMessage {
+  return msg && typeof msg === 'object' && msg.type === 'tool_output_chunk';
+}
+
+export function isSDKAgentSpawnMessage(msg: any): msg is SDKAgentSpawnMessage {
+  return msg && typeof msg === 'object' && msg.type === 'agent_spawn';
 }
 
 export function isControlRequest(msg: any): msg is CLIControlRequest {
