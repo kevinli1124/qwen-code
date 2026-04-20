@@ -10,6 +10,9 @@ import type {
   AnyToolInvocation,
   AgentEventEmitter,
   AgentSpawnEvent,
+  AgentToolCallEvent,
+  AgentToolResultEvent,
+  AgentToolOutputUpdateEvent,
 } from '@qwen-code/qwen-code-core';
 import { isSlashCommand } from './ui/utils/commandUtils.js';
 import type { LoadedSettings } from './config/settings.js';
@@ -34,6 +37,7 @@ import type {
   PermissionMode,
   CLIToolStartMessage,
   CLIToolCompleteMessage,
+  CLIToolOutputChunkMessage,
   CLIAgentSpawnMessage,
 } from './nonInteractive/types.js';
 import type { JsonOutputAdapterInterface } from './nonInteractive/io/BaseJsonOutputAdapter.js';
@@ -368,13 +372,17 @@ export async function runNonInteractive(
                   };
                   process.stdout.write(`${JSON.stringify(msg)}\n`);
 
-                  // For the agent tool, forward AGENT_SPAWN events to stdout.
+                  // For the agent tool, forward subagent lifecycle events to stdout.
                   if (toolName === 'agent') {
                     const maybeAgent = invocation as unknown as {
                       eventEmitter?: AgentEventEmitter;
                     };
                     if (maybeAgent.eventEmitter) {
-                      maybeAgent.eventEmitter.on(
+                      const em = maybeAgent.eventEmitter;
+                      // callId → tool name map so TOOL_OUTPUT_UPDATE can include tool_name
+                      const subagentToolNames = new Map<string, string>();
+
+                      em.on(
                         AgentEventType.AGENT_SPAWN,
                         (event: AgentSpawnEvent) => {
                           const spawnMsg: CLIAgentSpawnMessage = {
@@ -387,6 +395,59 @@ export async function runNonInteractive(
                             timestamp: event.timestamp,
                           };
                           process.stdout.write(`${JSON.stringify(spawnMsg)}\n`);
+                        },
+                      );
+
+                      em.on(
+                        AgentEventType.TOOL_CALL,
+                        (event: AgentToolCallEvent) => {
+                          subagentToolNames.set(event.callId, event.name);
+                          const msg: CLIToolStartMessage = {
+                            type: 'tool_start',
+                            session_id: sessionId,
+                            call_id: event.callId,
+                            tool_name: event.name,
+                            args: event.args,
+                            agent_id: event.subagentId,
+                            timestamp: event.timestamp,
+                          };
+                          process.stdout.write(`${JSON.stringify(msg)}\n`);
+                        },
+                      );
+
+                      em.on(
+                        AgentEventType.TOOL_RESULT,
+                        (event: AgentToolResultEvent) => {
+                          subagentToolNames.delete(event.callId);
+                          const msg: CLIToolCompleteMessage = {
+                            type: 'tool_complete',
+                            session_id: sessionId,
+                            call_id: event.callId,
+                            tool_name: event.name,
+                            success: event.success,
+                            ...(event.error && { error: event.error }),
+                            duration_ms: event.durationMs ?? 0,
+                            agent_id: event.subagentId,
+                            timestamp: event.timestamp,
+                          };
+                          process.stdout.write(`${JSON.stringify(msg)}\n`);
+                        },
+                      );
+
+                      em.on(
+                        AgentEventType.TOOL_OUTPUT_UPDATE,
+                        (event: AgentToolOutputUpdateEvent) => {
+                          const msg: CLIToolOutputChunkMessage = {
+                            type: 'tool_output_chunk',
+                            session_id: sessionId,
+                            call_id: event.callId,
+                            tool_name:
+                              subagentToolNames.get(event.callId) ?? '',
+                            chunk: event.outputChunk,
+                            agent_id: event.subagentId,
+                            timestamp: event.timestamp,
+                          };
+                          process.stdout.write(`${JSON.stringify(msg)}\n`);
                         },
                       );
                     }

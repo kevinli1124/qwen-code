@@ -163,7 +163,7 @@ describe('SubAgentTracker', () => {
       expect(typeof cleanups[0]).toBe('function');
     });
 
-    it('should register event listeners', () => {
+    it('should register event listeners including AGENT_SPAWN', () => {
       const onSpy = vi.spyOn(eventEmitter, 'on');
 
       tracker.setup(eventEmitter, abortController.signal);
@@ -184,9 +184,13 @@ describe('SubAgentTracker', () => {
         AgentEventType.STREAM_TEXT,
         expect.any(Function),
       );
+      expect(onSpy).toHaveBeenCalledWith(
+        AgentEventType.AGENT_SPAWN,
+        expect.any(Function),
+      );
     });
 
-    it('should remove event listeners on cleanup', () => {
+    it('should remove event listeners on cleanup including AGENT_SPAWN', () => {
       const offSpy = vi.spyOn(eventEmitter, 'off');
       const cleanups = tracker.setup(eventEmitter, abortController.signal);
 
@@ -208,6 +212,57 @@ describe('SubAgentTracker', () => {
         AgentEventType.STREAM_TEXT,
         expect.any(Function),
       );
+      expect(offSpy).toHaveBeenCalledWith(
+        AgentEventType.AGENT_SPAWN,
+        expect.any(Function),
+      );
+    });
+  });
+
+  describe('AGENT_SPAWN handling', () => {
+    it('emits tool_call_update with agentSpawn _meta on the parent tool call', async () => {
+      tracker.setup(eventEmitter, abortController.signal);
+
+      eventEmitter.emit(AgentEventType.AGENT_SPAWN, {
+        subagentId: 'sub-abc',
+        parentAgentId: 'parent-xyz',
+        parentToolCallId: 'parent-call-123',
+        subagentType: 'general-purpose',
+        timestamp: 1_000_000,
+      });
+
+      // Allow async sendUpdate to settle
+      await Promise.resolve();
+
+      expect(sendUpdateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionUpdate: 'tool_call_update',
+          toolCallId: 'parent-call-123',
+          status: 'in_progress',
+          _meta: expect.objectContaining({
+            agentSpawn: expect.objectContaining({
+              subagentId: 'sub-abc',
+              subagentType: 'general-purpose',
+            }),
+          }),
+        }),
+      );
+    });
+
+    it('does not emit when aborted', async () => {
+      abortController.abort();
+      tracker.setup(eventEmitter, abortController.signal);
+
+      eventEmitter.emit(AgentEventType.AGENT_SPAWN, {
+        subagentId: 'sub-abc',
+        parentAgentId: 'parent-xyz',
+        parentToolCallId: 'parent-call-123',
+        subagentType: 'general-purpose',
+        timestamp: 1_000_000,
+      });
+
+      await Promise.resolve();
+      expect(sendUpdateSpy).not.toHaveBeenCalled();
     });
   });
 

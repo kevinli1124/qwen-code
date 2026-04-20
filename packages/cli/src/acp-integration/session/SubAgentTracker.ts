@@ -11,6 +11,7 @@ import type {
   AgentApprovalRequestEvent,
   AgentUsageEvent,
   AgentStreamTextEvent,
+  AgentSpawnEvent,
   ToolCallConfirmationDetails,
   AnyDeclarativeTool,
   AnyToolInvocation,
@@ -90,12 +91,14 @@ export class SubAgentTracker {
     const onApproval = this.createApprovalHandler(abortSignal);
     const onUsageMetadata = this.createUsageMetadataHandler(abortSignal);
     const onStreamText = this.createStreamTextHandler(abortSignal);
+    const onAgentSpawn = this.createSpawnHandler(abortSignal);
 
     eventEmitter.on(AgentEventType.TOOL_CALL, onToolCall);
     eventEmitter.on(AgentEventType.TOOL_RESULT, onToolResult);
     eventEmitter.on(AgentEventType.TOOL_WAITING_APPROVAL, onApproval);
     eventEmitter.on(AgentEventType.USAGE_METADATA, onUsageMetadata);
     eventEmitter.on(AgentEventType.STREAM_TEXT, onStreamText);
+    eventEmitter.on(AgentEventType.AGENT_SPAWN, onAgentSpawn);
 
     return [
       () => {
@@ -104,6 +107,7 @@ export class SubAgentTracker {
         eventEmitter.off(AgentEventType.TOOL_WAITING_APPROVAL, onApproval);
         eventEmitter.off(AgentEventType.USAGE_METADATA, onUsageMetadata);
         eventEmitter.off(AgentEventType.STREAM_TEXT, onStreamText);
+        eventEmitter.off(AgentEventType.AGENT_SPAWN, onAgentSpawn);
         // Clean up any remaining states
         this.toolStates.clear();
       },
@@ -277,6 +281,35 @@ export class SubAgentTracker {
         'assistant',
         event.thought ?? false,
       );
+    };
+  }
+
+  /**
+   * Creates a handler for AGENT_SPAWN events.
+   * Notifies ACP clients that a subagent was spawned by attaching spawn metadata
+   * to a tool_call_update on the parent tool call via the _meta field.
+   */
+  private createSpawnHandler(
+    abortSignal: AbortSignal,
+  ): (...args: unknown[]) => void {
+    return (...args: unknown[]) => {
+      const event = args[0] as AgentSpawnEvent;
+      if (abortSignal.aborted) return;
+
+      void this.ctx.sendUpdate({
+        sessionUpdate: 'tool_call_update',
+        toolCallId: this.parentToolCallId,
+        status: 'in_progress',
+        content: [],
+        _meta: {
+          agentSpawn: {
+            subagentId: event.subagentId,
+            parentAgentId: event.parentAgentId,
+            subagentType: event.subagentType,
+            timestamp: event.timestamp,
+          },
+        },
+      } as Parameters<typeof this.ctx.sendUpdate>[0]);
     };
   }
 }

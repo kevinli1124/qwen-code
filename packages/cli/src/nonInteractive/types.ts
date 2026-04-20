@@ -493,6 +493,16 @@ export interface CLIToolCompleteMessage {
   timestamp: number;
 }
 
+export interface CLIToolOutputChunkMessage {
+  type: 'tool_output_chunk';
+  session_id: string;
+  call_id: string;
+  tool_name: string;
+  chunk: unknown;
+  agent_id: string;
+  timestamp: number;
+}
+
 export interface CLIAgentSpawnMessage {
   type: 'agent_spawn';
   session_id: string;
