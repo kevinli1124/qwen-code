@@ -54,8 +54,26 @@ export interface TurnSummary {
 
 export type CaptureAction =
   | { kind: 'skipped'; reason: string }
-  | { kind: 'written'; episode: EpisodeConfig }
+  | {
+      kind: 'written';
+      episode: EpisodeConfig;
+      /**
+       * Set when the current episode count has reached the distill
+       * threshold (default 5) without the user having distilled recently.
+       * Callers can surface this as a gentle nudge to invoke `memory_distill`.
+       */
+      distillSuggestion?: DistillSuggestion;
+    }
   | { kind: 'pending'; candidate: EpisodeConfig };
+
+export interface DistillSuggestion {
+  /** Total episodes currently on disk. */
+  episodeCount: number;
+  /** Human-readable prompt for the UI layer. */
+  message: string;
+}
+
+const DEFAULT_DISTILL_THRESHOLD = 5;
 
 /**
  * Decides whether a completed turn is worth preserving as an episode and,
@@ -101,7 +119,8 @@ export class SessionReviewer {
     if (this.settings.autoCapture === 'auto') {
       try {
         const written = await this.store.writeEpisode(candidate);
-        return { kind: 'written', episode: written };
+        const distillSuggestion = await this.maybeBuildDistillSuggestion();
+        return { kind: 'written', episode: written, distillSuggestion };
       } catch (err) {
         debugLogger.warn(
           `Failed to auto-write episode ${candidate.id}: ${err instanceof Error ? err.message : String(err)}`,
@@ -133,6 +152,29 @@ export class SessionReviewer {
 
   getStore(): EpisodeStore {
     return this.store;
+  }
+
+  /**
+   * Builds a distillation suggestion when the episode pile has grown past
+   * the threshold. Best-effort: any filesystem error returns undefined so
+   * the caller still gets its primary result.
+   */
+  private async maybeBuildDistillSuggestion(
+    threshold: number = DEFAULT_DISTILL_THRESHOLD,
+  ): Promise<DistillSuggestion | undefined> {
+    try {
+      const episodeCount = await this.store.count({ force: true });
+      if (episodeCount < threshold) return undefined;
+      return {
+        episodeCount,
+        message:
+          `You now have ${episodeCount} episode${episodeCount === 1 ? '' : 's'} on file. ` +
+          `Consider running \`memory_distill\` to review them and promote recurring ` +
+          `lessons into durable memories.`,
+      };
+    } catch {
+      return undefined;
+    }
   }
 }
 

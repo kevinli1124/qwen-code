@@ -75,6 +75,7 @@ import { TriggerToggleTool } from '../tools/trigger-toggle.js';
 import { TriggerManager } from '../triggers/trigger-manager.js';
 import { MemoryWriteTool } from '../tools/memory-write.js';
 import { MemoryRemoveTool } from '../tools/memory-remove.js';
+import { MemoryDistillTool } from '../tools/memory-distill.js';
 import { MemoryStore } from '../memory/memory-store.js';
 import {
   DEFAULT_EPISODE_SETTINGS,
@@ -2466,6 +2467,9 @@ export class Config {
     // bullet append) with topic-scoped memory files and an on-demand index.
     await registerCoreTool(MemoryWriteTool, this);
     await registerCoreTool(MemoryRemoveTool, this);
+    // Episodic → Semantic distillation: surface recent episodes so the
+    // model can propose durable memories via memory_write.
+    await registerCoreTool(MemoryDistillTool, this);
 
     if (!options?.skipDiscovery) {
       await registry.discoverAllTools();

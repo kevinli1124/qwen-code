@@ -304,6 +304,74 @@ describe('SessionReviewer.maybeCapture', () => {
     expect(result.kind).toBe('written');
   });
 
+  it('emits distillSuggestion after 5+ episodes', async () => {
+    const reviewer = new SessionReviewer(new EpisodeStore(), {
+      ...DEFAULT_EPISODE_SETTINGS,
+      autoCapture: 'auto',
+    });
+
+    // Write 5 qualifying turns back-to-back. Each produces a distinct
+    // timestamp-based id so the store accepts all of them.
+    let lastSuggestion: { episodeCount: number } | undefined;
+    for (let i = 0; i < 5; i++) {
+      const startedAt = Date.parse('2026-04-22T09:00:00Z') + i * 60_000;
+      const summary = {
+        history: [
+          { role: 'user', parts: [{ text: `task ${i}` }] },
+          modelWithToolCalls(
+            Array.from({ length: 20 }, () => ({
+              name: 'read_file',
+              args: { file_path: `/f${i}.ts` },
+            })),
+            `Summary ${i}`,
+          ),
+        ] as TurnSummary['history'],
+        turnStartIndex: 0,
+        turnStartedAt: startedAt,
+        turnEndedAt: startedAt + 21 * 60 * 1000,
+        completedNormally: true,
+      };
+      const result = await reviewer.maybeCapture(summary);
+      expect(result.kind).toBe('written');
+      if (result.kind === 'written' && result.distillSuggestion) {
+        lastSuggestion = result.distillSuggestion;
+      }
+    }
+
+    expect(lastSuggestion).toBeDefined();
+    expect(lastSuggestion?.episodeCount).toBeGreaterThanOrEqual(5);
+  });
+
+  it('does not emit distillSuggestion when below threshold', async () => {
+    const reviewer = new SessionReviewer(new EpisodeStore(), {
+      ...DEFAULT_EPISODE_SETTINGS,
+      autoCapture: 'auto',
+    });
+
+    const startedAt = Date.parse('2026-04-22T09:00:00Z');
+    const summary = {
+      history: [
+        { role: 'user', parts: [{ text: 'one' }] },
+        modelWithToolCalls(
+          Array.from({ length: 20 }, () => ({
+            name: 'read_file',
+            args: { file_path: '/a.ts' },
+          })),
+          'Summary',
+        ),
+      ] as TurnSummary['history'],
+      turnStartIndex: 0,
+      turnStartedAt: startedAt,
+      turnEndedAt: startedAt + 21 * 60 * 1000,
+      completedNormally: true,
+    };
+    const result = await reviewer.maybeCapture(summary);
+    expect(result.kind).toBe('written');
+    if (result.kind === 'written') {
+      expect(result.distillSuggestion).toBeUndefined();
+    }
+  });
+
   it('returns pending on ask when threshold met', async () => {
     const reviewer = new SessionReviewer(new EpisodeStore(), {
       ...DEFAULT_EPISODE_SETTINGS,

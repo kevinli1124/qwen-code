@@ -35,6 +35,7 @@ export const ToolNames = {
   TRIGGER_TOGGLE: 'trigger_toggle',
   MEMORY_WRITE: 'memory_write',
   MEMORY_REMOVE: 'memory_remove',
+  MEMORY_DISTILL: 'memory_distill',
 } as const;
 
 /**
@@ -68,6 +69,7 @@ export const ToolDisplayNames = {
   TRIGGER_TOGGLE: 'TriggerToggle',
   MEMORY_WRITE: 'MemoryWrite',
   MEMORY_REMOVE: 'MemoryRemove',
+  MEMORY_DISTILL: 'MemoryDistill',
 } as const;
 
 // Migration from old tool names to new tool names

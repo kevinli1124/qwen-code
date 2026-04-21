@@ -94,6 +94,9 @@ const { MemoryStore } = await import(srcUrl('memory', 'memory-store.ts'));
 const { findSimilarMemories, findSimilarSkills } = await import(
   srcUrl('utils', 'similarity.ts')
 );
+const { buildDistillPrompt } = await import(
+  srcUrl('tools', 'memory-distill.ts')
+);
 
 // Quick sanity: confirm os.homedir now points where we expect.
 if (os.homedir() !== tempHome) {
@@ -444,6 +447,115 @@ await section(
       'MEMORY.md index lists the seeded entry',
       indexContent.includes('eslint_monorepo_globs'),
       'missing in index',
+    );
+  },
+);
+
+// ─── Phase 3 tests ────────────────────────────────────────────
+
+await section(
+  'Phase 3 — Memory distillation (prompt builder + auto-suggest)',
+  async () => {
+    // Seed three episodes via the real store.
+    const store = new EpisodeStore();
+    for (let i = 0; i < 3; i++) {
+      await store.writeEpisode({
+        id: `2026-04-22-09${String(i).padStart(2, '0')}-sample-${i}`,
+        title: `Investigation ${i}`,
+        timestamp: new Date(
+          Date.parse('2026-04-22T09:00:00Z') + i * 60_000,
+        ).toISOString(),
+        durationMins: 30,
+        toolCalls: 20,
+        outcome: 'success',
+        tags: ['eslint', 'monorepo'],
+        scores: { novelty: 2, reusability: 2, complexity: 3, outcome: 3 },
+        content: `Body text for investigation ${i}`,
+      });
+    }
+
+    const all = await store.listEpisodes({ force: true });
+    const seeded = all.filter((e) => e.id.includes('sample-'));
+    check(
+      '3 seeded episodes are all visible',
+      seeded.length === 3,
+      `got ${seeded.length}`,
+    );
+
+    // Build the distill prompt directly (exercises the same code path the
+    // tool uses to format output).
+    const prompt = buildDistillPrompt(seeded, '# Memory Index\n\n- foo — hook');
+
+    check(
+      'prompt references all 3 episode titles',
+      prompt.includes('Investigation 0') &&
+        prompt.includes('Investigation 1') &&
+        prompt.includes('Investigation 2'),
+      'at least one title missing',
+    );
+    check(
+      'prompt embeds the memory index',
+      prompt.includes('# Memory Index') && prompt.includes('- foo — hook'),
+      'memory index not embedded',
+    );
+    check(
+      'prompt includes the final anti-fabrication reminder',
+      /do not fabricate memories/i.test(prompt),
+      'reminder missing',
+    );
+    check(
+      'prompt advises memory_write with overwrite:false',
+      prompt.includes('overwrite: false'),
+      'missing overwrite guidance',
+    );
+
+    // Now verify SessionReviewer surfaces a distillSuggestion when the
+    // episode pile crosses the threshold (5 by default).
+    const reviewer = new SessionReviewer(new EpisodeStore(), {
+      autoCapture: 'auto',
+      toolCallThreshold: 15,
+      durationMsThreshold: 20 * 60 * 1000,
+      retentionDays: 90,
+    });
+
+    let lastResult;
+    for (let i = 0; i < 3; i++) {
+      const startedAt = Date.parse('2026-04-22T10:00:00Z') + i * 60_000;
+      lastResult = await reviewer.maybeCapture({
+        history: [
+          { role: 'user', parts: [{ text: `task ${i}` }] },
+          {
+            role: 'model',
+            parts: [
+              ...Array.from({ length: 20 }, () => ({
+                functionCall: {
+                  name: 'read_file',
+                  args: { file_path: `/tmp/${i}.ts` },
+                },
+              })),
+              { text: `Done ${i}` },
+            ],
+          },
+        ],
+        turnStartIndex: 0,
+        turnStartedAt: startedAt,
+        turnEndedAt: startedAt + 21 * 60 * 1000,
+        completedNormally: true,
+      });
+    }
+
+    check(
+      'last write succeeded (6 total episodes now)',
+      lastResult && lastResult.kind === 'written',
+      `got kind=${lastResult?.kind}`,
+    );
+    check(
+      'distillSuggestion fires once episodes >= 5',
+      lastResult &&
+        lastResult.kind === 'written' &&
+        !!lastResult.distillSuggestion &&
+        lastResult.distillSuggestion.episodeCount >= 5,
+      `suggestion=${JSON.stringify(lastResult?.distillSuggestion)}`,
     );
   },
 );
