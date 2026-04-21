@@ -18,6 +18,7 @@ import { BaseDeclarativeTool, BaseToolInvocation, Kind } from './tools.js';
 import { ToolNames, ToolDisplayNames } from './tool-names.js';
 import type { Config } from '../config/config.js';
 import type { MemoryType, MemoryScope } from '../memory/types.js';
+import { findSimilarMemories } from '../utils/similarity.js';
 
 export interface MemoryWriteParams {
   name: string;
@@ -48,6 +49,44 @@ class MemoryWriteInvocation extends BaseToolInvocation<
   async execute(): Promise<ToolResult> {
     try {
       const store = this.config.getMemoryStore();
+
+      // When overwrite is explicitly false, scan for near-duplicate entries
+      // under a DIFFERENT name. An exact-name match is handled by the store's
+      // ALREADY_EXISTS error. A semantic near-duplicate would not collide at
+      // the file level but would pollute the index — surface it to the agent
+      // so it can update the existing memory instead.
+      if (this.params.overwrite === false) {
+        const draftSlug = this.params.name;
+        const all = await store.listMemories({ scope: this.params.scope });
+        const candidates = all.filter((m) => m.name !== draftSlug);
+        const hits = findSimilarMemories(
+          {
+            name: this.params.name,
+            description: this.params.description,
+            type: this.params.type,
+          },
+          candidates,
+        );
+        if (hits.length > 0) {
+          const top = hits[0];
+          const list = hits
+            .slice(0, 3)
+            .map(
+              (h) =>
+                `- ${h.item.name} (${h.item.type}, ${h.reason}, score=${h.score.toFixed(2)}): ${h.item.description}`,
+            )
+            .join('\n');
+          const msg =
+            `Skipped save: found ${hits.length} similar memor${hits.length === 1 ? 'y' : 'ies'} already in scope "${this.params.scope}". ` +
+            `Consider updating "${top.item.name}" instead, or re-run with overwrite=true to force a new entry.\n\n` +
+            `Top matches:\n${list}`;
+          return {
+            llmContent: msg,
+            returnDisplay: `Similar memory exists: ${top.item.name}`,
+          };
+        }
+      }
+
       const cfg = await store.writeMemory(
         {
           name: this.params.name,
@@ -159,7 +198,11 @@ export class MemoryWriteTool extends BaseDeclarativeTool<
           overwrite: {
             type: 'boolean',
             description:
-              'Allow overwriting an existing memory with the same name. Defaults to true.',
+              'Allow overwriting an existing memory with the same name. Defaults to true. ' +
+              'Pass `false` to also activate semantic near-duplicate detection: if a ' +
+              'similar memory already exists under a different name, the call returns a ' +
+              '`similar memory exists` notice instead of writing, letting you update the ' +
+              'existing entry rather than creating a parallel one.',
           },
         },
         required: ['name', 'type', 'scope', 'description', 'content'],
