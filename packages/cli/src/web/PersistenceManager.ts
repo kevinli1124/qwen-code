@@ -1,0 +1,99 @@
+/**
+ * @license
+ * Copyright 2025 Qwen team
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+
+export interface StoredMessage {
+  type: string;
+  timestamp: string;
+  data: unknown;
+}
+
+export interface SessionRecord {
+  id: string;
+  title: string;
+  cwd: string;
+  status: 'idle' | 'running' | 'completed' | 'error';
+  createdAt: string;
+  updatedAt: string;
+  messages: StoredMessage[];
+}
+
+const SESSIONS_DIR = path.join(os.homedir(), '.qwen', 'web-sessions');
+
+function ensureDir(): void {
+  if (!fs.existsSync(SESSIONS_DIR)) {
+    fs.mkdirSync(SESSIONS_DIR, { recursive: true });
+  }
+}
+
+function sessionPath(id: string): string {
+  return path.join(SESSIONS_DIR, `${id}.json`);
+}
+
+export const PersistenceManager = {
+  saveSession(session: SessionRecord): void {
+    ensureDir();
+    fs.writeFileSync(
+      sessionPath(session.id),
+      JSON.stringify(session, null, 2),
+      'utf8',
+    );
+  },
+
+  loadSession(id: string): SessionRecord | null {
+    const p = sessionPath(id);
+    if (!fs.existsSync(p)) return null;
+    try {
+      return JSON.parse(fs.readFileSync(p, 'utf8')) as SessionRecord;
+    } catch {
+      return null;
+    }
+  },
+
+  listSessions(): SessionRecord[] {
+    ensureDir();
+    const files = fs
+      .readdirSync(SESSIONS_DIR)
+      .filter((f) => f.endsWith('.json'));
+    const sessions: SessionRecord[] = [];
+    for (const f of files) {
+      try {
+        const raw = fs.readFileSync(path.join(SESSIONS_DIR, f), 'utf8');
+        sessions.push(JSON.parse(raw) as SessionRecord);
+      } catch {
+        // skip corrupt files
+      }
+    }
+    return sessions.sort(
+      (a, b) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+    );
+  },
+
+  deleteSession(id: string): void {
+    const p = sessionPath(id);
+    if (fs.existsSync(p)) fs.unlinkSync(p);
+  },
+
+  appendMessage(id: string, msg: StoredMessage): void {
+    const session = PersistenceManager.loadSession(id);
+    if (!session) return;
+    session.messages.push(msg);
+    session.updatedAt = new Date().toISOString();
+    PersistenceManager.saveSession(session);
+  },
+
+  updateStatus(id: string, status: SessionRecord['status']): void {
+    const session = PersistenceManager.loadSession(id);
+    if (!session) return;
+    session.status = status;
+    session.updatedAt = new Date().toISOString();
+    PersistenceManager.saveSession(session);
+  },
+};

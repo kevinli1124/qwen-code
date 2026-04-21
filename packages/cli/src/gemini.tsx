@@ -223,6 +223,16 @@ export async function main() {
   let argv = await parseArguments();
   profileCheckpoint('after_parse_arguments');
 
+  // --web: start embedded HTTP server and open browser
+  if (process.argv.includes('--web')) {
+    const portArg = process.argv.find((a) => a.startsWith('--port='));
+    const port = portArg ? parseInt(portArg.split('=')[1] ?? '7788', 10) : 7788;
+    const noOpen = process.argv.includes('--no-open');
+    const { startWebServer } = await import('./web/WebServer.js');
+    await startWebServer({ port, open: !noOpen });
+    process.exit(0);
+  }
+
   // Check for invalid input combinations early to prevent crashes
   if (argv.promptInteractive && !process.stdin.isTTY) {
     writeStderrLine(
