@@ -109,6 +109,15 @@
             "utf-8-bom"
           ],
           "default": "utf-8"
+        },
+        "agentName": {
+          "description": "Custom name for the AI agent shown in the header and prompt prefix.",
+          "type": "string"
+        },
+        "setupCompleted": {
+          "description": "Whether the initial setup wizard has been completed.",
+          "type": "boolean",
+          "default": false
         }
       }
     },
@@ -1501,6 +1510,31 @@
           "description": "Enable in-session cron/loop tools (experimental). When enabled, the model can create recurring prompts using cron_create, cron_list, and cron_delete tools. Can also be enabled via QWEN_CODE_ENABLE_CRON=1 environment variable.",
           "type": "boolean",
           "default": false
+        }
+      }
+    },
+    "messaging": {
+      "description": "Credentials and allowlists for messaging gateways (Telegram today). Prefer storing these in user-scope settings (~/.qwen/settings.json) so they do not land in project repos.",
+      "type": "object",
+      "properties": {
+        "telegram": {
+          "description": "Telegram bot credentials. Env vars TELEGRAM_BOT_TOKEN and TELEGRAM_ALLOWED_USER_IDS take precedence when set.",
+          "type": "object",
+          "properties": {
+            "token": {
+              "description": "Telegram bot token obtained from @BotFather. Treated as sensitive — never displayed in plain text in dialogs.",
+              "type": "string",
+              "default": ""
+            },
+            "allowedUserIds": {
+              "description": "Array of Telegram user ids (as strings) permitted to drive the bot. Empty = accept every sender (insecure for public bots).",
+              "type": "array",
+              "items": {
+                "description": "A single Telegram user id.",
+                "type": "string"
+              }
+            }
+          }
         }
       }
     },
