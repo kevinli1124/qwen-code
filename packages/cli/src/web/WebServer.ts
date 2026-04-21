@@ -284,7 +284,12 @@ async function handleApi(
       /* empty */
     }
 
-    const cwd = parsed.cwd ?? process.cwd();
+    if (!parsed.cwd) {
+      sendError(res, 400, 'cwd required');
+      return;
+    }
+
+    const cwd = parsed.cwd;
     const title = parsed.title ?? path.basename(cwd);
     const sessionId = randomUUID();
 
@@ -536,10 +541,10 @@ function tryListen(
   });
 }
 
-export async function startWebServer(
-  options: WebServerOptions = {},
-): Promise<void> {
-  const preferredPort = options.port ?? 7788;
+/** Creates and starts the HTTP server. Returns server + actual bound port. */
+export async function createServer(
+  preferredPort: number,
+): Promise<{ server: http.Server; port: number }> {
   const staticDir = resolveStaticDir();
 
   const server = http.createServer(async (req, res) => {
@@ -558,6 +563,15 @@ export async function startWebServer(
   });
 
   const port = await tryListen(server, preferredPort);
+  return { server, port };
+}
+
+export async function startWebServer(
+  options: WebServerOptions = {},
+): Promise<void> {
+  const preferredPort = options.port ?? 7788;
+
+  const { server, port } = await createServer(preferredPort);
   const url = `http://localhost:${port}`;
 
   if (port !== preferredPort) {
