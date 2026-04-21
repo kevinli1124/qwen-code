@@ -126,7 +126,8 @@ export default tseslint.config(
             '**/generated/**',
             './styles/tailwind.css',
             './styles/App.css',
-            './styles/style.css'
+            './styles/style.css',
+            './styles/global.css'
           ],
         },
       ],

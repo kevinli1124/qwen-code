@@ -1,0 +1,106 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Claude Code visual style — override webui defaults */
+:root {
+  /* Fonts */
+  --app-font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --app-font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --app-monospace-font-size: 13px;
+
+  /* Backgrounds */
+  --app-background: #1a1a1a;
+  --app-primary-background: #1a1a1a;
+  --app-background-secondary: #242424;
+  --app-secondary-background: #242424;
+  --app-background-tertiary: #2e2e2e;
+
+  /* Foreground */
+  --app-foreground: #e8e6e3;
+  --app-primary-foreground: #e8e6e3;
+  --app-foreground-secondary: #8a8a8a;
+  --app-secondary-foreground: #8a8a8a;
+  --app-foreground-muted: #5a5a5a;
+
+  /* Borders */
+  --app-border: #2e2e2e;
+  --app-primary-border-color: #2e2e2e;
+  --app-border-focus: #d97757;
+
+  /* Primary/Accent — Claude orange */
+  --app-primary: #d97757;
+  --app-primary-hover: #c4643e;
+
+  /* Status */
+  --app-success: #10b981;
+  --app-warning: #f59e0b;
+  --app-error: #ef4444;
+  --app-info: #3b82f6;
+
+  /* Inputs */
+  --app-input-background: #242424;
+  --app-input-border: #2e2e2e;
+  --app-input-foreground: #e8e6e3;
+  --app-input-placeholder-foreground: #5a5a5a;
+
+  /* Tool calls */
+  --app-tool-background: #1a1a1a;
+  --app-code-background: #0f0f0f;
+
+  /* Header */
+  --app-header-background: #161616;
+
+  /* List */
+  --app-list-hover-background: rgba(255,255,255,0.05);
+  --app-list-active-background: rgba(217,119,87,0.15);
+
+  /* Buttons */
+  --app-button-background: #2e2e2e;
+  --app-ghost-button-hover-background: rgba(255,255,255,0.06);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: #1a1a1a;
+  color: #e8e6e3;
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #2e2e2e;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3e3e3e;
+}
+
+/* Chat viewer overrides */
+.chat-viewer-container {
+  height: 100%;
+  overflow: hidden;
+}
+
+.chat-viewer-messages {
+  height: 100%;
+  overflow-y: auto;
+  padding: 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
