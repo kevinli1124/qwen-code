@@ -22,7 +22,7 @@ import type {
 } from './types.js';
 import { SkillError, SkillErrorCode, parseModelField } from './types.js';
 import type { Config } from '../config/config.js';
-import { validateConfig } from './skill-load.js';
+import { validateConfig, parseProvenanceField } from './skill-load.js';
 import { createDebugLogger } from '../utils/debugLogger.js';
 import { normalizeContent } from '../utils/textUtils.js';
 import { SKILL_PROVIDER_CONFIG_DIRS } from '../config/storage.js';
@@ -478,6 +478,7 @@ export class SkillManager {
 
       // Extract optional model field
       const model = parseModelField(frontmatter);
+      const provenance = parseProvenanceField(frontmatter);
 
       const config: SkillConfig = {
         name,
@@ -487,6 +488,7 @@ export class SkillManager {
         level,
         filePath,
         body: body.trim(),
+        provenance,
       };
 
       // Validate the parsed configuration
@@ -805,7 +807,7 @@ export class SkillManager {
  */
 function serializeSkill(
   config: Pick<SkillConfig, 'name' | 'description' | 'body'> &
-    Partial<Pick<SkillConfig, 'allowedTools' | 'model'>>,
+    Partial<Pick<SkillConfig, 'allowedTools' | 'model' | 'provenance'>>,
 ): string {
   const fm: Record<string, unknown> = {
     name: config.name,
@@ -816,6 +818,25 @@ function serializeSkill(
   }
   if (config.model) {
     fm['model'] = config.model;
+  }
+  if (config.provenance) {
+    const clean: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(config.provenance)) {
+      if (v === undefined || v === null) continue;
+      if (Array.isArray(v)) {
+        if (v.length === 0) continue;
+        // The local YAML stringifier/parser only supports one-level arrays
+        // (top-level keys). Flatten nested string arrays to a comma-separated
+        // value so the roundtrip survives. parseProvenanceField decodes both
+        // the array and the CSV form.
+        clean[k] = (v as unknown[]).map((x) => String(x)).join(', ');
+      } else {
+        clean[k] = v;
+      }
+    }
+    if (Object.keys(clean).length > 0) {
+      fm['provenance'] = clean;
+    }
   }
   const yaml = stringifyYaml(fm, { lineWidth: 0, minContentWidth: 0 }).trim();
   const body = (config.body ?? '').trim();

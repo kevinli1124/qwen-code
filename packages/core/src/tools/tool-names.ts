@@ -38,6 +38,8 @@ export const ToolNames = {
   MEMORY_DISTILL: 'memory_distill',
   SKILL_WRITE: 'skill_write',
   SKILL_PROPOSE: 'skill_propose',
+  MEMORY_EXPORT: 'memory_export',
+  SKILL_INSTALL: 'skill_install',
 } as const;
 
 /**
@@ -74,6 +76,8 @@ export const ToolDisplayNames = {
   MEMORY_DISTILL: 'MemoryDistill',
   SKILL_WRITE: 'SkillWrite',
   SKILL_PROPOSE: 'SkillPropose',
+  MEMORY_EXPORT: 'MemoryExport',
+  SKILL_INSTALL: 'SkillInstall',
 } as const;
 
 // Migration from old tool names to new tool names

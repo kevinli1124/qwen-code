@@ -102,6 +102,12 @@ const { buildSkillProposalPrompt } = await import(
 );
 const { SkillManager } = await import(srcUrl('skills', 'skill-manager.ts'));
 const { Config } = await import(srcUrl('config', 'config.ts'));
+const { MemoryExportTool } = await import(
+  srcUrl('tools', 'memory-export.ts')
+);
+const { SkillInstallTool } = await import(
+  srcUrl('tools', 'skill-install.ts')
+);
 
 // Quick sanity: confirm os.homedir now points where we expect.
 if (os.homedir() !== tempHome) {
@@ -701,6 +707,164 @@ await section(
         capture.skillProposal.episodeScore >= 9,
       `got ${JSON.stringify(capture.skillProposal)}`,
     );
+  },
+);
+
+// ─── Phase 5 tests ────────────────────────────────────────────
+
+await section(
+  'Phase 5 — Memory export → Skill install (provenance roundtrip)',
+  async () => {
+    // Setup: two distinct "users" sharing the same machine. We simulate
+    // this by swapping HOME between operations.
+    const sourceHome = path.join(tempHome, 'phase5-source');
+    const targetHome = path.join(tempHome, 'phase5-target');
+    const sourceProject = path.join(sourceHome, 'qwen-demo');
+    const targetProject = path.join(targetHome, 'qwen-demo');
+    await fs.mkdir(sourceProject, { recursive: true });
+    await fs.mkdir(targetProject, { recursive: true });
+
+    // --- Source user: seed memories and export ---
+    process.env['HOME'] = sourceHome;
+    process.env['USERPROFILE'] = sourceHome;
+    const sourceConfig = new Config({
+      usageStatisticsEnabled: false,
+      debugMode: false,
+      model: 'test',
+      cwd: sourceProject,
+      targetDir: sourceProject,
+    });
+    const srcMemStore = sourceConfig.getMemoryStore();
+    await srcMemStore.writeMemory({
+      name: 'eslint_globs_policy',
+      type: 'decision',
+      scope: 'user',
+      description: 'ESLint flat config globs do not inherit',
+      content:
+        '**Rule:** flat config glob blocks are independent.\n\n**Why:** past incident.\n**How to apply:** verify coverage on lint failure.',
+    });
+    await srcMemStore.writeMemory({
+      name: 'tsx_strict_default',
+      type: 'decision',
+      scope: 'user',
+      description: 'strict: true in every new package',
+      content: '**Why:** early type catches.\n**How to apply:** tsconfig base.',
+    });
+
+    const exportTool = new MemoryExportTool(sourceConfig);
+    const exportResult = await exportTool
+      .build({
+        skillName: 'sky-wisdom',
+        description: 'Decisions from the source user',
+        types: ['decision'],
+        level: 'user',
+      })
+      .execute(new AbortController().signal);
+    check(
+      'memory_export reports 2 memories packed',
+      /Exported 2/.test(String(exportResult.returnDisplay)),
+      String(exportResult.returnDisplay),
+    );
+
+    const bundlePath = path.join(
+      sourceHome,
+      '.qwen',
+      'skills',
+      'sky-wisdom',
+      'SKILL.md',
+    );
+    const bundle = await fs.readFile(bundlePath, 'utf8').catch(() => '');
+    check(
+      'bundle frontmatter contains provenance block',
+      bundle.includes('provenance:') && bundle.includes('extractedFrom:'),
+      'missing provenance',
+    );
+    check(
+      'bundle body embeds both memory sections',
+      bundle.includes('### eslint_globs_policy') &&
+        bundle.includes('### tsx_strict_default'),
+      'memory sections missing',
+    );
+
+    // --- Target user: install the bundle cross-user ---
+    process.env['HOME'] = targetHome;
+    process.env['USERPROFILE'] = targetHome;
+    const originalUser = process.env['USER'];
+    process.env['USER'] = 'target-user';
+    try {
+      const targetConfig = new Config({
+        usageStatisticsEnabled: false,
+        debugMode: false,
+        model: 'test',
+        cwd: targetProject,
+        targetDir: targetProject,
+      });
+      const installTool = new SkillInstallTool(targetConfig);
+
+      // First attempt: WITHOUT acceptCrossUser — should be refused.
+      const refusal = await installTool
+        .build({ sourcePath: bundlePath, level: 'user' })
+        .execute(new AbortController().signal);
+      check(
+        'cross-user install is refused without acceptCrossUser',
+        /Cross-user/.test(String(refusal.returnDisplay)),
+        String(refusal.returnDisplay),
+      );
+
+      // Second attempt: acceptCrossUser + unpackMemories.
+      const installResult = await installTool
+        .build({
+          sourcePath: bundlePath,
+          level: 'user',
+          unpackMemories: true,
+          acceptCrossUser: true,
+        })
+        .execute(new AbortController().signal);
+      check(
+        'install succeeds with acceptCrossUser + unpack',
+        /Installed sky-wisdom/.test(String(installResult.returnDisplay)),
+        String(installResult.returnDisplay),
+      );
+
+      const installedPath = path.join(
+        targetHome,
+        '.qwen',
+        'skills',
+        'sky-wisdom',
+        'SKILL.md',
+      );
+      const installed = await fs
+        .readFile(installedPath, 'utf8')
+        .catch(() => '');
+      check(
+        'installed SKILL.md preserves provenance fields',
+        installed.includes('provenance:') &&
+          installed.includes('sourceUser:') &&
+          installed.includes('extractedFrom:'),
+        'provenance was not preserved in roundtrip',
+      );
+
+      const targetMemStore = new SkillManager(targetConfig); // only to trigger cache init
+      await targetMemStore.listSkills({ force: true });
+
+      const targetMems = await targetConfig
+        .getMemoryStore()
+        .listMemories({ scope: 'user', force: true });
+      const importedNames = targetMems
+        .map((m) => m.name)
+        .filter((n) => n.startsWith('imported-'));
+      check(
+        'unpackMemories writes imported entries with prefix',
+        importedNames.length === 2,
+        `got ${JSON.stringify(importedNames)}`,
+      );
+    } finally {
+      if (originalUser === undefined) delete process.env['USER'];
+      else process.env['USER'] = originalUser;
+      // Restore HOME for any later sections (cleanup block below uses it).
+      process.env['HOME'] = tempHome;
+      process.env['USERPROFILE'] = tempHome;
+    }
   },
 );
 

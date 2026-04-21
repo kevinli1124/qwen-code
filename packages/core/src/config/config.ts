@@ -78,6 +78,8 @@ import { MemoryRemoveTool } from '../tools/memory-remove.js';
 import { MemoryDistillTool } from '../tools/memory-distill.js';
 import { SkillWriteTool } from '../tools/skill-write.js';
 import { SkillProposeTool } from '../tools/skill-propose.js';
+import { MemoryExportTool } from '../tools/memory-export.js';
+import { SkillInstallTool } from '../tools/skill-install.js';
 import { MemoryStore } from '../memory/memory-store.js';
 import {
   DEFAULT_EPISODE_SETTINGS,
@@ -2479,6 +2481,10 @@ export class Config {
     // high-score episodes; similarity gate prevents parallel entries.
     await registerCoreTool(SkillWriteTool, this);
     await registerCoreTool(SkillProposeTool, this);
+    // Cross-agent / cross-user knowledge transfer: bundle memory into a
+    // provenance-tagged skill and install bundles from elsewhere.
+    await registerCoreTool(MemoryExportTool, this);
+    await registerCoreTool(SkillInstallTool, this);
 
     if (!options?.skipDiscovery) {
       await registry.discoverAllTools();

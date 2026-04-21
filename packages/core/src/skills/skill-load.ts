@@ -1,5 +1,6 @@
 import {
   type SkillConfig,
+  type SkillProvenance,
   type SkillValidationResult,
   parseModelField,
 } from './types.js';
@@ -114,6 +115,7 @@ export function parseSkillContent(
 
   // Extract optional model field
   const model = parseModelField(frontmatter);
+  const provenance = parseProvenanceField(frontmatter);
 
   const config: SkillConfig = {
     name,
@@ -123,6 +125,7 @@ export function parseSkillContent(
     filePath,
     body: body.trim(),
     level: 'extension',
+    provenance,
   };
 
   // Validate the parsed configuration
@@ -133,6 +136,42 @@ export function parseSkillContent(
 
   debugLogger.debug(`Successfully parsed skill: ${name} from ${filePath}`);
   return config;
+}
+
+/**
+ * Parse the optional `provenance` object from skill frontmatter. Unknown
+ * fields are ignored. Returns undefined when the key is missing or not an
+ * object, so hand-authored skills parse cleanly.
+ */
+export function parseProvenanceField(
+  frontmatter: Record<string, unknown>,
+): SkillProvenance | undefined {
+  const raw = frontmatter['provenance'];
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const obj = raw as Record<string, unknown>;
+  const provenance: SkillProvenance = {};
+  if (typeof obj['sourceUser'] === 'string')
+    provenance.sourceUser = obj['sourceUser'];
+  if (typeof obj['sourceProject'] === 'string')
+    provenance.sourceProject = obj['sourceProject'];
+  if (typeof obj['sourceAgent'] === 'string')
+    provenance.sourceAgent = obj['sourceAgent'];
+  if (typeof obj['extractedAt'] === 'string')
+    provenance.extractedAt = obj['extractedAt'];
+  const extractedFromRaw = obj['extractedFrom'];
+  if (Array.isArray(extractedFromRaw)) {
+    provenance.extractedFrom = (extractedFromRaw as unknown[]).filter(
+      (v): v is string => typeof v === 'string',
+    );
+  } else if (typeof extractedFromRaw === 'string') {
+    // CSV form written by the simple YAML stringifier for one-level arrays
+    // inside a nested provenance object.
+    provenance.extractedFrom = extractedFromRaw
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+  }
+  return Object.keys(provenance).length > 0 ? provenance : undefined;
 }
 
 export function validateConfig(

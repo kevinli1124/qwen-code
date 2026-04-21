@@ -14,6 +14,24 @@
 export type SkillLevel = 'project' | 'user' | 'extension' | 'bundled';
 
 /**
+ * Provenance metadata attached to skills exported from memories (via
+ * `memory_export`). Lets an installed skill carry its origin so reviewers
+ * can see whose wisdom this is and what memories were folded into it.
+ */
+export interface SkillProvenance {
+  /** Who produced the source memories (from user_profile or env). */
+  sourceUser?: string;
+  /** Project directory name the export ran from. */
+  sourceProject?: string;
+  /** Subagent the memories were scoped to, if any. */
+  sourceAgent?: string;
+  /** ISO timestamp when the export was produced. */
+  extractedAt?: string;
+  /** Names of the memory entries packed into the body. */
+  extractedFrom?: string[];
+}
+
+/**
  * Core configuration for a skill as stored in SKILL.md files.
  * Each skill directory contains a SKILL.md file with YAML frontmatter
  * containing metadata, followed by markdown content describing the skill.
@@ -58,6 +76,12 @@ export interface SkillConfig {
    * For extension-level skills: the name of the providing extension
    */
   extensionName?: string;
+
+  /**
+   * Provenance metadata populated by `memory_export`. Absent for
+   * hand-authored skills.
+   */
+  provenance?: SkillProvenance;
 }
 
 /**
