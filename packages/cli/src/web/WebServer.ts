@@ -518,10 +518,28 @@ export interface WebServerOptions {
   open?: boolean;
 }
 
+function tryListen(
+  server: http.Server,
+  port: number,
+  maxRetries = 10,
+): Promise<number> {
+  return new Promise((resolve, reject) => {
+    server.once('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'EADDRINUSE' && maxRetries > 0) {
+        server.removeAllListeners('error');
+        tryListen(server, port + 1, maxRetries - 1).then(resolve, reject);
+      } else {
+        reject(err);
+      }
+    });
+    server.listen(port, '127.0.0.1', () => resolve(port));
+  });
+}
+
 export async function startWebServer(
   options: WebServerOptions = {},
 ): Promise<void> {
-  const port = options.port ?? 7788;
+  const preferredPort = options.port ?? 7788;
   const staticDir = resolveStaticDir();
 
   const server = http.createServer(async (req, res) => {
@@ -539,25 +557,30 @@ export async function startWebServer(
     serveStatic(staticDir, res, pathname);
   });
 
-  server.listen(port, '127.0.0.1', () => {
-    const url = `http://localhost:${port}`;
-    process.stderr.write(`Qwen Code Web UI running at ${url}\n`);
+  const port = await tryListen(server, preferredPort);
+  const url = `http://localhost:${port}`;
 
-    if (options.open) {
-      // Open browser
-      const opener =
-        process.platform === 'win32'
-          ? 'start'
-          : process.platform === 'darwin'
-            ? 'open'
-            : 'xdg-open';
-      import('node:child_process')
-        .then(({ exec }) => exec(`${opener} ${url}`))
-        .catch(() => {
-          /* ignore open errors */
-        });
-    }
-  });
+  if (port !== preferredPort) {
+    process.stderr.write(
+      `[web] Port ${preferredPort} in use, using ${port} instead\n`,
+    );
+  }
+
+  process.stderr.write(`Qwen Code Web UI running at ${url}\n`);
+
+  if (options.open) {
+    const opener =
+      process.platform === 'win32'
+        ? 'start'
+        : process.platform === 'darwin'
+          ? 'open'
+          : 'xdg-open';
+    import('node:child_process')
+      .then(({ exec }) => exec(`${opener} ${url}`))
+      .catch(() => {
+        /* ignore open errors */
+      });
+  }
 
   // Keep alive until SIGTERM / SIGINT
   await new Promise<void>((resolve) => {
