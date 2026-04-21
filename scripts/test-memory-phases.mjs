@@ -111,6 +111,10 @@ const { SkillInstallTool } = await import(
 const { OnboardingManager } = await import(
   srcUrl('onboarding', 'onboarding-manager.ts')
 );
+const { EpisodeListTool } = await import(
+  srcUrl('tools', 'episode-list.ts')
+);
+const { SkillListTool } = await import(srcUrl('tools', 'skill-list.ts'));
 
 // Quick sanity: confirm os.homedir now points where we expect.
 if (os.homedir() !== tempHome) {
@@ -957,6 +961,158 @@ await section('Phase 6 — First-run onboarding (manager + hint)', async () => {
   process.env['HOME'] = tempHome;
   process.env['USERPROFILE'] = tempHome;
 });
+
+// ─── Phase 7 tests ────────────────────────────────────────────
+
+await section(
+  'Phase 7 — List tools + retention cleanup',
+  async () => {
+    const phase7Home = path.join(tempHome, 'phase7-home');
+    const phase7Project = path.join(phase7Home, 'qwen-demo');
+    await fs.mkdir(phase7Project, { recursive: true });
+    process.env['HOME'] = phase7Home;
+    process.env['USERPROFILE'] = phase7Home;
+
+    const config = new Config({
+      usageStatisticsEnabled: false,
+      debugMode: false,
+      model: 'test',
+      cwd: phase7Project,
+      targetDir: phase7Project,
+      episodes: { retentionDays: 30 },
+    });
+
+    // Seed three episodes: two current, one old (expired).
+    const epStore = new EpisodeStore();
+    await epStore.writeEpisode({
+      id: 'current-a',
+      title: 'Recent task A',
+      timestamp: new Date().toISOString(),
+      durationMins: 30,
+      toolCalls: 20,
+      outcome: 'success',
+      tags: ['docker'],
+      scores: { novelty: 2, reusability: 2, complexity: 3, outcome: 3 },
+      content: 'Body A',
+    });
+    await epStore.writeEpisode({
+      id: 'current-b',
+      title: 'Recent task B',
+      timestamp: new Date().toISOString(),
+      durationMins: 20,
+      toolCalls: 10,
+      outcome: 'success',
+      tags: ['eslint'],
+      scores: { novelty: 2, reusability: 1, complexity: 2, outcome: 3 },
+      content: 'Body B',
+    });
+    await epStore.writeEpisode({
+      id: 'expired-old',
+      title: 'Old task',
+      timestamp: '2020-01-01T00:00:00Z',
+      durationMins: 15,
+      toolCalls: 8,
+      outcome: 'partial',
+      tags: ['eslint'],
+      scores: { novelty: 1, reusability: 1, complexity: 1, outcome: 2 },
+      content: 'Body old',
+    });
+
+    // episode_list — unfiltered should show all three.
+    const epListTool = new EpisodeListTool(config);
+    const allResult = await epListTool
+      .build({})
+      .execute(new AbortController().signal);
+    check(
+      'episode_list returns all three seeded episodes',
+      /Listed 3 episodes/.test(String(allResult.returnDisplay)),
+      String(allResult.returnDisplay),
+    );
+
+    // episode_list with tag filter.
+    const taggedResult = await epListTool
+      .build({ tag: 'docker' })
+      .execute(new AbortController().signal);
+    check(
+      'episode_list tag filter returns only docker',
+      /Listed 1 episode/.test(String(taggedResult.returnDisplay)) &&
+        String(taggedResult.llmContent).includes('current-a'),
+      String(taggedResult.returnDisplay),
+    );
+
+    // Retention cleanup — archive expired episodes.
+    const reviewer = config.getSessionReviewer();
+    const archived = await reviewer.archiveExpired();
+    check(
+      'archiveExpired moves exactly the old episode',
+      archived === 1,
+      `archived=${archived}`,
+    );
+    const afterArchive = await epStore.listEpisodes({ force: true });
+    check(
+      'archived episode no longer appears in live listing',
+      afterArchive.every((e) => e.id !== 'expired-old'),
+      `still present: ${afterArchive.map((e) => e.id).join(', ')}`,
+    );
+    const archiveDir = path.join(
+      phase7Home,
+      '.qwen',
+      'episodes',
+      'archived',
+    );
+    const archivedFiles = await fs.readdir(archiveDir).catch(() => []);
+    check(
+      'archive directory contains the expired file',
+      archivedFiles.includes('expired-old.md'),
+      `got ${JSON.stringify(archivedFiles)}`,
+    );
+
+    // Seed a skill + provenance skill, then test skill_list.
+    const skillManager = config.getSkillManager();
+    await skillManager.writeSkill({
+      name: 'local-phase7',
+      description: 'Phase 7 local skill',
+      body: '# body',
+      level: 'project',
+    });
+    await skillManager.writeSkill({
+      name: 'imported-phase7',
+      description: 'Bundle from another user',
+      body: '# body',
+      level: 'user',
+      provenance: {
+        sourceUser: 'alice',
+        sourceProject: 'other-repo',
+        extractedAt: '2026-04-22T09:00:00Z',
+        extractedFrom: ['foo'],
+      },
+    });
+
+    const skillListTool = new SkillListTool(config);
+    const listResult = await skillListTool
+      .build({})
+      .execute(new AbortController().signal);
+    const listContent = String(listResult.llmContent);
+    check(
+      'skill_list groups by level and names both skills',
+      listContent.includes('## Project') &&
+        listContent.includes('## User') &&
+        listContent.includes('local-phase7') &&
+        listContent.includes('imported-phase7'),
+      'expected grouping / naming missing',
+    );
+    check(
+      'skill_list annotates provenance for installed skills',
+      listContent.includes('from alice') &&
+        listContent.includes('other-repo'),
+      'provenance annotation missing',
+    );
+
+    // Restore HOME for cleanup.
+    process.env['HOME'] = tempHome;
+    process.env['USERPROFILE'] = tempHome;
+  },
+);
 
 // ─── Cleanup ──────────────────────────────────────────────────
 

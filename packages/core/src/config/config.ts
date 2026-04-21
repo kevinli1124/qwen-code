@@ -80,6 +80,8 @@ import { SkillWriteTool } from '../tools/skill-write.js';
 import { SkillProposeTool } from '../tools/skill-propose.js';
 import { MemoryExportTool } from '../tools/memory-export.js';
 import { SkillInstallTool } from '../tools/skill-install.js';
+import { EpisodeListTool } from '../tools/episode-list.js';
+import { SkillListTool } from '../tools/skill-list.js';
 import { MemoryStore } from '../memory/memory-store.js';
 import {
   DEFAULT_EPISODE_SETTINGS,
@@ -1116,6 +1118,34 @@ export class Config {
 
     logStartSession(this, new StartSessionEvent(this));
     this.debugLogger.info('Config initialization completed');
+
+    // Fire-and-forget retention cleanup for episodic memory. Safe to run
+    // post-initialization since it only moves expired files into an
+    // `archived/` subdirectory (never deletes).
+    this.runRetentionCleanup();
+  }
+
+  /**
+   * Runs episode retention cleanup in the background. Any failure is
+   * swallowed into a debug log — this is housekeeping, never critical.
+   */
+  private runRetentionCleanup(): void {
+    const reviewer = this.getSessionReviewer();
+    if (!reviewer) return;
+    void reviewer
+      .archiveExpired()
+      .then((count) => {
+        if (count > 0) {
+          this.debugLogger.info(
+            `Episode retention: archived ${count} expired episode(s).`,
+          );
+        }
+      })
+      .catch((err) => {
+        this.debugLogger.warn(
+          `Episode retention cleanup failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      });
   }
 
   async refreshHierarchicalMemory(): Promise<void> {
@@ -2541,6 +2571,9 @@ export class Config {
     // provenance-tagged skill and install bundles from elsewhere.
     await registerCoreTool(MemoryExportTool, this);
     await registerCoreTool(SkillInstallTool, this);
+    // Read-only listings for discoverability.
+    await registerCoreTool(EpisodeListTool, this);
+    await registerCoreTool(SkillListTool, this);
 
     if (!options?.skipDiscovery) {
       await registry.discoverAllTools();
