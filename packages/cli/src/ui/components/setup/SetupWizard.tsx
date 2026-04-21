@@ -39,7 +39,12 @@ interface LlmQuestion {
 const SOUL_QUESTIONS: LlmQuestion[] = [
   {
     q: '我說話的感覺像',
-    options: ['資深同事（直接、有立場）', '安靜工具（中性、無閒聊）', '導師（耐心、善於解釋）', '幽默駭客（有個性、偶爾嗆）'],
+    options: [
+      '資深同事（直接、有立場）',
+      '安靜工具（中性、無閒聊）',
+      '導師（耐心、善於解釋）',
+      '幽默駭客（有個性、偶爾嗆）',
+    ],
   },
   {
     q: '技術上有問題，主動開口嗎',
@@ -55,7 +60,10 @@ const SOUL_QUESTIONS: LlmQuestion[] = [
   },
   {
     q: '前提錯了，我的反應',
-    options: ['直接說「這個前提不對，因為…」', '委婉提示：「我的理解有點不同…」'],
+    options: [
+      '直接說「這個前提不對，因為…」',
+      '委婉提示：「我的理解有點不同…」',
+    ],
   },
 ];
 
@@ -78,7 +86,9 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
   const [step, setStep] = useState<Step>('connection');
 
   // ── Connection ──
-  const [connStatus, setConnStatus] = useState<'testing' | 'ok' | 'fail'>('testing');
+  const [connStatus, setConnStatus] = useState<'testing' | 'ok' | 'fail'>(
+    'testing',
+  );
   const [connModel, setConnModel] = useState('');
   const [connError, setConnError] = useState('');
 
@@ -343,7 +353,9 @@ ${summary}`;
       const curQ = SOUL_QUESTIONS[qIdx];
       if (!curQ) return;
       if (key.upArrow) {
-        setQCursorIdx((i) => (i - 1 + curQ.options.length) % curQ.options.length);
+        setQCursorIdx(
+          (i) => (i - 1 + curQ.options.length) % curQ.options.length,
+        );
       }
       if (key.downArrow) {
         setQCursorIdx((i) => (i + 1) % curQ.options.length);
@@ -380,19 +392,21 @@ ${summary}`;
         <Box flexDirection="column" marginTop={1} gap={1}>
           <Text bold>Step 1 / 3 — LLM 連線確認</Text>
           {connStatus === 'testing' && (
-            <Text color={theme.text.secondary}>  正在測試連線...</Text>
+            <Text color={theme.text.secondary}> 正在測試連線...</Text>
           )}
           {connStatus === 'ok' && (
             <>
-              <Text color="green">  ✓ 連線成功　模型：{connModel}</Text>
-              <Text color={theme.text.secondary}>  按 Enter 繼續</Text>
+              <Text color="green"> ✓ 連線成功 模型：{connModel}</Text>
+              <Text color={theme.text.secondary}> 按 Enter 繼續</Text>
             </>
           )}
           {connStatus === 'fail' && (
             <>
-              <Text color="red">  ✗ 連線失敗：{connError}</Text>
+              <Text color="red"> ✗ 連線失敗：{connError}</Text>
               <Text color={theme.text.secondary}>
-                {'  請先完成 LLM 設定（/auth）後重啟。或按 Enter 跳過，稍後設定。'}
+                {
+                  '  請先完成 LLM 設定（/auth）後重啟。或按 Enter 跳過，稍後設定。'
+                }
               </Text>
             </>
           )}
@@ -404,7 +418,11 @@ ${summary}`;
         <Box flexDirection="column" marginTop={1} gap={1}>
           <Text bold>Step 2 / 3 — Agent 名字</Text>
           <Box>
-            <Text color={nameMode === 'type' ? theme.text.accent : theme.text.secondary}>
+            <Text
+              color={
+                nameMode === 'type' ? theme.text.accent : theme.text.secondary
+              }
+            >
               {nameMode === 'type' ? '▶ ' : '  '}
             </Text>
             <Text>自己輸入：</Text>
@@ -412,14 +430,22 @@ ${summary}`;
             <Text color={theme.text.secondary}>█</Text>
           </Box>
           <Box>
-            <Text color={nameMode === 'llm' ? theme.text.accent : theme.text.secondary}>
+            <Text
+              color={
+                nameMode === 'llm' ? theme.text.accent : theme.text.secondary
+              }
+            >
               {nameMode === 'llm' ? '▶ ' : '  '}
             </Text>
-            <Text color={nameMode === 'llm' ? theme.text.accent : theme.text.secondary}>
+            <Text
+              color={
+                nameMode === 'llm' ? theme.text.accent : theme.text.secondary
+              }
+            >
               讓 AI 取名
             </Text>
           </Box>
-          <Text color={theme.text.secondary}>  ↑↓ 切換模式　Enter 確認</Text>
+          <Text color={theme.text.secondary}> ↑↓ 切換模式 Enter 確認</Text>
         </Box>
       )}
 
@@ -428,20 +454,28 @@ ${summary}`;
         <Box flexDirection="column" marginTop={1} gap={1}>
           <Text bold>Step 2 / 3 — AI 建議名字</Text>
           {loadingNames ? (
-            <Text color={theme.text.secondary}>  生成中...</Text>
+            <Text color={theme.text.secondary}> 生成中...</Text>
           ) : (
             <>
               {llmNames.map((name, i) => (
                 <Box key={name}>
-                  <Text color={i === llmNameIdx ? theme.text.accent : theme.text.secondary}>
+                  <Text
+                    color={
+                      i === llmNameIdx
+                        ? theme.text.accent
+                        : theme.text.secondary
+                    }
+                  >
                     {i === llmNameIdx ? '▶ ' : '  '}
                   </Text>
-                  <Text color={i === llmNameIdx ? theme.text.accent : undefined}>
+                  <Text
+                    color={i === llmNameIdx ? theme.text.accent : undefined}
+                  >
                     {name}
                   </Text>
                 </Box>
               ))}
-              <Text color={theme.text.secondary}>  ↑↓ 選擇　Enter 確認</Text>
+              <Text color={theme.text.secondary}> ↑↓ 選擇 Enter 確認</Text>
             </>
           )}
         </Box>
@@ -453,16 +487,21 @@ ${summary}`;
           <Text bold>Step 3 / 3 — Agent Soul（個性）</Text>
           {soulOptions.map((opt, i) => (
             <Box key={opt.id}>
-              <Text color={i === soulIdx ? theme.text.accent : theme.text.secondary}>
+              <Text
+                color={i === soulIdx ? theme.text.accent : theme.text.secondary}
+              >
                 {i === soulIdx ? '▶ ' : '  '}
               </Text>
               <Text color={i === soulIdx ? theme.text.accent : undefined}>
                 {opt.label}
               </Text>
-              <Text color={theme.text.secondary}>{'  '}{opt.description}</Text>
+              <Text color={theme.text.secondary}>
+                {'  '}
+                {opt.description}
+              </Text>
             </Box>
           ))}
-          <Text color={theme.text.secondary}>  ↑↓ 選擇　Enter 確認</Text>
+          <Text color={theme.text.secondary}> ↑↓ 選擇 Enter 確認</Text>
         </Box>
       )}
 
@@ -475,19 +514,25 @@ ${summary}`;
           <Text>{SOUL_QUESTIONS[qIdx]?.q}</Text>
           {SOUL_QUESTIONS[qIdx]?.options.map((opt, i) => (
             <Box key={opt}>
-              <Text color={i === qCursorIdx ? theme.text.accent : theme.text.secondary}>
+              <Text
+                color={
+                  i === qCursorIdx ? theme.text.accent : theme.text.secondary
+                }
+              >
                 {i === qCursorIdx ? '▶ ' : '  '}
               </Text>
-              <Text color={i === qCursorIdx ? theme.text.accent : undefined}>{opt}</Text>
+              <Text color={i === qCursorIdx ? theme.text.accent : undefined}>
+                {opt}
+              </Text>
             </Box>
           ))}
-          <Text color={theme.text.secondary}>  ↑↓ 選擇　Enter 確認</Text>
+          <Text color={theme.text.secondary}> ↑↓ 選擇 Enter 確認</Text>
         </Box>
       )}
 
       {step === 'soul-llm' && generatingSoul && (
         <Box flexDirection="column" marginTop={1}>
-          <Text color={theme.text.secondary}>  Soul 生成中，請稍候...</Text>
+          <Text color={theme.text.secondary}> Soul 生成中，請稍候...</Text>
         </Box>
       )}
 
@@ -495,19 +540,30 @@ ${summary}`;
         <Box flexDirection="column" marginTop={1} gap={1}>
           <Text bold>Soul 預覽</Text>
           <Text color={theme.text.secondary}>{divider}</Text>
-          <Text>{generatedSoul.slice(0, 400)}{generatedSoul.length > 400 ? '\n...' : ''}</Text>
+          <Text>
+            {generatedSoul.slice(0, 400)}
+            {generatedSoul.length > 400 ? '\n...' : ''}
+          </Text>
           <Text color={theme.text.secondary}>{divider}</Text>
-          <Text color={theme.text.secondary}>  按 Enter 確認並完成設定</Text>
+          <Text color={theme.text.secondary}> 按 Enter 確認並完成設定</Text>
         </Box>
       )}
 
       {/* Step: Done */}
       {step === 'done' && (
         <Box flexDirection="column" marginTop={1} gap={1}>
-          <Text bold color="green">✓ 設定完成</Text>
-          <Text>  Agent 名字：<Text bold color={theme.text.accent}>{agentName}</Text></Text>
-          <Text color={theme.text.secondary}>  Soul 已寫入 ~/.qwen/soul.md</Text>
-          <Text color={theme.text.secondary}>  正在啟動...</Text>
+          <Text bold color="green">
+            ✓ 設定完成
+          </Text>
+          <Text>
+            {' '}
+            Agent 名字：
+            <Text bold color={theme.text.accent}>
+              {agentName}
+            </Text>
+          </Text>
+          <Text color={theme.text.secondary}> Soul 已寫入 ~/.qwen/soul.md</Text>
+          <Text color={theme.text.secondary}> 正在啟動...</Text>
         </Box>
       )}
     </Box>

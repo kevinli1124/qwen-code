@@ -139,7 +139,7 @@ const baseline = runScenario('baseline (NO prefix — expect broken)', '');
 
 // Wipe files between runs so we see each scenario's output clearly.
 for (const f of fixtures) {
-  try { fs.unlinkSync(f.path); } catch {}
+  try { fs.unlinkSync(f.path); } catch { /* best effort */ }
 }
 
 // ─── Scenario B: WITH our UTF-8 prefix (expect clean UTF-8) ────────────
@@ -148,7 +148,7 @@ const withPrefix = runScenario('with UTF-8 prefix (expect clean UTF-8)', UTF8_PR
 // ─── Cleanup ────────────────────────────────────────────────────────────
 try {
   for (const f of fixtures) {
-    try { fs.unlinkSync(f.path); } catch {}
+    try { fs.unlinkSync(f.path); } catch { /* best effort */ }
   }
   fs.rmdirSync(tmpDir);
 } catch { /* best effort */ }
