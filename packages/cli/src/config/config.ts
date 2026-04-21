@@ -1110,6 +1110,14 @@ export async function loadCliConfig(
     fileFiltering: settings.context?.fileFiltering,
     checkpointing:
       argv.checkpointing || settings.general?.checkpointing?.enabled,
+    episodes: settings.general?.episodes
+      ? {
+          autoCapture: settings.general.episodes.autoCapture,
+          toolCallThreshold: settings.general.episodes.toolCallThreshold,
+          durationMsThreshold: settings.general.episodes.durationMsThreshold,
+          retentionDays: settings.general.episodes.retentionDays,
+        }
+      : undefined,
     proxy:
       argv.proxy ||
       process.env['HTTPS_PROXY'] ||

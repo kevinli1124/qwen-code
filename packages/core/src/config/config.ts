@@ -76,6 +76,12 @@ import { TriggerManager } from '../triggers/trigger-manager.js';
 import { MemoryWriteTool } from '../tools/memory-write.js';
 import { MemoryRemoveTool } from '../tools/memory-remove.js';
 import { MemoryStore } from '../memory/memory-store.js';
+import {
+  DEFAULT_EPISODE_SETTINGS,
+  SessionReviewer,
+  type AutoCaptureMode,
+  type EpisodeCaptureSettings,
+} from '../episodes/session-reviewer.js';
 import type { LspClient } from '../lsp/types.js';
 
 // Other modules
@@ -386,6 +392,11 @@ export interface ConfigParameters {
     enableFuzzySearch?: boolean;
   };
   checkpointing?: boolean;
+  /**
+   * Episodic memory capture settings. See `EpisodeCaptureSettings` for
+   * defaults; any fields omitted fall back to defaults.
+   */
+  episodes?: Partial<EpisodeCaptureSettings>;
   proxy?: string;
   cwd: string;
   fileDiscoveryService?: FileDiscoveryService;
@@ -577,6 +588,8 @@ export class Config {
   private cronScheduler: CronScheduler | null = null;
   private triggerManager: TriggerManager | null = null;
   private memoryStore: MemoryStore | null = null;
+  private sessionReviewer: SessionReviewer | null = null;
+  private readonly episodeSettings: EpisodeCaptureSettings;
   private readonly fileFiltering: {
     respectGitIgnore: boolean;
     respectQwenIgnore: boolean;
@@ -730,6 +743,20 @@ export class Config {
       enableFuzzySearch: params.fileFiltering?.enableFuzzySearch ?? true,
     };
     this.checkpointing = params.checkpointing ?? false;
+    this.episodeSettings = {
+      autoCapture:
+        (params.episodes?.autoCapture as AutoCaptureMode | undefined) ??
+        DEFAULT_EPISODE_SETTINGS.autoCapture,
+      toolCallThreshold:
+        params.episodes?.toolCallThreshold ??
+        DEFAULT_EPISODE_SETTINGS.toolCallThreshold,
+      durationMsThreshold:
+        params.episodes?.durationMsThreshold ??
+        DEFAULT_EPISODE_SETTINGS.durationMsThreshold,
+      retentionDays:
+        params.episodes?.retentionDays ??
+        DEFAULT_EPISODE_SETTINGS.retentionDays,
+    };
     this.proxy = params.proxy;
     this.cwd = params.cwd ?? process.cwd();
     this.fileDiscoveryService = params.fileDiscoveryService ?? null;
@@ -1859,6 +1886,25 @@ export class Config {
       this.memoryStore = new MemoryStore(this.getProjectRoot());
     }
     return this.memoryStore;
+  }
+
+  getEpisodeSettings(): EpisodeCaptureSettings {
+    return this.episodeSettings;
+  }
+
+  /**
+   * Lazily constructs the SessionReviewer. Returns null when capture is
+   * disabled so callers can short-circuit without instantiating file I/O.
+   */
+  getSessionReviewer(): SessionReviewer | null {
+    if (this.episodeSettings.autoCapture === 'off') return null;
+    if (!this.sessionReviewer) {
+      this.sessionReviewer = new SessionReviewer(
+        undefined,
+        this.episodeSettings,
+      );
+    }
+    return this.sessionReviewer;
   }
 
   isCronEnabled(): boolean {

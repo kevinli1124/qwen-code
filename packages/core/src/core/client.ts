@@ -12,6 +12,7 @@ import type {
   PartListUnion,
   Tool,
 } from '@google/genai';
+import { FinishReason } from '@google/genai';
 
 // Config
 import { ApprovalMode, type Config } from '../config/config.js';
@@ -502,6 +503,18 @@ export class GeminiClient {
       this.stripOrphanedUserEntriesFromHistory();
     }
 
+    // Episodic capture — snapshot the turn boundary at entry so we can
+    // evaluate the completed turn at the return site below. Only initial
+    // user queries are captured; Hook/Retry/Cron/next-speaker recursions
+    // do not create their own episodes.
+    const episodeCaptureMeta: { startedAt: number; startIndex: number } | null =
+      messageType === SendMessageType.UserQuery
+        ? {
+            startedAt: Date.now(),
+            startIndex: this.getHistory().length,
+          }
+        : null;
+
     // Fire UserPromptSubmit hook through MessageBus (only if hooks are enabled)
     const hooksEnabled = !this.config.getDisableAllHooks();
     const messageBus = this.config.getMessageBus();
@@ -945,7 +958,37 @@ export class GeminiClient {
       }
     }
 
+    if (episodeCaptureMeta) {
+      // Fire-and-forget: reviewer decides internally whether to capture.
+      // Failures are logged inside the reviewer; never block the caller.
+      void this.runEpisodeCapture(episodeCaptureMeta, turn, signal).catch(
+        (err) => {
+          debugLogger.warn(
+            `Episode capture failed: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        },
+      );
+    }
+
     return turn;
+  }
+
+  private async runEpisodeCapture(
+    meta: { startedAt: number; startIndex: number },
+    turn: Turn,
+    _signal: AbortSignal,
+  ): Promise<void> {
+    const reviewer = this.config.getSessionReviewer();
+    if (!reviewer) return;
+    const history = this.getHistory();
+    await reviewer.maybeCapture({
+      history,
+      turnStartIndex: meta.startIndex,
+      turnStartedAt: meta.startedAt,
+      turnEndedAt: Date.now(),
+      completedNormally:
+        !turn.finishReason || turn.finishReason === FinishReason.STOP,
+    });
   }
 
   async generateContent(

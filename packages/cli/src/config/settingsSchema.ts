@@ -317,6 +317,63 @@ const SETTINGS_SCHEMA = {
           },
         },
       },
+      episodes: {
+        type: 'object',
+        label: 'Episodic Memory',
+        category: 'Memory',
+        requiresRestart: false,
+        default: {},
+        description:
+          'Automatic episode capture from completed long-running tasks. Episodes feed memory distillation and skill proposal.',
+        showInDialog: false,
+        properties: {
+          autoCapture: {
+            type: 'enum',
+            label: 'Auto-capture mode',
+            category: 'Memory',
+            requiresRestart: false,
+            default: 'ask',
+            description:
+              'When a long-running turn completes: off = never capture, ask = confirm before writing, auto = write without confirmation.',
+            options: [
+              { value: 'off', label: 'Off' },
+              { value: 'ask', label: 'Ask' },
+              { value: 'auto', label: 'Auto' },
+            ],
+            showInDialog: true,
+          },
+          toolCallThreshold: {
+            type: 'number',
+            label: 'Tool call threshold',
+            category: 'Memory',
+            requiresRestart: false,
+            default: 15,
+            description:
+              'A turn is considered "long" and worth capturing when it uses at least this many tool calls.',
+            showInDialog: false,
+          },
+          durationMsThreshold: {
+            type: 'number',
+            label: 'Duration threshold (ms)',
+            category: 'Memory',
+            requiresRestart: false,
+            default: 1_200_000,
+            description:
+              'A turn is considered "long" and worth capturing when it lasts at least this many milliseconds. Default: 20 minutes.',
+            showInDialog: false,
+          },
+          retentionDays: {
+            type: 'number',
+            label: 'Retention (days)',
+            category: 'Memory',
+            requiresRestart: false,
+            default: 90,
+            description:
+              'Episodes older than this many days are moved to ~/.qwen/episodes/archived/. Set to 0 to disable archival.',
+            showInDialog: false,
+          },
+        },
+      },
       debugKeystrokeLogging: {
         type: 'boolean',
         label: 'Debug Keystroke Logging',

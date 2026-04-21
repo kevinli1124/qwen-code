@@ -67,6 +67,36 @@
             }
           }
         },
+        "episodes": {
+          "description": "Automatic episode capture from completed long-running tasks. Episodes feed memory distillation and skill proposal.",
+          "type": "object",
+          "properties": {
+            "autoCapture": {
+              "description": "When a long-running turn completes: off = never capture, ask = confirm before writing, auto = write without confirmation. Options: off, ask, auto",
+              "enum": [
+                "off",
+                "ask",
+                "auto"
+              ],
+              "default": "ask"
+            },
+            "toolCallThreshold": {
+              "description": "A turn is considered \"long\" and worth capturing when it uses at least this many tool calls.",
+              "type": "number",
+              "default": 15
+            },
+            "durationMsThreshold": {
+              "description": "A turn is considered \"long\" and worth capturing when it lasts at least this many milliseconds. Default: 20 minutes.",
+              "type": "number",
+              "default": 1200000
+            },
+            "retentionDays": {
+              "description": "Episodes older than this many days are moved to ~/.qwen/episodes/archived/. Set to 0 to disable archival.",
+              "type": "number",
+              "default": 90
+            }
+          }
+        },
         "debugKeystrokeLogging": {
           "description": "Enable debug logging of keystrokes to the console.",
           "type": "boolean",
