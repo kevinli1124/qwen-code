@@ -8,15 +8,20 @@ import { filesystemApi } from '../../api/filesystem';
 
 interface FolderBrowserProps {
   onSelect: (path: string) => void;
+  onFileSelect?: (path: string) => void;
   initialPath?: string;
+  mode?: 'folder' | 'file';
 }
 
 export const FolderBrowser: FC<FolderBrowserProps> = ({
   onSelect,
+  onFileSelect,
   initialPath = '/',
+  mode = 'folder',
 }) => {
   const [currentPath, setCurrentPath] = useState(initialPath);
   const [dirs, setDirs] = useState<string[]>([]);
+  const [files, setFiles] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [manualPath, setManualPath] = useState(initialPath);
@@ -27,6 +32,7 @@ export const FolderBrowser: FC<FolderBrowserProps> = ({
     try {
       const result = await filesystemApi.browse(path);
       setDirs(result.dirs);
+      setFiles(result.files);
       setCurrentPath(result.path);
       setManualPath(result.path);
     } catch (e) {
@@ -134,7 +140,7 @@ export const FolderBrowser: FC<FolderBrowserProps> = ({
 
             {dirs.map((dir) => (
               <button
-                key={dir}
+                key={`d-${dir}`}
                 onClick={() => navigateTo(dir)}
                 className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-[#e8e6e3] hover:bg-[#2e2e2e] transition-colors group"
               >
@@ -168,17 +174,51 @@ export const FolderBrowser: FC<FolderBrowserProps> = ({
                 </svg>
               </button>
             ))}
+
+            {mode === 'file' &&
+              files.map((file) => {
+                const filePath = `${currentPath.replace(/\\/g, '/').replace(/\/$/, '')}/${file}`;
+                return (
+                  <button
+                    key={`f-${file}`}
+                    onClick={() => onFileSelect?.(filePath)}
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-[#8a8a8a] hover:bg-[#2e2e2e] hover:text-accent transition-colors"
+                  >
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 12 12"
+                      fill="none"
+                      className="flex-shrink-0"
+                    >
+                      <path
+                        d="M2 1.5A1.5 1.5 0 013.5 0H7l3.5 3.5V10.5A1.5 1.5 0 019 12H3.5A1.5 1.5 0 012 10.5v-9z"
+                        stroke="currentColor"
+                        strokeWidth="1.2"
+                      />
+                      <path
+                        d="M7 0v3.5H10.5"
+                        stroke="currentColor"
+                        strokeWidth="1.2"
+                      />
+                    </svg>
+                    <span className="flex-1 text-left truncate">{file}</span>
+                  </button>
+                );
+              })}
           </div>
         )}
       </div>
 
       {/* Select current button */}
-      <button
-        onClick={() => onSelect(currentPath)}
-        className="w-full py-2 text-xs bg-accent text-white rounded hover:bg-accent-hover transition-colors font-medium"
-      >
-        Select: {currentPath}
-      </button>
+      {mode === 'folder' && (
+        <button
+          onClick={() => onSelect(currentPath)}
+          className="w-full py-2 text-xs bg-accent text-white rounded hover:bg-accent-hover transition-colors font-medium"
+        >
+          Select: {currentPath}
+        </button>
+      )}
     </div>
   );
 };
