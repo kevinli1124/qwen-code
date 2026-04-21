@@ -13,12 +13,12 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Claude Code visual style overrides
+        // Qwen brand colors
         sidebar: '#0f0f0f',
         surface: '#1a1a1a',
         card: '#242424',
-        accent: '#d97757',
-        'accent-hover': '#c4643e',
+        accent: '#4f6bff',
+        'accent-hover': '#3a55e8',
       },
       animation: {
         'fade-up': 'fade-up 150ms ease-out both',

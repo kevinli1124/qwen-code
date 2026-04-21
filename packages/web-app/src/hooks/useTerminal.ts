@@ -23,8 +23,8 @@ export function useTerminal(
         theme: {
           background: '#0f0f0f',
           foreground: '#e8e6e3',
-          cursor: '#d97757',
-          selectionBackground: 'rgba(217, 119, 87, 0.3)',
+          cursor: '#4f6bff',
+          selectionBackground: 'rgba(79, 107, 255, 0.3)',
         },
         fontFamily: 'JetBrains Mono, ui-monospace, monospace',
         fontSize: 13,

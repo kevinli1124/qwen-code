@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Claude Code visual style — override webui defaults */
+/* Qwen official brand colors */
 :root {
   /* Fonts */
   --app-font-sans: 'Inter', system-ui, -apple-system, sans-serif;
@@ -26,11 +26,11 @@
   /* Borders */
   --app-border: #2e2e2e;
   --app-primary-border-color: #2e2e2e;
-  --app-border-focus: #d97757;
+  --app-border-focus: #4f6bff;
 
-  /* Primary/Accent — Claude orange */
-  --app-primary: #d97757;
-  --app-primary-hover: #c4643e;
+  /* Primary/Accent — Qwen blue-purple */
+  --app-primary: #4f6bff;
+  --app-primary-hover: #3a55e8;
 
   /* Status */
   --app-success: #10b981;
@@ -53,7 +53,7 @@
 
   /* List */
   --app-list-hover-background: rgba(255,255,255,0.05);
-  --app-list-active-background: rgba(217,119,87,0.15);
+  --app-list-active-background: rgba(79,107,255,0.15);
 
   /* Buttons */
   --app-button-background: #2e2e2e;
