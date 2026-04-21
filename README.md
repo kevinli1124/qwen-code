@@ -1,22 +1,43 @@
 <div align="center">
 
-[![npm version](https://img.shields.io/npm/v/@qwen-code/qwen-code.svg)](https://www.npmjs.com/package/@qwen-code/qwen-code)
 [![License](https://img.shields.io/github/license/QwenLM/qwen-code.svg)](./LICENSE)
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen.svg)](https://nodejs.org/)
-[![Downloads](https://img.shields.io/npm/dm/@qwen-code/qwen-code.svg)](https://www.npmjs.com/package/@qwen-code/qwen-code)
-
-<a href="https://trendshift.io/repositories/15287" target="_blank"><img src="https://trendshift.io/api/badge/repositories/15287" alt="QwenLM%2Fqwen-code | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 
 **An open-source AI agent that lives in your terminal.**
 
-<a href="https://qwenlm.github.io/qwen-code-docs/zh/users/overview">中文</a> |
-<a href="https://qwenlm.github.io/qwen-code-docs/de/users/overview">Deutsch</a> |
-<a href="https://qwenlm.github.io/qwen-code-docs/fr/users/overview">français</a> |
-<a href="https://qwenlm.github.io/qwen-code-docs/ja/users/overview">日本語</a> |
-<a href="https://qwenlm.github.io/qwen-code-docs/ru/users/overview">Русский</a> |
-<a href="https://qwenlm.github.io/qwen-code-docs/pt-BR/users/overview">Português (Brasil)</a>
+> **This is a SkyAutoCraft internal fork** of [QwenLM/qwen-code](https://github.com/QwenLM/qwen-code).
+> It is not published to npm. Install from source — see [Installation from Source](#installation-from-source) below.
 
 </div>
+
+## SkyAutoCraft Fork — What's Different
+
+This fork extends the upstream Qwen Code with features built for SkyAutoCraft internal use. Changes are tracked in git history; modified files carry a `Copyright 2026 Qwen Team` header while original Google-authored files retain `Copyright 2025 Google LLC`.
+
+### Added Features
+
+| Feature                                             | Description                                                                                                                                                                                                 |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Web UI** (`packages/web-app`)                     | Browser-based interface with 3-column layout (sidebar + conversation + right panel). Terminal (xterm.js), file ops log, and plan checklist tabs. Served by the CLI's built-in HTTP server via `qwen --web`. |
+| **Telegram Gateway** (`packages/channels/telegram`) | Interactive Telegram bot with setup wizard. Run `node packages/channels/telegram/setup.js` to configure.                                                                                                    |
+| **Unified Agent Trigger + Memory**                  | Structured memory system (user / feedback / project / reference types) under `.qwen/` and `~/.claude/projects/`.                                                                                            |
+| **First-run Setup Wizard**                          | Guided onboarding on first launch — choose agent name, soul, and LLM provider.                                                                                                                              |
+| **Soul System**                                     | Agent personality via `soul.md` files. Project-level soul capped at 8 KB for safety.                                                                                                                        |
+
+### Security Hardening
+
+| Change                | Detail                                                                                                        |
+| --------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Telemetry removed     | OpenTelemetry SDK and QwenLogger (Aliyun RUM) completely removed. All telemetry functions are local no-ops.   |
+| Update check disabled | `checkForUpdates()` always returns `null` — no npm registry calls are ever made.                              |
+| Private IP blocking   | `web_fetch` tool blocks access to `localhost`, `127.x`, `10.x`, `192.168.x`, `172.16-31.x` (SSRF protection). |
+
+### License Compliance
+
+- `NOTICE` file added — documents upstream Google Gemini CLI origin per Apache 2.0 requirements.
+- All source files have `@license` headers; Google-originated files retain original copyright.
+
+---
 
 ## 🎉 News
 
@@ -39,40 +60,82 @@ Qwen Code is an open-source AI agent for the terminal, optimized for Qwen series
 
 ![](https://gw.alicdn.com/imgextra/i1/O1CN01D2DviS1wwtEtMwIzJ_!!6000000006373-2-tps-1600-900.png)
 
-## Installation
+## Installation from Source
 
-### Quick Install (Recommended)
+This fork is not published to npm. Install by cloning the repo and building locally.
 
-#### Linux / macOS
+### Prerequisites
 
-```bash
-bash -c "$(curl -fsSL https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/installation/install-qwen.sh)"
-```
-
-#### Windows (Run as Administrator CMD)
-
-```cmd
-curl -fsSL -o %TEMP%\install-qwen.bat https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/installation/install-qwen.bat && %TEMP%\install-qwen.bat
-```
-
-> **Note**: It's recommended to restart your terminal after installation to ensure environment variables take effect.
-
-### Manual Installation
-
-#### Prerequisites
-
-Make sure you have Node.js 20 or later installed. Download it from [nodejs.org](https://nodejs.org/en/download).
-
-#### NPM
+Node.js **20.x** is required (pinned via conda on this machine to avoid version drift).
 
 ```bash
-npm install -g @qwen-code/qwen-code@latest
+# One-time: create the conda environment (already done on the dev machine)
+conda create -n qwen-code -c conda-forge nodejs=20.20.2
+
+# Activate before any npm / node command
+conda activate qwen-code
+
+# Verify
+node --version   # should print v20.20.2
 ```
 
-#### Homebrew (macOS, Linux)
+If `conda` is not in PATH, call it directly:
 
 ```bash
-brew install qwen-code
+C:/Users/Sky/anaconda3/Scripts/conda.exe run -n qwen-code <command>
+```
+
+### Build & Install
+
+```bash
+# 1. Clone
+git clone https://github.com/kevinli1124/qwen-code.git
+cd qwen-code
+
+# 2. Install dependencies
+npm install
+
+# 3. Build all packages
+npm run build
+
+# 4. Bundle the CLI into a single file
+npm run bundle
+
+# 5. Link globally so `qwen` is available anywhere
+npm link --workspace=packages/cli
+```
+
+After `npm link`, `qwen` is available as a global command.
+
+### Web UI (Browser Interface)
+
+```bash
+# Build the web-app first (only needed once, or after web-app changes)
+npm run build --workspace=packages/web-app
+
+# Inline web assets into the CLI bundle
+node scripts/inline_web_assets.js
+
+# Start CLI with web server
+qwen --web
+
+# Open http://localhost:7799 in your browser
+```
+
+### Telegram Channel
+
+```bash
+# Interactive setup wizard
+node packages/channels/telegram/setup.js
+
+# Start the bot (after setup)
+node packages/channels/telegram/start.js
+```
+
+### Development Mode (no bundling)
+
+```bash
+npm run dev
 ```
 
 ## Quick Start
