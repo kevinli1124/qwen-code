@@ -1118,6 +1118,13 @@ export async function loadCliConfig(
           retentionDays: settings.general.episodes.retentionDays,
         }
       : undefined,
+    onboarding: settings.general?.onboarding
+      ? {
+          enabled: settings.general.onboarding.enabled,
+          minQuestions: settings.general.onboarding.minQuestions,
+          askOnGap: settings.general.onboarding.askOnGap,
+        }
+      : undefined,
     proxy:
       argv.proxy ||
       process.env['HTTPS_PROXY'] ||

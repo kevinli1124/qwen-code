@@ -67,6 +67,27 @@
             }
           }
         },
+        "onboarding": {
+          "description": "When enabled, the agent prompts for a minimal user profile on the first session (how to address the user, preferred language, etc.) and saves it to memory.",
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "description": "Prompt for a basic user profile on the first session. Skipped automatically once ~/.qwen/memory/user_profile.md exists.",
+              "type": "boolean",
+              "default": true
+            },
+            "minQuestions": {
+              "description": "Lowest number of required questions on first run (default 1: just \"how should I address you?\"). Optional questions are never blocking.",
+              "type": "number",
+              "default": 1
+            },
+            "askOnGap": {
+              "description": "Allow the agent to ask follow-up profile questions later when it notices a missing field (e.g. preferred shell). Set false to freeze the profile after first run.",
+              "type": "boolean",
+              "default": true
+            }
+          }
+        },
         "episodes": {
           "description": "Automatic episode capture from completed long-running tasks. Episodes feed memory distillation and skill proposal.",
           "type": "object",

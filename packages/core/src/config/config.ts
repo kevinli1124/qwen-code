@@ -87,6 +87,11 @@ import {
   type AutoCaptureMode,
   type EpisodeCaptureSettings,
 } from '../episodes/session-reviewer.js';
+import { OnboardingManager } from '../onboarding/onboarding-manager.js';
+import {
+  DEFAULT_ONBOARDING_SETTINGS,
+  type OnboardingSettings,
+} from '../onboarding/types.js';
 import type { LspClient } from '../lsp/types.js';
 
 // Other modules
@@ -402,6 +407,12 @@ export interface ConfigParameters {
    * defaults; any fields omitted fall back to defaults.
    */
   episodes?: Partial<EpisodeCaptureSettings>;
+  /**
+   * First-run onboarding settings. When enabled, a hint is prepended to the
+   * memory index instructing the agent to collect a basic user profile on
+   * the first session.
+   */
+  onboarding?: Partial<OnboardingSettings>;
   proxy?: string;
   cwd: string;
   fileDiscoveryService?: FileDiscoveryService;
@@ -595,6 +606,8 @@ export class Config {
   private memoryStore: MemoryStore | null = null;
   private sessionReviewer: SessionReviewer | null = null;
   private readonly episodeSettings: EpisodeCaptureSettings;
+  private onboardingManager: OnboardingManager | null = null;
+  private readonly onboardingSettings: OnboardingSettings;
   private readonly fileFiltering: {
     respectGitIgnore: boolean;
     respectQwenIgnore: boolean;
@@ -761,6 +774,15 @@ export class Config {
       retentionDays:
         params.episodes?.retentionDays ??
         DEFAULT_EPISODE_SETTINGS.retentionDays,
+    };
+    this.onboardingSettings = {
+      enabled:
+        params.onboarding?.enabled ?? DEFAULT_ONBOARDING_SETTINGS.enabled,
+      minQuestions:
+        params.onboarding?.minQuestions ??
+        DEFAULT_ONBOARDING_SETTINGS.minQuestions,
+      askOnGap:
+        params.onboarding?.askOnGap ?? DEFAULT_ONBOARDING_SETTINGS.askOnGap,
     };
     this.proxy = params.proxy;
     this.cwd = params.cwd ?? process.cwd();
@@ -1122,6 +1144,21 @@ export class Config {
     } catch (err) {
       this.debugLogger.warn(
         'Failed to load memory index:',
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+
+    // Prepend first-run onboarding hint when user_profile memory is absent.
+    // The block self-removes on the next refresh once the profile is saved.
+    try {
+      const onboarding = this.getOnboardingManager();
+      if (await onboarding.shouldPromptOnboarding()) {
+        const hint = onboarding.buildOnboardingHint();
+        mergedMemory = mergedMemory ? `${hint}\n\n${mergedMemory}` : hint;
+      }
+    } catch (err) {
+      this.debugLogger.warn(
+        'Failed to compose onboarding hint:',
         err instanceof Error ? err.message : String(err),
       );
     }
@@ -1910,6 +1947,25 @@ export class Config {
       );
     }
     return this.sessionReviewer;
+  }
+
+  getOnboardingSettings(): OnboardingSettings {
+    return this.onboardingSettings;
+  }
+
+  /**
+   * Lazily constructs the OnboardingManager. Always returns a manager, even
+   * when onboarding is disabled, so callers that probe `shouldPromptOnboarding`
+   * get a consistent `false` result without branching.
+   */
+  getOnboardingManager(): OnboardingManager {
+    if (!this.onboardingManager) {
+      this.onboardingManager = new OnboardingManager(
+        this.getMemoryStore(),
+        this.onboardingSettings,
+      );
+    }
+    return this.onboardingManager;
   }
 
   isCronEnabled(): boolean {

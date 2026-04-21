@@ -108,6 +108,9 @@ const { MemoryExportTool } = await import(
 const { SkillInstallTool } = await import(
   srcUrl('tools', 'skill-install.ts')
 );
+const { OnboardingManager } = await import(
+  srcUrl('onboarding', 'onboarding-manager.ts')
+);
 
 // Quick sanity: confirm os.homedir now points where we expect.
 if (os.homedir() !== tempHome) {
@@ -867,6 +870,93 @@ await section(
     }
   },
 );
+
+// ─── Phase 6 tests ────────────────────────────────────────────
+
+await section('Phase 6 — First-run onboarding (manager + hint)', async () => {
+  // Fresh $HOME for this section to isolate from earlier memory writes.
+  const onboardHome = path.join(tempHome, 'phase6-home');
+  const onboardProject = path.join(onboardHome, 'qwen-demo');
+  await fs.mkdir(onboardProject, { recursive: true });
+  process.env['HOME'] = onboardHome;
+  process.env['USERPROFILE'] = onboardHome;
+
+  const config = new Config({
+    usageStatisticsEnabled: false,
+    debugMode: false,
+    model: 'test',
+    cwd: onboardProject,
+    targetDir: onboardProject,
+  });
+  const store = config.getMemoryStore();
+  const mgr = new OnboardingManager(store);
+
+  check(
+    'shouldPromptOnboarding=true on fresh workspace',
+    (await mgr.shouldPromptOnboarding()) === true,
+    'profile already existed?',
+  );
+
+  const hint = mgr.buildOnboardingHint();
+  check(
+    'hint asks the required name question',
+    /What should I call you\?/.test(hint),
+    'required question missing',
+  );
+  check(
+    'hint instructs the model to call memory_write for user_profile',
+    hint.includes('memory_write') && hint.includes('user_profile'),
+    'save instruction missing',
+  );
+
+  // Refresh memory via Config — the hint should appear in the merged block.
+  await config.refreshHierarchicalMemory();
+  const userMemoryBefore = config.getUserMemory();
+  check(
+    'Config.refreshHierarchicalMemory prepends the hint before profile is saved',
+    userMemoryBefore.includes('First-run onboarding'),
+    'hint not injected',
+  );
+
+  // Record the profile the way the model would.
+  await mgr.recordProfile({
+    name: 'Sky',
+    role: 'solo developer',
+    reply_style: 'concise',
+    language: 'zh-TW',
+  });
+
+  check(
+    'shouldPromptOnboarding=false once profile saved',
+    (await mgr.shouldPromptOnboarding()) === false,
+    'still prompting after save',
+  );
+
+  const gaps = await mgr.detectGaps(['shell']);
+  check(
+    'detectGaps surfaces only truly missing fields (here: shell)',
+    gaps.length === 1 && gaps[0] === 'shell',
+    `got ${JSON.stringify(gaps)}`,
+  );
+
+  // Refresh again — hint should disappear now that profile exists.
+  await config.refreshHierarchicalMemory();
+  const userMemoryAfter = config.getUserMemory();
+  check(
+    'onboarding hint removed after user_profile is saved',
+    !userMemoryAfter.includes('First-run onboarding'),
+    'hint still present',
+  );
+  check(
+    'memory index still surfaces the saved user_profile',
+    userMemoryAfter.includes('user_profile'),
+    'user_profile not in merged memory',
+  );
+
+  // Restore HOME for cleanup at end of script.
+  process.env['HOME'] = tempHome;
+  process.env['USERPROFILE'] = tempHome;
+});
 
 // ─── Cleanup ──────────────────────────────────────────────────
 

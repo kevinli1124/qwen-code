@@ -317,6 +317,48 @@ const SETTINGS_SCHEMA = {
           },
         },
       },
+      onboarding: {
+        type: 'object',
+        label: 'First-run onboarding',
+        category: 'Memory',
+        requiresRestart: false,
+        default: {},
+        description:
+          'When enabled, the agent prompts for a minimal user profile on the first session (how to address the user, preferred language, etc.) and saves it to memory.',
+        showInDialog: false,
+        properties: {
+          enabled: {
+            type: 'boolean',
+            label: 'Enable onboarding',
+            category: 'Memory',
+            requiresRestart: false,
+            default: true,
+            description:
+              'Prompt for a basic user profile on the first session. Skipped automatically once ~/.qwen/memory/user_profile.md exists.',
+            showInDialog: true,
+          },
+          minQuestions: {
+            type: 'number',
+            label: 'Minimum questions',
+            category: 'Memory',
+            requiresRestart: false,
+            default: 1,
+            description:
+              'Lowest number of required questions on first run (default 1: just "how should I address you?"). Optional questions are never blocking.',
+            showInDialog: false,
+          },
+          askOnGap: {
+            type: 'boolean',
+            label: 'Ask on gap',
+            category: 'Memory',
+            requiresRestart: false,
+            default: true,
+            description:
+              'Allow the agent to ask follow-up profile questions later when it notices a missing field (e.g. preferred shell). Set false to freeze the profile after first run.',
+            showInDialog: false,
+          },
+        },
+      },
       episodes: {
         type: 'object',
         label: 'Episodic Memory',
