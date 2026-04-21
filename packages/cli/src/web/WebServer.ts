@@ -12,16 +12,16 @@ import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { SessionManager } from './SessionManager.js';
 import { PersistenceManager } from './PersistenceManager.js';
+import { staticFiles } from './staticFiles.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Static files are served from the web-app dist/ relative to this file.
-// In the bundled .exe the dist/ is inlined via staticFiles.ts; for dev we use the real path.
+const USE_EMBEDDED = Object.keys(staticFiles).length > 0;
+
+// Resolve the dev-mode static directory (web-app dist/).
 function resolveStaticDir(): string {
-  // Look relative to packages/cli/src/web/ → ../../../../packages/web-app/dist
   const devPath = path.resolve(__dirname, '../../../../packages/web-app/dist');
   if (fs.existsSync(devPath)) return devPath;
-  // Fallback: same directory as the bundle
   return path.resolve(__dirname, 'web-dist');
 }
 
@@ -82,12 +82,32 @@ function parsePathname(req: http.IncomingMessage): {
   return { pathname: url.pathname, search: url.searchParams };
 }
 
+function serveEmbedded(res: http.ServerResponse, reqPath: string): void {
+  const lookup = staticFiles[reqPath] ?? staticFiles['/index.html'];
+  if (!lookup) {
+    res.writeHead(404);
+    res.end('Not found');
+    return;
+  }
+  const data = Buffer.from(lookup.data, 'base64');
+  res.writeHead(200, {
+    'Content-Type': lookup.mime,
+    'Content-Length': data.length,
+  });
+  res.end(data);
+}
+
 function serveStatic(
   staticDir: string,
   res: http.ServerResponse,
   reqPath: string,
 ): void {
-  // Serve index.html for all non-asset paths (SPA fallback)
+  if (USE_EMBEDDED) {
+    serveEmbedded(res, reqPath);
+    return;
+  }
+
+  // Dev mode: serve from disk (web-app dist/)
   const ext = path.extname(reqPath);
   const filePath = ext
     ? path.join(staticDir, reqPath)
@@ -95,7 +115,6 @@ function serveStatic(
 
   fs.readFile(filePath, (err, data) => {
     if (err) {
-      // SPA fallback
       const indexPath = path.join(staticDir, 'index.html');
       fs.readFile(indexPath, (err2, indexData) => {
         if (err2) {

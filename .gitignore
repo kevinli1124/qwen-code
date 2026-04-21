@@ -50,6 +50,7 @@ packages/*/coverage/
 packages/cli/src/generated/
 packages/core/src/generated/
 packages/web-templates/src/generated/
+packages/web-app/dist/
 .integration-tests/
 packages/vscode-ide-companion/*.vsix
 
