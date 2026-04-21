@@ -10,7 +10,10 @@ import * as path from 'path';
 import * as os from 'os';
 import { fileURLToPath } from 'url';
 import { watch as watchFs, type FSWatcher } from 'chokidar';
-import { parse as parseYaml } from '../utils/yaml-parser.js';
+import {
+  parse as parseYaml,
+  stringify as stringifyYaml,
+} from '../utils/yaml-parser.js';
 import type {
   SkillConfig,
   SkillLevel,
@@ -233,6 +236,83 @@ export class SkillManager {
    */
   validateConfig(config: Partial<SkillConfig>): SkillValidationResult {
     return validateConfig(config);
+  }
+
+  /**
+   * Writes a skill to disk under the given level (project or user). Creates
+   * the skill directory if needed and refreshes the cache so the skill is
+   * immediately visible to `listSkills()`.
+   *
+   * Storage layout: `<base>/<SKILLS_CONFIG_DIR>/<name>/SKILL.md` where `base`
+   * is the project root (for `project`) or home dir (for `user`). We always
+   * write under the first entry of `SKILL_PROVIDER_CONFIG_DIRS` (i.e. `.qwen`).
+   *
+   * `extension` and `bundled` levels are read-only and rejected.
+   *
+   * @throws SkillError on invalid level, validation failure, or I/O error.
+   */
+  async writeSkill(
+    config: Omit<SkillConfig, 'filePath'> & { filePath?: string },
+    options: { overwrite?: boolean } = {},
+  ): Promise<SkillConfig> {
+    if (config.level !== 'project' && config.level !== 'user') {
+      throw new SkillError(
+        `Cannot write skills at level "${config.level}" — only project and user levels support writing.`,
+        SkillErrorCode.INVALID_CONFIG,
+        config.name,
+      );
+    }
+
+    const validation = this.validateConfig(config);
+    if (!validation.isValid) {
+      throw new SkillError(
+        `Skill "${config.name}" validation failed: ${validation.errors.join(', ')}`,
+        SkillErrorCode.INVALID_CONFIG,
+        config.name,
+      );
+    }
+
+    const baseDirs = this.getSkillsBaseDirs(config.level);
+    if (baseDirs.length === 0) {
+      throw new SkillError(
+        `No base directories available for level "${config.level}"`,
+        SkillErrorCode.FILE_ERROR,
+        config.name,
+      );
+    }
+    const skillDir = path.join(baseDirs[0], config.name);
+    const filePath = path.join(skillDir, SKILL_MANIFEST_FILE);
+
+    let exists = false;
+    try {
+      await fs.access(filePath);
+      exists = true;
+    } catch {
+      // does not exist
+    }
+
+    if (exists && !options.overwrite) {
+      throw new SkillError(
+        `Skill "${config.name}" already exists at ${filePath}. Pass overwrite=true to update.`,
+        SkillErrorCode.INVALID_CONFIG,
+        config.name,
+      );
+    }
+
+    await fs.mkdir(skillDir, { recursive: true });
+    const serialized = serializeSkill(config);
+    try {
+      await fs.writeFile(filePath, serialized, 'utf8');
+    } catch (err) {
+      throw new SkillError(
+        `Failed to write skill file: ${err instanceof Error ? err.message : String(err)}`,
+        SkillErrorCode.FILE_ERROR,
+        config.name,
+      );
+    }
+
+    await this.refreshCache();
+    return { ...config, filePath };
   }
 
   /**
@@ -713,4 +793,31 @@ export class SkillManager {
       );
     }
   }
+}
+
+// ─── Helpers ──────────────────────────────────────────────────
+
+/**
+ * Serializes a SkillConfig to the on-disk SKILL.md format: YAML frontmatter
+ * with the authored fields (name, description, optional allowedTools / model),
+ * a blank line, then the body. Volatile runtime fields (level, filePath) are
+ * NOT written — they are re-derived from the file location on load.
+ */
+function serializeSkill(
+  config: Pick<SkillConfig, 'name' | 'description' | 'body'> &
+    Partial<Pick<SkillConfig, 'allowedTools' | 'model'>>,
+): string {
+  const fm: Record<string, unknown> = {
+    name: config.name,
+    description: config.description,
+  };
+  if (config.allowedTools && config.allowedTools.length > 0) {
+    fm['allowedTools'] = config.allowedTools;
+  }
+  if (config.model) {
+    fm['model'] = config.model;
+  }
+  const yaml = stringifyYaml(fm, { lineWidth: 0, minContentWidth: 0 }).trim();
+  const body = (config.body ?? '').trim();
+  return `---\n${yaml}\n---\n\n${body}\n`;
 }

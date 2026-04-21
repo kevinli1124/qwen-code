@@ -342,6 +342,38 @@ describe('SessionReviewer.maybeCapture', () => {
     expect(lastSuggestion?.episodeCount).toBeGreaterThanOrEqual(5);
   });
 
+  it('emits skillProposal with trigger=high_score when episode scores 9+/12', async () => {
+    const reviewer = new SessionReviewer(new EpisodeStore(), {
+      ...DEFAULT_EPISODE_SETTINGS,
+      autoCapture: 'auto',
+    });
+
+    const startedAt = Date.parse('2026-04-22T09:00:00Z');
+    const summary = {
+      history: [
+        { role: 'user', parts: [{ text: 'big task' }] },
+        modelWithToolCalls(
+          Array.from({ length: 40 }, () => ({
+            name: 'read_file',
+            args: { file_path: '/a.ts' },
+          })),
+          'Refactored the eslint configuration successfully.',
+        ),
+      ] as TurnSummary['history'],
+      turnStartIndex: 0,
+      turnStartedAt: startedAt,
+      turnEndedAt: startedAt + 25 * 60 * 1000,
+      completedNormally: true,
+    };
+    const result = await reviewer.maybeCapture(summary);
+    expect(result.kind).toBe('written');
+    if (result.kind === 'written') {
+      expect(result.skillProposal).toBeDefined();
+      expect(result.skillProposal?.trigger).toBe('high_score');
+      expect(result.skillProposal?.episodeScore).toBeGreaterThanOrEqual(9);
+    }
+  });
+
   it('does not emit distillSuggestion when below threshold', async () => {
     const reviewer = new SessionReviewer(new EpisodeStore(), {
       ...DEFAULT_EPISODE_SETTINGS,

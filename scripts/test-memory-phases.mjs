@@ -97,6 +97,11 @@ const { findSimilarMemories, findSimilarSkills } = await import(
 const { buildDistillPrompt } = await import(
   srcUrl('tools', 'memory-distill.ts')
 );
+const { buildSkillProposalPrompt } = await import(
+  srcUrl('tools', 'skill-propose.ts')
+);
+const { SkillManager } = await import(srcUrl('skills', 'skill-manager.ts'));
+const { Config } = await import(srcUrl('config', 'config.ts'));
 
 // Quick sanity: confirm os.homedir now points where we expect.
 if (os.homedir() !== tempHome) {
@@ -556,6 +561,145 @@ await section(
         !!lastResult.distillSuggestion &&
         lastResult.distillSuggestion.episodeCount >= 5,
       `suggestion=${JSON.stringify(lastResult?.distillSuggestion)}`,
+    );
+  },
+);
+
+// ─── Phase 4 tests ────────────────────────────────────────────
+
+await section(
+  'Phase 4 — Skill auto-proposal (SkillManager write + prompt builder)',
+  async () => {
+    // Direct SkillManager roundtrip in the temp home.
+    const fakeConfig = new Config({
+      usageStatisticsEnabled: false,
+      debugMode: false,
+      model: 'test',
+      cwd: tempProject,
+      targetDir: tempProject,
+    });
+    const skillManager = new SkillManager(fakeConfig);
+
+    const written = await skillManager.writeSkill({
+      name: 'eslint-monorepo-fix',
+      description: 'Diagnose and fix ESLint glob patterns in monorepos',
+      body:
+        '# ESLint monorepo fix\n\n' +
+        '## When to use\n\n' +
+        'Repeated failures on scripts/*.mjs after a lint config change.\n\n' +
+        '## Steps\n\n' +
+        '1. Inspect eslint.config.js\n' +
+        '2. Verify glob coverage\n' +
+        '3. Extend patterns and re-run `npm run lint`',
+      level: 'project',
+    });
+
+    check(
+      'writeSkill returns filePath under .qwen/skills/',
+      typeof written.filePath === 'string' &&
+        written.filePath.includes('.qwen') &&
+        written.filePath.includes('skills'),
+      `got ${written.filePath}`,
+    );
+
+    // Verify on-disk layout.
+    const skillMdPath = path.join(
+      tempProject,
+      '.qwen',
+      'skills',
+      'eslint-monorepo-fix',
+      'SKILL.md',
+    );
+    const onDisk = await fs.readFile(skillMdPath, 'utf8').catch(() => null);
+    check(
+      'SKILL.md written to expected path',
+      onDisk !== null && /^---\n/.test(onDisk) && onDisk.includes('ESLint monorepo'),
+      `expected at ${skillMdPath}`,
+    );
+
+    // Seed a high-score episode and build the proposal prompt.
+    const epStore = new EpisodeStore();
+    await epStore.writeEpisode({
+      id: '2026-04-22-1200-skill-source',
+      title: 'Promotable pattern',
+      timestamp: '2026-04-22T12:00:00Z',
+      durationMins: 40,
+      toolCalls: 30,
+      outcome: 'success',
+      tags: ['eslint', 'monorepo'],
+      scores: { novelty: 3, reusability: 3, complexity: 3, outcome: 3 },
+      content:
+        'This task exposed a reusable diagnostic pattern across monorepo lint setups.',
+    });
+
+    const qualifying = (
+      await epStore.listEpisodes({ force: true, minScore: 9 })
+    ).filter((e) => e.id === '2026-04-22-1200-skill-source');
+    check(
+      'seeded high-score episode is surfaced by minScore filter',
+      qualifying.length === 1,
+      `got ${qualifying.length}`,
+    );
+
+    const existing = await skillManager.listSkills({ force: true });
+    const prompt = buildSkillProposalPrompt(qualifying, existing);
+
+    check(
+      'proposal prompt includes SKILL.md schema block',
+      prompt.includes('name: <kebab-case-slug>'),
+      'schema block missing',
+    );
+    check(
+      'proposal prompt lists the existing skill to avoid duplicates',
+      prompt.includes('eslint-monorepo-fix'),
+      'existing skill not surfaced',
+    );
+    check(
+      'proposal prompt offers [merge] [new] [cancel]',
+      prompt.includes('[merge]') &&
+        prompt.includes('[new]') &&
+        prompt.includes('[cancel]'),
+      'three-option suggestion missing',
+    );
+
+    // Auto-suggestion: SessionReviewer should now emit skillProposal when
+    // the written episode scores 9+/12.
+    const reviewer = new SessionReviewer(new EpisodeStore(), {
+      autoCapture: 'auto',
+      toolCallThreshold: 15,
+      durationMsThreshold: 20 * 60 * 1000,
+      retentionDays: 90,
+    });
+    const startedAt = Date.parse('2026-04-22T13:00:00Z');
+    const summary = {
+      history: [
+        { role: 'user', parts: [{ text: 'big task' }] },
+        {
+          role: 'model',
+          parts: [
+            ...Array.from({ length: 40 }, () => ({
+              functionCall: {
+                name: 'read_file',
+                args: { file_path: '/tmp/x.ts' },
+              },
+            })),
+            { text: 'Fixed the eslint monorepo issue.' },
+          ],
+        },
+      ],
+      turnStartIndex: 0,
+      turnStartedAt: startedAt,
+      turnEndedAt: startedAt + 30 * 60 * 1000,
+      completedNormally: true,
+    };
+    const capture = await reviewer.maybeCapture(summary);
+    check(
+      'SessionReviewer emits skillProposal with trigger=high_score',
+      capture.kind === 'written' &&
+        capture.skillProposal !== undefined &&
+        capture.skillProposal.trigger === 'high_score' &&
+        capture.skillProposal.episodeScore >= 9,
+      `got ${JSON.stringify(capture.skillProposal)}`,
     );
   },
 );

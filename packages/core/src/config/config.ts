@@ -76,6 +76,8 @@ import { TriggerManager } from '../triggers/trigger-manager.js';
 import { MemoryWriteTool } from '../tools/memory-write.js';
 import { MemoryRemoveTool } from '../tools/memory-remove.js';
 import { MemoryDistillTool } from '../tools/memory-distill.js';
+import { SkillWriteTool } from '../tools/skill-write.js';
+import { SkillProposeTool } from '../tools/skill-propose.js';
 import { MemoryStore } from '../memory/memory-store.js';
 import {
   DEFAULT_EPISODE_SETTINGS,
@@ -2332,7 +2334,10 @@ export class Config {
     return this.subagentManager;
   }
 
-  getSkillManager(): SkillManager | null {
+  getSkillManager(): SkillManager {
+    if (!this.skillManager) {
+      this.skillManager = new SkillManager(this);
+    }
     return this.skillManager;
   }
 
@@ -2470,6 +2475,10 @@ export class Config {
     // Episodic → Semantic distillation: surface recent episodes so the
     // model can propose durable memories via memory_write.
     await registerCoreTool(MemoryDistillTool, this);
+    // Episodic → Procedural promotion: draft a SKILL.md from recurring
+    // high-score episodes; similarity gate prevents parallel entries.
+    await registerCoreTool(SkillWriteTool, this);
+    await registerCoreTool(SkillProposeTool, this);
 
     if (!options?.skipDiscovery) {
       await registry.discoverAllTools();

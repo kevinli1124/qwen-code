@@ -63,6 +63,12 @@ export type CaptureAction =
        * Callers can surface this as a gentle nudge to invoke `memory_distill`.
        */
       distillSuggestion?: DistillSuggestion;
+      /**
+       * Set when the just-written episode (or a tag-overlapping cluster
+       * with recent ones) crosses the skill-promotion threshold.
+       * Callers can surface this as a nudge to invoke `skill_propose`.
+       */
+      skillProposal?: SkillProposal;
     }
   | { kind: 'pending'; candidate: EpisodeConfig };
 
@@ -73,7 +79,23 @@ export interface DistillSuggestion {
   message: string;
 }
 
+export interface SkillProposal {
+  /** Which rule triggered the proposal. */
+  trigger: 'high_score' | 'recurring_pattern';
+  /** Score of the just-written episode (0-12). */
+  episodeScore: number;
+  /** IDs of episodes supporting this proposal (includes the current one). */
+  episodeIds: string[];
+  /** Tags shared across supporting episodes. */
+  sharedTags: string[];
+  /** Human-readable prompt for the UI layer. */
+  message: string;
+}
+
 const DEFAULT_DISTILL_THRESHOLD = 5;
+const DEFAULT_SKILL_SCORE_THRESHOLD = 9;
+const RECURRING_LOOKBACK = 10;
+const RECURRING_MIN_TAG_OVERLAP = 2;
 
 /**
  * Decides whether a completed turn is worth preserving as an episode and,
@@ -120,7 +142,13 @@ export class SessionReviewer {
       try {
         const written = await this.store.writeEpisode(candidate);
         const distillSuggestion = await this.maybeBuildDistillSuggestion();
-        return { kind: 'written', episode: written, distillSuggestion };
+        const skillProposal = await this.maybeBuildSkillProposal(written);
+        return {
+          kind: 'written',
+          episode: written,
+          distillSuggestion,
+          skillProposal,
+        };
       } catch (err) {
         debugLogger.warn(
           `Failed to auto-write episode ${candidate.id}: ${err instanceof Error ? err.message : String(err)}`,
@@ -152,6 +180,83 @@ export class SessionReviewer {
 
   getStore(): EpisodeStore {
     return this.store;
+  }
+
+  /**
+   * Builds a skill-proposal suggestion when the just-written episode
+   * qualifies. Triggers:
+   *   - "high_score": total score >= DEFAULT_SKILL_SCORE_THRESHOLD (9/12).
+   *   - "recurring_pattern": two or more recent episodes share a tag set
+   *     of size >= RECURRING_MIN_TAG_OVERLAP.
+   * Best-effort: filesystem errors return undefined.
+   */
+  private async maybeBuildSkillProposal(
+    just: EpisodeConfig,
+  ): Promise<SkillProposal | undefined> {
+    try {
+      const episodeScore = totalScore(just.scores);
+
+      if (episodeScore >= DEFAULT_SKILL_SCORE_THRESHOLD) {
+        return {
+          trigger: 'high_score',
+          episodeScore,
+          episodeIds: [just.id],
+          sharedTags: just.tags.slice(),
+          message:
+            `Episode scored ${episodeScore}/12 — high enough to promote into a reusable skill. ` +
+            `Consider running \`skill_propose\` to draft one from this pattern.`,
+        };
+      }
+
+      if (just.tags.length === 0) return undefined;
+
+      // Look at recent episodes for tag-set overlap signalling recurrence.
+      const recent = await this.store.listEpisodes({ force: true });
+      const pool = recent
+        .filter((e) => e.id !== just.id)
+        .slice(0, RECURRING_LOOKBACK);
+
+      const justTags = new Set(just.tags.map((t) => t.toLowerCase()));
+      const supporters: EpisodeConfig[] = [];
+      const sharedTagCounts = new Map<string, number>();
+
+      for (const other of pool) {
+        const otherTags = new Set(other.tags.map((t) => t.toLowerCase()));
+        let shared = 0;
+        const localShared: string[] = [];
+        for (const t of justTags) {
+          if (otherTags.has(t)) {
+            shared++;
+            localShared.push(t);
+          }
+        }
+        if (shared >= RECURRING_MIN_TAG_OVERLAP) {
+          supporters.push(other);
+          for (const t of localShared) {
+            sharedTagCounts.set(t, (sharedTagCounts.get(t) ?? 0) + 1);
+          }
+        }
+      }
+
+      if (supporters.length === 0) return undefined;
+
+      // Keep tags that appeared in at least one supporter, sorted by frequency.
+      const sharedTags = Array.from(sharedTagCounts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .map(([t]) => t);
+
+      return {
+        trigger: 'recurring_pattern',
+        episodeScore,
+        episodeIds: [just.id, ...supporters.map((s) => s.id)],
+        sharedTags,
+        message:
+          `Detected ${supporters.length + 1} episodes sharing tags [${sharedTags.join(', ')}]. ` +
+          `Consider running \`skill_propose\` to crystallise the pattern.`,
+      };
+    } catch {
+      return undefined;
+    }
   }
 
   /**
