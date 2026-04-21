@@ -5,6 +5,7 @@
  */
 
 import http from 'node:http';
+import https from 'node:https';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -39,6 +40,103 @@ function mimeType(ext: string): string {
     '.png': 'image/png',
   };
   return map[ext] ?? 'application/octet-stream';
+}
+
+const QWEN_SETTINGS_PATH = path.join(os.homedir(), '.qwen', 'settings.json');
+
+function deepMerge(
+  target: Record<string, unknown>,
+  source: Record<string, unknown>,
+): Record<string, unknown> {
+  const result = { ...target };
+  for (const [key, value] of Object.entries(source)) {
+    if (
+      value !== null &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      typeof result[key] === 'object' &&
+      result[key] !== null &&
+      !Array.isArray(result[key])
+    ) {
+      result[key] = deepMerge(
+        result[key] as Record<string, unknown>,
+        value as Record<string, unknown>,
+      );
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
+function readSettings(): Record<string, unknown> {
+  try {
+    return JSON.parse(fs.readFileSync(QWEN_SETTINGS_PATH, 'utf8')) as Record<
+      string,
+      unknown
+    >;
+  } catch {
+    return {};
+  }
+}
+
+function writeSettings(data: Record<string, unknown>): void {
+  fs.mkdirSync(path.dirname(QWEN_SETTINGS_PATH), { recursive: true });
+  fs.writeFileSync(QWEN_SETTINGS_PATH, JSON.stringify(data, null, 2), 'utf8');
+}
+
+function httpsGet(
+  url: string,
+  headers: Record<string, string>,
+): Promise<{ status: number; body: string }> {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, { headers }, (res) => {
+      let body = '';
+      res.on('data', (chunk: Buffer) => {
+        body += chunk.toString();
+      });
+      res.on('end', () => resolve({ status: res.statusCode ?? 0, body }));
+    });
+    req.on('error', reject);
+    req.setTimeout(8000, () => {
+      req.destroy(new Error('Request timeout'));
+    });
+  });
+}
+
+async function testConnection(
+  authType: string,
+  apiKey: string,
+  baseUrl: string,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    let url: string;
+    let headers: Record<string, string>;
+
+    if (authType === 'anthropic') {
+      url = 'https://api.anthropic.com/v1/models';
+      headers = {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      };
+    } else if (authType === 'gemini') {
+      url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+      headers = {};
+    } else {
+      // openai-compatible (Qwen DashScope, OpenAI, custom)
+      const base = (baseUrl || 'https://api.openai.com/v1').replace(/\/$/, '');
+      url = `${base}/models`;
+      headers = { Authorization: `Bearer ${apiKey}` };
+    }
+
+    const { status } = await httpsGet(url, headers);
+    if (status === 200 || status === 204) {
+      return { ok: true };
+    }
+    return { ok: false, error: `HTTP ${status}` };
+  } catch (err) {
+    return { ok: false, error: String(err) };
+  }
 }
 
 function readBody(req: http.IncomingMessage): Promise<string> {
@@ -340,6 +438,71 @@ async function handleApi(
     } catch (err) {
       sendError(res, 400, String(err));
     }
+    return;
+  }
+
+  // GET /api/settings
+  if (pathname === '/api/settings' && method === 'GET') {
+    const raw = readSettings();
+    const security = (raw['security'] as Record<string, unknown>) ?? {};
+    const auth = (security['auth'] as Record<string, unknown>) ?? {};
+    const model = (raw['model'] as Record<string, unknown>) ?? {};
+    const general = (raw['general'] as Record<string, unknown>) ?? {};
+    const tools = (raw['tools'] as Record<string, unknown>) ?? {};
+    sendJson(res, 200, {
+      security: {
+        auth: {
+          selectedType: auth['selectedType'] ?? 'openai',
+          apiKey: auth['apiKey'] ?? '',
+          baseUrl: auth['baseUrl'] ?? '',
+        },
+      },
+      model: { name: model['name'] ?? '' },
+      general: {
+        agentName: general['agentName'] ?? '',
+        language: general['language'] ?? 'auto',
+        outputLanguage: general['outputLanguage'] ?? 'auto',
+        setupCompleted: general['setupCompleted'] ?? false,
+      },
+      tools: { approvalMode: tools['approvalMode'] ?? 'default' },
+    });
+    return;
+  }
+
+  // PATCH /api/settings
+  if (pathname === '/api/settings' && method === 'PATCH') {
+    const body = await readBody(req);
+    let patch: Record<string, unknown> = {};
+    try {
+      patch = JSON.parse(body) as Record<string, unknown>;
+    } catch {
+      /* empty */
+    }
+    const merged = deepMerge(readSettings(), patch);
+    writeSettings(merged);
+    sendJson(res, 200, { ok: true });
+    return;
+  }
+
+  // POST /api/settings/test
+  if (pathname === '/api/settings/test' && method === 'POST') {
+    const body = await readBody(req);
+    let config: { apiKey?: string; baseUrl?: string; authType?: string } = {};
+    try {
+      config = JSON.parse(body) as typeof config;
+    } catch {
+      /* empty */
+    }
+    if (!config.apiKey) {
+      sendError(res, 400, 'apiKey required');
+      return;
+    }
+    const result = await testConnection(
+      config.authType ?? 'openai',
+      config.apiKey,
+      config.baseUrl ?? '',
+    );
+    sendJson(res, 200, result);
     return;
   }
 

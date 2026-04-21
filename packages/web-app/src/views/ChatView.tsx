@@ -3,7 +3,7 @@
  * Copyright 2025 Qwen team
  * SPDX-License-Identifier: Apache-2.0
  */
-import { useState, type FC } from 'react';
+import { useState, useEffect, type FC } from 'react';
 import { AppLayout } from '../components/layout/AppLayout';
 import { Sidebar } from '../components/layout/Sidebar';
 import { RightPanel } from '../components/layout/RightPanel';
@@ -12,12 +12,14 @@ import { InputBar } from '../components/conversation/InputBar';
 import { PermissionModal } from '../components/conversation/PermissionModal';
 import { ErrorBanner } from '../components/shared/ErrorBanner';
 import { NewSessionModal } from '../components/session/NewSessionModal';
+import { SettingsModal } from '../components/shared/SettingsModal';
 import { useSessionStore } from '../stores/sessionStore';
 import { useMessageStore } from '../stores/messageStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useSessionEvents } from '../hooks/useSession';
 import { useSSE } from '../hooks/useSSE';
 import { sessionsApi } from '../api/sessions';
+import { settingsApi } from '../api/settings';
 
 export const ChatView: FC = () => {
   const [showNewSession, setShowNewSession] = useState(false);
@@ -31,7 +33,28 @@ export const ChatView: FC = () => {
     setConnectionError,
     setStreaming,
   } = useMessageStore();
-  const toggleSidebar = useSettingsStore((s) => s.toggleSidebar);
+  const {
+    toggleSidebar,
+    showSettingsModal,
+    setShowSettingsModal,
+    setServerSettings,
+    serverSettings,
+  } = useSettingsStore();
+
+  // Load settings on mount; auto-open modal if no API key configured
+  useEffect(() => {
+    settingsApi
+      .get()
+      .then((s) => {
+        setServerSettings(s);
+        if (!s.security.auth.apiKey && !s.general.setupCompleted) {
+          setShowSettingsModal(true);
+        }
+      })
+      .catch(() => {
+        // Server not reachable (dev mode without backend) — skip
+      });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { handleEvent } = useSessionEvents(activeSessionId ?? '');
 
@@ -208,6 +231,14 @@ export const ChatView: FC = () => {
         <NewSessionModal
           onConfirm={handleNewSession}
           onClose={() => setShowNewSession(false)}
+        />
+      )}
+
+      {/* Settings modal */}
+      {showSettingsModal && (
+        <SettingsModal
+          onClose={() => setShowSettingsModal(false)}
+          isFirstRun={!serverSettings?.general.setupCompleted}
         />
       )}
     </>

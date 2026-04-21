@@ -13,6 +13,7 @@ interface SidebarProps {
 
 export const Sidebar: FC<SidebarProps> = ({ onNewSession }) => {
   const currentModel = useSettingsStore((s) => s.currentModel);
+  const setShowSettingsModal = useSettingsStore((s) => s.setShowSettingsModal);
 
   return (
     <div className="flex flex-col h-full w-full">
@@ -48,9 +49,15 @@ export const Sidebar: FC<SidebarProps> = ({ onNewSession }) => {
       </div>
 
       {/* Footer */}
-      <div className="px-3 py-2 border-t border-[#2e2e2e]">
-        <div className="flex items-center gap-2 px-2 py-1.5 rounded text-xs text-[#8a8a8a]">
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+      <div className="px-3 py-2 border-t border-[#2e2e2e] flex items-center justify-between">
+        <div className="flex items-center gap-2 px-2 py-1.5 rounded text-xs text-[#8a8a8a] min-w-0">
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 12 12"
+            fill="none"
+            className="flex-shrink-0"
+          >
             <circle
               cx="6"
               cy="6"
@@ -67,6 +74,27 @@ export const Sidebar: FC<SidebarProps> = ({ onNewSession }) => {
           </svg>
           <span className="truncate">{currentModel}</span>
         </div>
+        <button
+          onClick={() => setShowSettingsModal(true)}
+          className="w-6 h-6 flex items-center justify-center rounded text-[#8a8a8a] hover:text-[#e8e6e3] hover:bg-[#2e2e2e] transition-colors flex-shrink-0"
+          title="Settings"
+        >
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+            <circle
+              cx="6.5"
+              cy="6.5"
+              r="2"
+              stroke="currentColor"
+              strokeWidth="1.2"
+            />
+            <path
+              d="M6.5 1v1.5M6.5 10.5V12M1 6.5h1.5M10.5 6.5H12M2.6 2.6l1.06 1.06M9.34 9.34l1.06 1.06M2.6 10.4l1.06-1.06M9.34 3.66l1.06-1.06"
+              stroke="currentColor"
+              strokeWidth="1.2"
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
       </div>
     </div>
   );
