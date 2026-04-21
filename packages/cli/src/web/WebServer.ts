@@ -6,6 +6,7 @@
 
 import http from 'node:http';
 import https from 'node:https';
+import { type RequestOptions } from 'node:http';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -85,12 +86,15 @@ function writeSettings(data: Record<string, unknown>): void {
   fs.writeFileSync(QWEN_SETTINGS_PATH, JSON.stringify(data, null, 2), 'utf8');
 }
 
-function httpsGet(
+function httpGet(
   url: string,
   headers: Record<string, string>,
 ): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
-    const req = https.get(url, { headers }, (res) => {
+    const isHttps = url.startsWith('https://');
+    const transport = isHttps ? https : http;
+    const opts: RequestOptions = { headers };
+    const req = transport.get(url, opts, (res) => {
       let body = '';
       res.on('data', (chunk: Buffer) => {
         body += chunk.toString();
@@ -129,7 +133,7 @@ async function testConnection(
       headers = { Authorization: `Bearer ${apiKey}` };
     }
 
-    const { status } = await httpsGet(url, headers);
+    const { status } = await httpGet(url, headers);
     if (status === 200 || status === 204) {
       return { ok: true };
     }
