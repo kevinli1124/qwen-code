@@ -1,4 +1,4 @@
-name: Build Exe
+name: 'Build Exe'
 
 on:
   push:
@@ -9,74 +9,82 @@ on:
       tag:
         description: 'Release tag (e.g. v0.14.5)'
         required: true
-        type: string
+        type: 'string'
 
 jobs:
   build:
-    name: Build ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+    name: 'Build ${{ matrix.os }}'
+    runs-on: '${{ matrix.os }}'
     strategy:
       matrix:
         include:
-          - os: windows-latest
-            exe: qwen.exe
-          - os: ubuntu-latest
-            exe: qwen-linux
-          - os: macos-latest
-            exe: qwen-macos
-
+          - os: 'windows-latest'
+            exe: 'qwen.exe'
+          - os: 'ubuntu-latest'
+            exe: 'qwen-linux'
+          - os: 'macos-latest'
+            exe: 'qwen-macos'
     steps:
-      - uses: actions/checkout@v4
+      - name: 'Checkout'
+        uses: 'actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8' # ratchet:actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - name: 'Set up Node.js'
+        uses: 'actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020' # ratchet:actions/setup-node@v4.4.0
         with:
           node-version: '20'
-          cache: npm
-          cache-dependency-path: package-lock.json
+          cache: 'npm'
+          cache-dependency-path: 'package-lock.json'
 
-      - name: Install dependencies
-        run: npm ci --no-audit --progress=false
+      - name: 'Install dependencies'
+        run: 'npm ci --no-audit --progress=false'
 
-      - name: Build exe
-        run: npm run build:exe -- --out=${{ matrix.exe }}
+      - name: 'Build exe'
+        env:
+          OUTPUT_NAME: '${{ matrix.exe }}'
+        run: 'npm run build:exe -- --out="${OUTPUT_NAME}"'
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - name: 'Upload artifact'
+        uses: 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02' # ratchet:actions/upload-artifact@v4
         with:
-          name: ${{ matrix.exe }}
-          path: ${{ matrix.exe }}
+          name: '${{ matrix.exe }}'
+          path: '${{ matrix.exe }}'
 
   release:
-    name: Create GitHub Release
-    needs: build
-    runs-on: ubuntu-latest
+    name: 'Create GitHub Release'
+    needs: 'build'
+    runs-on: 'ubuntu-latest'
     permissions:
-      contents: write
-
+      contents: 'write'
     steps:
-      - uses: actions/checkout@v4
+      - name: 'Checkout'
+        uses: 'actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8' # ratchet:actions/checkout@v5
 
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
+      - name: 'Download all artifacts'
+        uses: 'actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0' # ratchet:actions/download-artifact@v5
         with:
-          path: dist-exe/
+          path: 'dist-exe/'
 
-      - name: Set release tag
-        id: tag
-        run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+      - name: 'Set release tag'
+        id: 'tag'
+        env:
+          INPUT_TAG: '${{ github.event.inputs.tag }}'
+          REF_NAME: '${{ github.ref_name }}'
+          EVENT_NAME: '${{ github.event_name }}'
+        run: |-
+          if [[ "${EVENT_NAME}" == 'workflow_dispatch' ]]; then
+            echo "tag=${INPUT_TAG}" >> "${GITHUB_OUTPUT}"
           else
-            echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            echo "tag=${REF_NAME}" >> "${GITHUB_OUTPUT}"
           fi
 
-      - name: Create Release
+      - name: 'Create Release'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release create ${{ steps.tag.outputs.tag }} \
+          GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
+          RELEASE_TAG: '${{ steps.tag.outputs.tag }}'
+        run: |-
+          gh release create "${RELEASE_TAG}" \
             dist-exe/qwen.exe/qwen.exe \
             dist-exe/qwen-linux/qwen-linux \
             dist-exe/qwen-macos/qwen-macos \
-            --title "Release ${{ steps.tag.outputs.tag }}" \
+            --title "Release ${RELEASE_TAG}" \
             --generate-notes

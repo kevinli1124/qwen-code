@@ -10,6 +10,10 @@ on:
 jobs:
   e2e-test-linux:
     name: 'E2E Test (Linux) - ${{ matrix.sandbox }}'
+    # Fork forks of QwenLM/qwen-code lack the OPENAI_* secrets required by
+    # these tests, so this job only runs in the upstream repository.
+    if: |-
+      ${{ github.repository == 'QwenLM/qwen-code' }}
     runs-on: 'ubuntu-latest'
     strategy:
       matrix:
@@ -75,6 +79,8 @@ jobs:
 
   e2e-test-macos:
     name: 'E2E Test - macOS'
+    if: |-
+      ${{ github.repository == 'QwenLM/qwen-code' }}
     runs-on: 'macos-latest'
     steps:
       - name: 'Checkout'
