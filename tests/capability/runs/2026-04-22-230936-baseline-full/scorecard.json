@@ -1,0 +1,177 @@
+{
+  "label": "baseline-full",
+  "ts": "2026-04-22-230936",
+  "results": [
+    {
+      "id": "T1.1",
+      "layer": "L1",
+      "name": "Race condition judgment (Python GIL)",
+      "durationMs": 34078,
+      "exitCode": 0,
+      "finalTextPreview": "Root Cause：**競態條件 (Race Condition)**。\n\n在 Python 中，`counter += 1` 並非原子操作 (Atomic Operation)。它實際上包含三個步驟：\n1. 讀取 `counter` 的目前值。\n2. 將該值加 1。\n3. 將結果寫回 `counter`。\n\n在高併發下，執行緒可能會在步驟 1 之後、步驟 3 之前被切換，導致多個執行緒讀到相同的舊值，最終寫回時互相覆蓋，造成計算結果遺失。\n\n### 最小修法\n引入 `threading.Lock` 來同步存取共享變數：\n\n```python\nimport threading\n\ncounter = 0\nlock = threading.Lock()  # 1. 新增鎖\n\ndef increment():\n    global counter\n    for _ in range(1000",
+      "stderrPreview": "(node:46660) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execu",
+      "eventCount": 4,
+      "score": {
+        "correctness": 3,
+        "initiative": 3,
+        "efficiency": 3,
+        "learning": 0,
+        "notes": "race=true lock=true tools=0"
+      },
+      "total": 9,
+      "verdict": "PASS"
+    },
+    {
+      "id": "T1.2",
+      "layer": "L1",
+      "name": "Contradictory requirements tradeoff",
+      "durationMs": 37338,
+      "exitCode": 0,
+      "finalTextPreview": "這是一個經典的「可用性（Availability/Performance）」與「一致性（Consistency/Durability）」的衝突。\n\n### 衝突點\n**同步 I/O 瓶頸**：遠端 MSSQL 的網路往返延遲（Network Round-trip）加上資料庫的交易日誌寫入（Transaction Log Write）與索引更新，其耗時極易超過 100ms。若採取**同步寫入**，API 的回應時間將直接受限於資料庫效能，無法保證滿足 PM 的要求。\n\n---\n\n### 折衷方案\n\n#### 方案一：非同步訊息佇列 (Asynchronous Messaging)\n**做法**：API 收到請求後，將 Audit Log 丟入高可用性的訊息佇列（如 Kafka, RabbitMQ 或 AWS SQS），隨即直接回傳回應給使用者。由後端 Worker 異步地將資料從佇列寫入 M",
+      "stderrPreview": "(node:48608) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execu",
+      "eventCount": 4,
+      "score": {
+        "correctness": 3,
+        "initiative": 3,
+        "efficiency": 3,
+        "learning": 0,
+        "notes": "latency=true async=true tradeoff=true"
+      },
+      "total": 9,
+      "verdict": "PASS"
+    },
+    {
+      "id": "T2.5",
+      "layer": "L2",
+      "name": "XSS detection in innerHTML usage",
+      "durationMs": 27016,
+      "exitCode": 0,
+      "finalTextPreview": "這段程式碼存在典型的 **跨站腳本攻擊 (Cross-Site Scripting, XSS)** 漏洞。\n\n### 1. 問題是什麼？\n問題出在 `out.innerHTML = ...` 這行。你直接將使用者輸入的內容 (`e.target.value`) 賦值給 `innerHTML`，而沒有經過任何過濾或轉義（Escaping）。\n\n### 2. 為何危險？\n`innerHTML` 會將字串解析為 HTML 並渲染。如果使用者輸入惡意的 HTML 標籤或 JavaScript 程式碼，瀏覽器會直接執行它。\n\n**攻擊範例：**\n如果使用者在輸入框中輸入以下內容：\n```html\n<img src=x onerror=\"alert('你的 Cookie 被偷走了: ' + document.cookie)\">\n```\n當 `change` 事件觸發時，瀏覽器會嘗試載入一個不存在的圖片",
+      "stderrPreview": "(node:34896) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execu",
+      "eventCount": 4,
+      "score": {
+        "correctness": 3,
+        "initiative": 3,
+        "efficiency": 3,
+        "learning": 0,
+        "notes": "xss=true innerHTML=true fix=true"
+      },
+      "total": 9,
+      "verdict": "PASS"
+    },
+    {
+      "id": "T3.4",
+      "layer": "L3",
+      "name": "Summarize long markdown doc",
+      "durationMs": 20074,
+      "exitCode": 0,
+      "finalTextPreview": "這份文件主要介紹 Qwen Code 的配置方式，說明使用者如何透過環境變數、命令列參數以及設定檔來調整程式行為。\n\n**重要小節包括：**\n1. **配置層級 (Configuration layers)**：定義設定的優先順序（從預設值到命令列參數）。\n2. **設定檔 (Settings files)**：說明四種 JSON 設定檔（系統預設、使用者、專案、系統覆寫）及其存放路徑。\n3. **`.qwen` 目錄**：介紹專案目錄下可存放的沙盒設定檔與 Agent 技能。\n4. **配置遷移 (Configuration migration)**：說明舊版設定如何自動遷移至新格式。\n5. **可用設定項目**：詳細列出 `general` (一般)、`output` (輸出)、`ui` (介面)、`ide` (IDE 整合)、`privacy` (隱私) 及 `model` (模型)",
+      "stderrPreview": "(node:74436) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execu",
+      "eventCount": 9,
+      "score": {
+        "correctness": 2,
+        "initiative": 1,
+        "efficiency": 3,
+        "learning": 0,
+        "notes": "read=false tools=1"
+      },
+      "total": 6,
+      "verdict": "FAIL"
+    },
+    {
+      "id": "T3.5",
+      "layer": "L3",
+      "name": "Generate API doc for rule-parser.ts",
+      "durationMs": 73763,
+      "exitCode": 0,
+      "finalTextPreview": "# `rule-parser.ts` API 文件\n\n此檔案負責解析與生成權限規則（Permission Rules），將人類可讀的規則字串（如 `Bash(git *)`）轉換為內部使用的結構化對象，並提供工具名稱解析、路徑匹配及指令拆分等功能。\n\n## Exported Functions\n\n### `resolveToolName`\n**簽名**: `resolveToolName(rawName: string): string`  \n**目的**: 將原始的工具名稱或別名（Alias）解析為其標準名稱（Canonical Name）。若名稱不在別名表中，則原樣返回。  \n**範例**:\n```typescript\nresolveToolName('Bash'); // 返回 'run_shell_command'\nresolveToolName('Read'); // 返回 'r",
+      "stderrPreview": "(node:75676) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execu",
+      "eventCount": 9,
+      "score": {
+        "correctness": 3,
+        "initiative": 1,
+        "efficiency": 3,
+        "learning": 0,
+        "notes": "read=false covered=3/4 example=false"
+      },
+      "total": 7,
+      "verdict": "FAIL"
+    },
+    {
+      "id": "T4.1",
+      "layer": "L4",
+      "name": "Autonomous memory_write on stated preference",
+      "durationMs": 20164,
+      "exitCode": 0,
+      "finalTextPreview": "沒問題，已經記下來了。之後不管是用 Python 還是 Node.js，只要是 production 程式碼，我絕對不會用 `print` 做 debug，會統一使用 logger。",
+      "stderrPreview": "(node:64992) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execu",
+      "eventCount": 9,
+      "score": {
+        "correctness": 3,
+        "initiative": 3,
+        "efficiency": 3,
+        "learning": 3,
+        "notes": "memory_write=true"
+      },
+      "total": 12,
+      "verdict": "PASS"
+    },
+    {
+      "id": "T4.4",
+      "layer": "L4",
+      "name": "Parallel independent tool calls",
+      "durationMs": 13702,
+      "exitCode": 0,
+      "finalTextPreview": "0.14.5\n0.14.5\n0.14.5",
+      "stderrPreview": "(node:72580) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execu",
+      "eventCount": 14,
+      "score": {
+        "correctness": 3,
+        "initiative": 3,
+        "efficiency": 3,
+        "learning": 0,
+        "notes": "reads=3 parallelTurn=true versions=3"
+      },
+      "total": 9,
+      "verdict": "PASS"
+    },
+    {
+      "id": "T4.5",
+      "layer": "L4",
+      "name": "Tool choice: glob over recursive list_directory",
+      "durationMs": 55852,
+      "exitCode": 0,
+      "finalTextPreview": "總共有 1422 個 .ts 檔。",
+      "stderrPreview": "(node:72176) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execu",
+      "eventCount": 17,
+      "score": {
+        "correctness": 3,
+        "initiative": 3,
+        "efficiency": 3,
+        "learning": 0,
+        "notes": "glob=true shell=false listDir=0"
+      },
+      "total": 9,
+      "verdict": "PASS"
+    },
+    {
+      "id": "T5.2",
+      "layer": "L5",
+      "name": "Multi-file call-chain trace",
+      "durationMs": 52168,
+      "exitCode": 0,
+      "finalTextPreview": "根據查詢結果，`IdeClient.connect()` 的相關資訊如下：\n\n1. **定義檔案**：\n   `D:\\SideProject\\Qwen-Code\\packages\\core\\src\\ide\\ide-client.ts`\n\n2. **呼叫處（3 處）**：\n   - `packages/core/src/ide/ide-client.test.ts` (測試檔案)\n   - `packages/cli/src/ui/commands/ideCommand.ts`\n   - `packages/cli/src/core/initializer.ts`\n\n3. **內部呼叫的主要方法**：\n   - `getConnectionConfigFromFile()`：讀取連線設定檔。\n   - `establishHttpConnection()`：嘗試建立 HTTP 連線。\n   ",
+      "stderrPreview": "(node:5008) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execut",
+      "eventCount": 19,
+      "score": {
+        "correctness": 2,
+        "initiative": 3,
+        "efficiency": 3,
+        "learning": 0,
+        "notes": "grep=true reads=1 tools=3"
+      },
+      "total": 8,
+      "verdict": "PASS"
+    }
+  ]
+}

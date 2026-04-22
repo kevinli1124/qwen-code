@@ -1,0 +1,44 @@
+{
+  "label": "baseline-full-rerun",
+  "ts": "2026-04-22-231636",
+  "results": [
+    {
+      "id": "T3.4",
+      "layer": "L3",
+      "name": "Summarize long markdown doc",
+      "durationMs": 21978,
+      "exitCode": 0,
+      "finalTextPreview": "這份文件主要介紹 **Qwen Code 的配置指南**，說明如何透過環境變數、命令列參數以及設定檔來調整程式行為。\n\n重要小節包括：\n1. **Configuration layers**：定義配置的優先順序（由低到高：預設值 $\\rightarrow$ 系統預設 $\\rightarrow$ 使用者 $\\rightarrow$ 專案 $\\rightarrow$ 系統設定 $\\rightarrow$ 環境變數 $\\rightarrow$ 命令列參數）。\n2. **Settings files**：詳細列出四種設定檔（系統預設、使用者、專案、系統）的存放路徑與作用範圍。\n3. **Configuration migration**：說明舊版設定（如 `disable*`）遷移至新版正向命名（如 `enable*`）的規則。\n4. **Available settings**：列出 `sett",
+      "stderrPreview": "(node:72744) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execu",
+      "eventCount": 9,
+      "score": {
+        "correctness": 2,
+        "initiative": 3,
+        "efficiency": 3,
+        "learning": 0,
+        "notes": "read=true tools=1"
+      },
+      "total": 8,
+      "verdict": "PASS"
+    },
+    {
+      "id": "T3.5",
+      "layer": "L3",
+      "name": "Generate API doc for rule-parser.ts",
+      "durationMs": 66451,
+      "exitCode": 0,
+      "finalTextPreview": "# `rule-parser.ts` API 文件\n\n本檔案提供解析與管理工具權限規則（Permission Rules）的公用函式，負責將權限規則字串轉換為結構化物件，以及將執行上下文轉換為最小權限規則字串。\n\n## 匯出函式 (Exported Functions)\n\n### `resolveToolName`\n**簽名：** `function resolveToolName(rawName: string): string`\n\n**目的：** 將原始工具名稱或別名（Alias）解析為其標準名稱（Canonical Name）。若名稱不在別名表中（例如 MCP 工具），則原樣返回。\n\n**範例：**\n```typescript\nresolveToolName('Bash'); // 返回 'run_shell_command'\nresolveToolName('Read'); // ",
+      "stderrPreview": "(node:73796) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execu",
+      "eventCount": 9,
+      "score": {
+        "correctness": 3,
+        "initiative": 3,
+        "efficiency": 3,
+        "learning": 0,
+        "notes": "read=true covered=3/4 example=true"
+      },
+      "total": 9,
+      "verdict": "PASS"
+    }
+  ]
+}

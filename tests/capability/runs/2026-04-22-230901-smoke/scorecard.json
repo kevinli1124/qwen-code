@@ -1,0 +1,25 @@
+{
+  "label": "smoke",
+  "ts": "2026-04-22-230901",
+  "results": [
+    {
+      "id": "T1.1",
+      "layer": "L1",
+      "name": "Race condition judgment (Python GIL)",
+      "durationMs": 26021,
+      "exitCode": 0,
+      "finalTextPreview": "### Root Cause\n**Race Condition (競態條件)**。\n\n`counter += 1` 在 Python 中**不是原子操作 (Atomic Operation)**。它實際上包含了三個步驟：\n1. 讀取 `counter` 的目前值。\n2. 將該值加 1。\n3. 將結果寫回 `counter`。\n\n在高併發情況下，執行緒 A 可能在步驟 1 讀到值後被切換到執行緒 B，執行緒 B 完成了整個加法並寫回，隨後執行緒 A 恢復執行，用它之前讀到的舊值加 1 並寫回，導致執行緒 B 的更新被覆蓋。\n\n### 最小修法\n使用 `threading.Lock` 確保更新過程的互斥：\n\n```python\nimport threading\n\ncounter = 0\nlock = threading.Lock()  # 新增 Lock\n\ndef increment():\n ",
+      "stderrPreview": "(node:51344) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execu",
+      "eventCount": 4,
+      "score": {
+        "correctness": 3,
+        "initiative": 3,
+        "efficiency": 3,
+        "learning": 0,
+        "notes": "race=true lock=true tools=0"
+      },
+      "total": 9,
+      "verdict": "PASS"
+    }
+  ]
+}

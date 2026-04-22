@@ -1,0 +1,50 @@
+2026-04-20 08:15:22 INFO  [api.auth] User 4129 logged in
+2026-04-20 08:15:23 INFO  [api.posts] Fetched 42 posts for user 4129
+2026-04-20 08:16:45 WARN  [api.rate] Rate limit 75% for user 4129
+2026-04-20 08:17:02 ERROR [db.conn] Connection pool exhausted (active=50, max=50)
+2026-04-20 08:17:03 ERROR [api.posts] Query timeout after 30000ms for user 4129
+2026-04-20 08:17:05 INFO  [api.auth] User 8812 logged in
+2026-04-20 08:17:10 ERROR [db.conn] Connection pool exhausted (active=50, max=50)
+2026-04-20 08:17:12 ERROR [api.posts] Query timeout after 30000ms for user 8812
+2026-04-20 08:18:01 INFO  [api.auth] User 2311 logged in
+2026-04-20 08:18:14 ERROR [db.conn] Connection pool exhausted (active=50, max=50)
+2026-04-20 08:18:16 ERROR [api.search] Query timeout after 30000ms for user 2311
+2026-04-20 08:19:05 INFO  [worker.cron] Daily summary job started
+2026-04-20 08:19:22 INFO  [worker.cron] Daily summary job completed in 17s
+2026-04-20 08:20:11 WARN  [api.upload] Large payload 15.3MB from user 9901
+2026-04-20 08:20:45 ERROR [api.upload] Upload failed: timeout after 60000ms for user 9901
+2026-04-20 08:21:03 INFO  [api.auth] User 4129 session expired
+2026-04-20 08:21:10 INFO  [api.auth] User 4129 logged in
+2026-04-20 08:22:08 ERROR [db.conn] Connection pool exhausted (active=50, max=50)
+2026-04-20 08:22:10 ERROR [api.posts] Query timeout after 30000ms for user 4129
+2026-04-20 08:23:15 INFO  [api.auth] User 5501 logged in
+2026-04-20 08:23:18 WARN  [api.rate] Rate limit 82% for user 5501
+2026-04-20 08:23:22 ERROR [db.conn] Connection pool exhausted (active=50, max=50)
+2026-04-20 08:23:25 ERROR [api.posts] Query timeout after 30000ms for user 5501
+2026-04-20 08:24:40 INFO  [worker.cleanup] Temp file cleanup started
+2026-04-20 08:25:01 INFO  [worker.cleanup] Cleaned 142 temp files (2.1GB)
+2026-04-20 08:26:13 ERROR [db.conn] Connection pool exhausted (active=50, max=50)
+2026-04-20 08:26:15 ERROR [api.search] Query timeout after 30000ms for user 8812
+2026-04-20 08:27:02 WARN  [api.upload] Large payload 22.8MB from user 3344
+2026-04-20 08:27:58 ERROR [api.upload] Upload failed: timeout after 60000ms for user 3344
+2026-04-20 08:28:44 ERROR [db.conn] Connection pool exhausted (active=50, max=50)
+2026-04-20 08:28:46 ERROR [api.posts] Query timeout after 30000ms for user 5501
+2026-04-20 08:29:15 INFO  [api.auth] User 7788 logged in
+2026-04-20 08:30:03 ERROR [db.conn] Connection pool exhausted (active=50, max=50)
+2026-04-20 08:30:05 ERROR [api.search] Query timeout after 30000ms for user 7788
+2026-04-20 08:31:12 INFO  [worker.metrics] Metrics flush started
+2026-04-20 08:31:22 INFO  [worker.metrics] Metrics flush completed
+2026-04-20 08:32:08 ERROR [db.conn] Connection pool exhausted (active=50, max=50)
+2026-04-20 08:32:10 ERROR [api.posts] Query timeout after 30000ms for user 2311
+2026-04-20 08:33:15 WARN  [api.rate] Rate limit 90% for user 4129
+2026-04-20 08:33:18 ERROR [db.conn] Connection pool exhausted (active=50, max=50)
+2026-04-20 08:33:20 ERROR [api.posts] Query timeout after 30000ms for user 4129
+2026-04-20 08:34:45 INFO  [api.auth] User 4129 session expired
+2026-04-20 08:35:02 ERROR [db.conn] Connection pool exhausted (active=50, max=50)
+2026-04-20 08:35:04 ERROR [api.search] Query timeout after 30000ms for user 5501
+2026-04-20 08:36:11 INFO  [worker.cron] Hourly snapshot job started
+2026-04-20 08:36:45 INFO  [worker.cron] Hourly snapshot job completed in 34s
+2026-04-20 08:37:22 ERROR [db.conn] Connection pool exhausted (active=50, max=50)
+2026-04-20 08:37:25 ERROR [api.posts] Query timeout after 30000ms for user 8812
+2026-04-20 08:38:10 INFO  [api.auth] User 9901 logged in
+2026-04-20 08:38:44 WARN  [api.upload] Large payload 18.2MB from user 9901

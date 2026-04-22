@@ -1,0 +1,177 @@
+{
+  "label": "extended",
+  "ts": "2026-04-22-233529",
+  "results": [
+    {
+      "id": "T1.3",
+      "layer": "L1",
+      "name": "Code review with tiered findings",
+      "durationMs": 78688,
+      "exitCode": 0,
+      "finalTextPreview": "這段程式碼寫得非常糟糕，存在嚴重的安全漏洞和效能問題。以下是詳細分析：\n\n### 🔴 Critical (嚴重)\n*   **SQL 注入漏洞 (SQL Injection)**：\n    你直接用 f-string 把 `user_id` 和 `search` 變數塞進 SQL 語句中。這是最典型的安全錯誤，攻擊者可以透過 `q` 參數輕鬆地竊取你的整個資料庫或刪除資料。**絕對禁止**在 SQL 查詢中使用字串格式化。\n\n### 🟡 Major (主要)\n*   **N+1 查詢問題 (N+1 Query Problem)**：\n    你在 `for` 迴圈裡面對每一筆貼文都執行一次 `SELECT name FROM users`。如果使用者有 100 筆貼文，你就會對資料庫發出 101 次請求。這會導致伺服器在資料量增加時迅速崩潰。\n*   **潛在的程式崩潰 (Attrib",
+      "stderrPreview": "(node:80572) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execu",
+      "eventCount": 10,
+      "score": {
+        "correctness": 3,
+        "initiative": 3,
+        "efficiency": 3,
+        "learning": 0,
+        "notes": "sqli=true n+1=true magic=false tiered=true"
+      },
+      "total": 9,
+      "verdict": "PASS"
+    },
+    {
+      "id": "T2.1",
+      "layer": "L2",
+      "name": "C# EF Core N+1 refactor",
+      "durationMs": 22478,
+      "exitCode": 0,
+      "finalTextPreview": "```csharp\npublic List<OrderDto> GetOrders(int customerId) {\n    return _ctx.Orders\n        .Where(o => o.CustomerId == customerId)\n        .Select(o => new OrderDto {\n            Id = o.Id,\n            Total = o.OrderItems.Sum(i => i.Price * i.Qty),\n            ItemCount = o.OrderItems.Count,\n        })\n        .ToList();\n}\n```\n\n使用 `.Select()` 進行投影，讓 EF Core 直接將計算翻譯成 SQL 聚合函數，一次查詢即可完成。",
+      "stderrPreview": "(node:67064) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execu",
+      "eventCount": 4,
+      "score": {
+        "correctness": 3,
+        "initiative": 3,
+        "efficiency": 3,
+        "learning": 0,
+        "notes": "include=false projection=true n+1=false"
+      },
+      "total": 9,
+      "verdict": "PASS"
+    },
+    {
+      "id": "T2.2",
+      "layer": "L2",
+      "name": "Python bug fix + pytest (captured)",
+      "durationMs": 42774,
+      "exitCode": 0,
+      "finalTextPreview": "這個 bug 很明顯：在 Python 中，`range()` 函數的第三個參數（step）**不能為 0**。當 `n=0` 時，`range(0, len(lst), 0)` 會直接拋出 `ValueError: range() arg 3 must not be zero`，導致程式崩潰。\n\n### 1. Bug 位置\n問題出在 `for i in range(0, len(lst), n):` 這一行。當傳入的 `n` 為 0 時，`range` 無法執行步進，觸發 Python 內建的錯誤。\n\n### 2. 最小修正\n應該在進入迴圈前檢查 `n` 是否大於 0。如果 `n <= 0`，分塊邏輯在數學上沒有意義，應該拋出一個明確的 `ValueError`。\n\n```python\ndef chunks(lst, n):\n    \"\"\"Split lst into chunks of",
+      "stderrPreview": "(node:79412) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execu",
+      "eventCount": 4,
+      "score": {
+        "correctness": 3,
+        "initiative": 3,
+        "efficiency": 3,
+        "learning": 0,
+        "notes": "zero=true test=true raise=true"
+      },
+      "total": 9,
+      "verdict": "PASS"
+    },
+    {
+      "id": "T2.3",
+      "layer": "L2",
+      "name": "Vue Options API → Composition API",
+      "durationMs": 20424,
+      "exitCode": 0,
+      "finalTextPreview": "這是轉換後的 Vue 3 Composition API 版本：\n\n```vue\n<template>\n  <div>{{ doubled }} — {{ name }}</div>\n</template>\n\n<script setup>\nimport { ref, computed, watch } from 'vue';\n\nconst count = ref(0);\nconst name = ref('');\n\nconst doubled = computed(() => count.value * 2);\n\nwatch(count, (val) => {\n  console.log('count changed', val);\n});\n\nconst increment = () => {\n  count.value++;\n};\n</script>\n```",
+      "stderrPreview": "(node:80356) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execu",
+      "eventCount": 4,
+      "score": {
+        "correctness": 3,
+        "initiative": 3,
+        "efficiency": 3,
+        "learning": 0,
+        "notes": "setup=true ref=true computed=true watch=true"
+      },
+      "total": 9,
+      "verdict": "PASS"
+    },
+    {
+      "id": "T2.4",
+      "layer": "L2",
+      "name": "T-SQL recursive CTE → WHILE (captured)",
+      "durationMs": 56053,
+      "exitCode": 0,
+      "finalTextPreview": "這是一個典型的層級結構查詢。遞迴 CTE 是 T-SQL 處理這類問題的標準做法，但在某些極端情境下，使用 `WHILE` 迴圈搭配暫存表能提供更高的控制權。\n\n### 改寫版本：WHILE 迴圈 + 暫存表\n\n```sql\n-- 定義暫存表儲存結果\nCREATE TABLE #Ancestors (\n    EmployeeId INT,\n    ManagerId INT,\n    [Level] INT\n);\n\nDECLARE @CurrentEmployeeId INT = @start;\nDECLARE @CurrentManagerId INT;\nDECLARE @CurrentLevel INT = 0;\n\n-- 初始抓取起始員工\nSELECT @CurrentManagerId = ManagerId \nFROM Employees \nWHERE EmployeeId = ",
+      "stderrPreview": "(node:78624) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execu",
+      "eventCount": 4,
+      "score": {
+        "correctness": 3,
+        "initiative": 3,
+        "efficiency": 3,
+        "learning": 0,
+        "notes": "while=true temp=true tradeoff=true"
+      },
+      "total": 9,
+      "verdict": "PASS"
+    },
+    {
+      "id": "T2.6",
+      "layer": "L2",
+      "name": "MSSQL slow query index recommendation (captured)",
+      "durationMs": 65647,
+      "exitCode": 0,
+      "finalTextPreview": "### 診斷分析\n\n目前的執行計畫顯示典型的 **「索引不匹配」** 與 **「非覆蓋索引」** 問題：\n\n1.  **Orders 表 (瓶頸 78%)**：出現 `Index Scan` 而非 `Index Seek`。這代表目前的索引無法有效利用 `WHERE` 條件中的等號（`Status`）與範圍（`OrderDate`）來快速定位資料，導致資料庫必須掃描大量索引頁面，且 `ORDER BY` 可能觸發了額外的排序開銷。\n2.  **Customers 表 (瓶頸 7%)**：出現 `Key Lookup`。這表示 join 使用的索引（可能是 PK）並不包含 `CustomerName` 欄位，導致每匹配一筆資料就必須回表（Lookup）抓取名稱，在 500 萬筆-10 萬筆的量級下，這會產生大量隨機 I/O。\n3.  **Hash Match (15%)**：由於 Order",
+      "stderrPreview": "(node:36336) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execu",
+      "eventCount": 4,
+      "score": {
+        "correctness": 3,
+        "initiative": 3,
+        "efficiency": 3,
+        "learning": 0,
+        "notes": "covering=true orderDate=true scan=true"
+      },
+      "total": 9,
+      "verdict": "PASS"
+    },
+    {
+      "id": "T4.6",
+      "layer": "L4",
+      "name": "Code review triggers a subagent",
+      "durationMs": 133851,
+      "exitCode": 0,
+      "finalTextPreview": "針對 `packages/core/src/permissions/rule-parser.ts` 的 Windows 路徑支援邏輯，Review 結果如下：\n\n1. **大小寫敏感度設定錯誤 (High)**：\n   在 `picomatch` 的選項中，`nocase` 被硬編碼為 `false`。這在 Windows 環境下會導致權限規則失效（例如 `C:/Users` 與 `C:/users` 被視為不同路徑），與 Windows 檔案系統不區分大小寫的行為相悖。建議根據作業系統動態設定 `nocase`。\n\n2. **UNC 路徑解析損壞 (High)**：\n   `resolvePathPattern` 函數會將 UNC 路徑（例如 `//Server/Share`）開頭的 `//` 刪除，使其變成 `/Server/Share`。這會導致路徑被誤認為是本地磁碟的根相對路徑，而",
+      "stderrPreview": "(node:74756) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execu",
+      "eventCount": 22,
+      "score": {
+        "correctness": 3,
+        "initiative": 3,
+        "efficiency": 3,
+        "learning": 0,
+        "notes": "agent=true read=true mentionsWindows=true tools=4"
+      },
+      "total": 9,
+      "verdict": "PASS"
+    },
+    {
+      "id": "T5.1",
+      "layer": "L5",
+      "name": "Scan repo for TODO/FIXME and categorize",
+      "durationMs": 70860,
+      "exitCode": 0,
+      "finalTextPreview": "根據掃描結果，我從 `packages/` 底下的 `.ts` / `.tsx` 檔案中挑選了 9 筆代表性的 TODO/FIXME 註解，分類並評估優先順序如下：\n\n| 檔案:行 | 類別 | 優先級 | 內容摘要 |\n| :--- | :--- | :--- | :--- |\n| `packages/cli/src/utils/commands.ts:38` | perf | 高 | 優化兩次掃描流程以提升效能與架構清晰度 |\n| `packages/cli/src/nonInteractive/control/controllers/permissionController.ts:152` | security | 高 | 測試環境允許所有工具，需確保此邏輯不會滲透至生產環境 |\n| `packages/cli/src/ui/commands/types.ts:45` | clean",
+      "stderrPreview": "(node:78432) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execu",
+      "eventCount": 14,
+      "score": {
+        "correctness": 3,
+        "initiative": 3,
+        "efficiency": 3,
+        "learning": 0,
+        "notes": "grep=true table=true categories=4 tools=2"
+      },
+      "total": 9,
+      "verdict": "PASS"
+    },
+    {
+      "id": "T5.3",
+      "layer": "L5",
+      "name": "Log pattern analysis",
+      "durationMs": 34723,
+      "exitCode": 0,
+      "finalTextPreview": "分析 `tests/capability/fixtures/app.log` 後，結果如下：\n\n### 1. 最頻繁出現的 Error Pattern\n**`ERROR [db.conn] Connection pool exhausted (active=50, max=50)`**\n該錯誤頻繁出現，且每次發生後幾乎都會立即導致 `api.posts` 或 `api.search` 出現 `Query timeout after 30000ms`。\n\n### 2. 根本原因假設\n**資料庫連線池枯竭 (Database Connection Pool Exhaustion)**\n系統設定的最大連線數為 50，目前已全部被佔用。這導致新進的 API 請求無法取得資料庫連線，直到達到 30 秒的超時限制而失敗。可能的原因包括：\n- **連線洩漏 (Connection Leak)**：程式碼",
+      "stderrPreview": "(node:78808) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execu",
+      "eventCount": 9,
+      "score": {
+        "correctness": 3,
+        "initiative": 3,
+        "efficiency": 3,
+        "learning": 0,
+        "notes": "read=true pool=true timeout=true suggestion=true"
+      },
+      "total": 9,
+      "verdict": "PASS"
+    }
+  ]
+}

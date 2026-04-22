@@ -37,6 +37,12 @@ Thumbs.db
 # Ignore built ts files
 dist
 
+# SEA (Single Executable Application) build artifacts
+/qwen.exe
+/qwen
+/sea-prep.blob
+/sea-config.json
+
 # Docker folder to help skip auth refreshes
 .docker
 
