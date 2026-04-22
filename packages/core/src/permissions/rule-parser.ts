@@ -380,13 +380,25 @@ export function buildPermissionRules(ctx: PermissionCheckContext): string[] {
         const dirPath = FILE_TARGETED_TOOLS.has(canonicalName)
           ? path.dirname(ctx.filePath)
           : ctx.filePath;
+        // Normalize to POSIX separators so rules round-trip identically
+        // between Windows and POSIX hosts.
+        const posixDir = toPosixPath(dirPath);
         // Use the `//` prefix for absolute filesystem paths in rule grammar.
         // Append `/**` so the gitignore-style glob matches all files in the
         // directory recursively (picomatch uses `**` for recursive descent).
-        // resolvePathPattern("//foo/**") → "/foo/**" — round-trips correctly.
-        const specifier = dirPath.startsWith('/')
-          ? `/${dirPath}/**`
-          : `${dirPath}/**`;
+        // POSIX absolute: `/Users/alice` → `//Users/alice/**`
+        // Windows absolute: `D:/Projects` → `//D:/Projects/**`
+        // Relative: `src/foo` → `src/foo/**`
+        const isUnixAbs = posixDir.startsWith('/');
+        const isWindowsAbs = /^[A-Za-z]:\//.test(posixDir);
+        let specifier: string;
+        if (isUnixAbs) {
+          specifier = `/${posixDir}/**`;
+        } else if (isWindowsAbs) {
+          specifier = `//${posixDir}/**`;
+        } else {
+          specifier = `${posixDir}/**`;
+        }
         return [`${displayName}(${specifier})`];
       }
       return [displayName];
@@ -437,6 +449,11 @@ function cleanPathSpecifier(specifier: string): string {
   cleaned = cleaned.replace(/\/\*\*$/, '/').replace(/\/\*$/, '/');
   // Convert rule grammar `//absolute` → `/absolute`
   if (cleaned.startsWith('//')) {
+    cleaned = cleaned.substring(1);
+  }
+  // Windows drive-letter paths read better without the leading slash in the UI:
+  // `/D:/Projects/` → `D:/Projects/`
+  if (/^\/[A-Za-z]:\//.test(cleaned)) {
     cleaned = cleaned.substring(1);
   }
   // Ensure trailing slash for directories
@@ -749,7 +766,20 @@ export function resolvePathPattern(
 ): string {
   if (specifier.startsWith('//')) {
     // Absolute path from filesystem root: `//path` → `/path`
-    return specifier.substring(1);
+    const stripped = specifier.substring(1);
+    // Windows absolute paths (drive letters) don't want the leading slash
+    // POSIX would prepend — `//D:/Projects/**` → `D:/Projects/**` not `/D:/`.
+    if (/^\/[A-Za-z]:\//.test(stripped)) {
+      return stripped.substring(1);
+    }
+    return stripped;
+  }
+
+  // Raw Windows absolute path (backwards-compat for rules persisted before
+  // Windows drive-letter detection was added — they got saved without the
+  // `//` prefix and were being mis-resolved as cwd-relative).
+  if (/^[A-Za-z]:[\\/]/.test(specifier)) {
+    return toPosixPath(specifier);
   }
 
   if (specifier.startsWith('~/')) {

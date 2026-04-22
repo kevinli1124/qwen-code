@@ -473,6 +473,23 @@ describe('resolvePathPattern', () => {
       '/project/Users/alice/file',
     );
   });
+
+  // ── Windows drive-letter absolute paths ──
+  it('// prefix with Windows drive letter → strips both slashes', () => {
+    expect(resolvePathPattern('//D:/Projects/**', projectRoot, cwd)).toBe(
+      'D:/Projects/**',
+    );
+  });
+
+  it('raw Windows drive-letter path (no // prefix) → treated as absolute', () => {
+    // Backwards-compat: rules saved before Windows support still resolve.
+    expect(resolvePathPattern('D:\\Projects/**', projectRoot, cwd)).toBe(
+      'D:/Projects/**',
+    );
+    expect(resolvePathPattern('D:/Projects/**', projectRoot, cwd)).toBe(
+      'D:/Projects/**',
+    );
+  });
 });
 
 // ─── matchesPathPattern ──────────────────────────────────────────────────────
@@ -1513,6 +1530,47 @@ describe('buildPermissionRules', () => {
     it('falls back to bare display name when no filePath', async () => {
       const rules = buildPermissionRules({ toolName: 'read_file' });
       expect(rules).toEqual(['Read']);
+    });
+
+    // ── Windows drive-letter paths ──
+    it('generates Read rule with // prefix for Windows absolute path', () => {
+      const rules = buildPermissionRules({
+        toolName: 'read_file',
+        filePath: 'D:\\Projects\\AAA\\foo.txt',
+      });
+      expect(rules).toEqual(['Read(//D:/Projects/AAA/**)']);
+    });
+
+    it('Windows rule round-trips and matches files under the allowed dir', () => {
+      const rules = buildPermissionRules({
+        toolName: 'read_file',
+        filePath: 'D:\\Projects\\foo.txt',
+      });
+      const parsed = parseRule(rules[0]!);
+      expect(parsed.specifier).toBe('//D:/Projects/**');
+
+      expect(
+        matchesRule(
+          parsed,
+          'read_file',
+          undefined,
+          'D:\\Projects\\AAA\\bar.txt',
+          undefined,
+          { projectRoot: 'D:/SideProject', cwd: 'D:/SideProject' },
+        ),
+      ).toBe(true);
+
+      // Sibling dir (outside D:\Projects) should NOT match
+      expect(
+        matchesRule(
+          parsed,
+          'read_file',
+          undefined,
+          'D:\\Other\\foo.txt',
+          undefined,
+          { projectRoot: 'D:/SideProject', cwd: 'D:/SideProject' },
+        ),
+      ).toBe(false);
     });
   });
 
