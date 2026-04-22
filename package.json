@@ -29,6 +29,7 @@
     "test:agents": "node scripts/test-agents.mjs",
     "test:memory-phases": "tsx scripts/test-memory-phases.mjs",
     "generate:settings-schema": "tsx scripts/generate-settings-schema.ts",
+    "convert:claude-skills": "node scripts/convert-claude-skills.mjs",
     "build": "node scripts/build.js",
     "build-and-start": "npm run build && npm run start",
     "build:vscode": "node scripts/build_vscode_companion.js",

@@ -9,6 +9,7 @@ import * as path from 'path';
 import { parse as parseYaml } from '../utils/yaml-parser.js';
 import { createDebugLogger } from '../utils/debugLogger.js';
 import { normalizeContent } from '../utils/textUtils.js';
+import { normalizeClaudeFrontmatter } from './claude-compat.js';
 
 const debugLogger = createDebugLogger('SKILL_LOAD');
 
@@ -83,7 +84,17 @@ export function parseSkillContent(
   const [, frontmatterYaml, body] = match;
 
   // Parse YAML frontmatter
-  const frontmatter = parseYaml(frontmatterYaml) as Record<string, unknown>;
+  const rawFrontmatter = parseYaml(frontmatterYaml) as Record<string, unknown>;
+
+  // Auto-migrate Claude Code-style frontmatter (allowed-tools, PascalCase tool
+  // names) to Qwen form so skills from Anthropic's ecosystem load transparently.
+  const { frontmatter, migrated, notes } =
+    normalizeClaudeFrontmatter(rawFrontmatter);
+  if (migrated) {
+    debugLogger.debug(
+      `Claude-compat migration applied to ${filePath}: ${notes.join(' ')}`,
+    );
+  }
 
   // Extract required fields
   const nameRaw = frontmatter['name'];
