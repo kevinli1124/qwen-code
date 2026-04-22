@@ -756,8 +756,23 @@ function pickCli(explicit) {
   // portable user would run).
   const exe = path.join(ROOT, 'qwen.exe');
   if (fs.existsSync(exe)) return { cmd: exe, args: [] };
-  // Fallback: use the local dist via the npm-linked bin.
-  return { cmd: 'qwen.cmd', args: [] };
+  // Fallback: use the local dist via the npm-linked bin. Windows .cmd
+  // shims require shell:true to spawn (CVE-2024-27980 patch blocks the
+  // direct execve path for .cmd/.bat on Node ≥ 20.12).
+  return {
+    cmd: process.platform === 'win32' ? 'qwen.cmd' : 'qwen',
+    args: [],
+  };
+}
+
+/**
+ * Node ≥ 20.12 rejects direct spawn of .cmd/.bat files on Windows with
+ * EINVAL. Detect the shim case so runTest can opt into shell:true.
+ */
+function needsShell(cmd) {
+  if (process.platform !== 'win32') return false;
+  const lower = cmd.toLowerCase();
+  return lower.endsWith('.cmd') || lower.endsWith('.bat');
 }
 
 /**
@@ -770,8 +785,12 @@ async function runTest(cli, test) {
   let stderr = '';
 
   return new Promise((resolve) => {
+    const shell = needsShell(cli.cmd);
+    // When shelling on Windows, wrap the executable path in double quotes so
+    // paths with spaces survive cmd.exe argument parsing.
+    const spawnCmd = shell && cli.cmd.includes(' ') ? `"${cli.cmd}"` : cli.cmd;
     const child = spawn(
-      cli.cmd,
+      spawnCmd,
       [
         ...cli.args,
         '--input-format',
@@ -784,8 +803,13 @@ async function runTest(cli, test) {
         cwd: ROOT,
         stdio: ['pipe', 'pipe', 'pipe'],
         env: { ...process.env, QWEN_CODE_NO_RELAUNCH: '1' },
+        shell,
       },
     );
+
+    child.on('error', (err) => {
+      stderr += `spawn error: ${err?.message ?? err}\n`;
+    });
 
     let buf = '';
     child.stdout.on('data', (chunk) => {
