@@ -11,6 +11,9 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['scripts/tests/**/*.test.js'],
+    // web-server.test.js runs under vitest.web.config.ts because it needs
+    // real node:fs — the appendFileSync mock in test-setup.ts breaks it.
+    exclude: ['scripts/tests/web-server.test.js'],
     setupFiles: ['scripts/tests/test-setup.ts'],
     coverage: {
       provider: 'v8',
