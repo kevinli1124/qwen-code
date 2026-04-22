@@ -5,7 +5,7 @@
  */
 
 import type React from 'react';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { Box, Text, useInput } from 'ink';
 import type { Config } from '@qwen-code/qwen-code-core';
 import { getResponseTextFromParts } from '@qwen-code/qwen-code-core';
@@ -23,13 +23,7 @@ import os from 'node:os';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Step =
-  | 'connection'
-  | 'naming'
-  | 'naming-llm'
-  | 'soul'
-  | 'soul-llm'
-  | 'done';
+type Step = 'naming' | 'naming-llm' | 'soul' | 'soul-llm' | 'done';
 
 interface LlmQuestion {
   q: string;
@@ -83,14 +77,9 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
   onComplete,
 }) => {
   // ── Step ──
-  const [step, setStep] = useState<Step>('connection');
-
-  // ── Connection ──
-  const [connStatus, setConnStatus] = useState<'testing' | 'ok' | 'fail'>(
-    'testing',
-  );
-  const [connModel, setConnModel] = useState('');
-  const [connError, setConnError] = useState('');
+  // LLM auth is handled by Qwen's own auth flow before this wizard runs, so
+  // we skip the connection check and start directly at naming.
+  const [step, setStep] = useState<Step>('naming');
 
   // ── Naming ──
   const [nameInput, setNameInput] = useState('');
@@ -114,38 +103,6 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
 
   // ── Final agentName ──
   const [agentName, setAgentName] = useState('');
-
-  // ─── Connection test on mount ─────────────────────────────────────────────
-
-  useEffect(() => {
-    if (step !== 'connection') return;
-    const test = async () => {
-      try {
-        const generator = config.getContentGenerator();
-        if (!generator) throw new Error('未設定 LLM 連線');
-        const model = config.getModel();
-        const resp = await generator.generateContent(
-          {
-            model,
-            contents: [{ role: 'user', parts: [{ text: 'ping' }] }],
-          },
-          'setup-ping',
-        );
-        const parts = resp.candidates?.[0]?.content?.parts ?? [];
-        const text = getResponseTextFromParts(parts);
-        if (text !== undefined) {
-          setConnModel(model);
-          setConnStatus('ok');
-        } else {
-          throw new Error('空回應');
-        }
-      } catch (e) {
-        setConnError(e instanceof Error ? e.message : String(e));
-        setConnStatus('fail');
-      }
-    };
-    void test();
-  }, [config, step]);
 
   // ─── LLM name suggestions ─────────────────────────────────────────────────
 
@@ -244,14 +201,26 @@ ${summary}`;
     [settings, onComplete],
   );
 
+  // Bail out of the wizard entirely with safe defaults. Invoked on ESC or
+  // explicit skip (e.g., when the LLM is unreachable and the user does not
+  // want to continue manually naming / picking a soul).
+  const skipWizard = useCallback(() => {
+    try {
+      settings.setValue(SettingScope.User, 'general.setupCompleted', true);
+    } catch {
+      // best effort
+    }
+    onComplete('Agent');
+  }, [settings, onComplete]);
+
   // ─── Keyboard handling ────────────────────────────────────────────────────
 
   useInput((input, key) => {
-    // ── Connection ──
-    if (step === 'connection') {
-      if (connStatus !== 'testing' && key.return) {
-        setStep('naming');
-      }
+    // Global ESC → skip the wizard entirely with defaults. This gives the
+    // user an explicit exit even if the LLM is unreachable or they want to
+    // configure name/soul manually later.
+    if (key.escape) {
+      skipWizard();
       return;
     }
 
@@ -387,36 +356,10 @@ ${summary}`;
       </Text>
       <Text color={theme.text.secondary}>{divider}</Text>
 
-      {/* Step: Connection */}
-      {step === 'connection' && (
-        <Box flexDirection="column" marginTop={1} gap={1}>
-          <Text bold>Step 1 / 3 — LLM 連線確認</Text>
-          {connStatus === 'testing' && (
-            <Text color={theme.text.secondary}> 正在測試連線...</Text>
-          )}
-          {connStatus === 'ok' && (
-            <>
-              <Text color="green"> ✓ 連線成功 模型：{connModel}</Text>
-              <Text color={theme.text.secondary}> 按 Enter 繼續</Text>
-            </>
-          )}
-          {connStatus === 'fail' && (
-            <>
-              <Text color="red"> ✗ 連線失敗：{connError}</Text>
-              <Text color={theme.text.secondary}>
-                {
-                  '  請先完成 LLM 設定（/auth）後重啟。或按 Enter 跳過，稍後設定。'
-                }
-              </Text>
-            </>
-          )}
-        </Box>
-      )}
-
       {/* Step: Naming */}
       {step === 'naming' && (
         <Box flexDirection="column" marginTop={1} gap={1}>
-          <Text bold>Step 2 / 3 — Agent 名字</Text>
+          <Text bold>Step 1 / 2 — Agent 名字</Text>
           <Box>
             <Text
               color={
@@ -452,7 +395,7 @@ ${summary}`;
       {/* Step: Naming LLM */}
       {step === 'naming-llm' && (
         <Box flexDirection="column" marginTop={1} gap={1}>
-          <Text bold>Step 2 / 3 — AI 建議名字</Text>
+          <Text bold>Step 1 / 2 — AI 建議名字</Text>
           {loadingNames ? (
             <Text color={theme.text.secondary}> 生成中...</Text>
           ) : (
@@ -484,7 +427,7 @@ ${summary}`;
       {/* Step: Soul */}
       {step === 'soul' && (
         <Box flexDirection="column" marginTop={1} gap={1}>
-          <Text bold>Step 3 / 3 — Agent Soul（個性）</Text>
+          <Text bold>Step 2 / 2 — Agent Soul（個性）</Text>
           {soulOptions.map((opt, i) => (
             <Box key={opt.id}>
               <Text

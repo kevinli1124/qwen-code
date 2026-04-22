@@ -162,10 +162,15 @@ export function KeypressProvider({
   );
 
   useEffect(() => {
-    const wasRaw = stdin.isRaw;
-    if (wasRaw === false) {
-      setRawMode(true);
-    }
+    // Always bump Ink's refcounted setRawMode so raw mode survives every
+    // child useInput mounting and unmounting during the session. Previously
+    // we skipped this when stdin was already raw (because gemini.tsx calls
+    // process.stdin.setRawMode(true) early to suppress spurious characters),
+    // but that left Ink's refcount at 0. When a child component later used
+    // useInput and then unmounted, Ink's refcount dropped back to 0 and the
+    // terminal was actually returned to cooked mode, so subsequent dialogs
+    // (e.g. IdeIntegrationNudge) saw raw escape sequences echoed to stdout.
+    setRawMode(true);
 
     const keypressStream = new PassThrough();
     let usePassthrough = false;
@@ -1112,10 +1117,9 @@ export function KeypressProvider({
 
       rl.close();
 
-      // Restore the terminal to its original state.
-      if (wasRaw === false) {
-        setRawMode(false);
-      }
+      // Pair the unconditional setRawMode(true) above so Ink's refcount is
+      // balanced when the provider unmounts (typically on app exit).
+      setRawMode(false);
 
       if (backslashTimeout) {
         clearTimeout(backslashTimeout);

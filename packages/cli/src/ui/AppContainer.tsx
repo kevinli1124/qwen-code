@@ -2233,7 +2233,11 @@ export const AppContainer = (props: AppContainerProps) => {
     [compactMode, frozenSnapshot],
   );
 
-  if (showWizard) {
+  // Defer the name/soul wizard until the LLM auth flow is done — we don't
+  // want to interrupt Qwen's existing auth onboarding, and the wizard's
+  // earlier connection step is redundant once auth has been completed.
+  const authFlowActive = isAuthDialogOpen || isAuthenticating || !!authError;
+  if (showWizard && !authFlowActive) {
     return (
       <SetupWizard
         config={config}
