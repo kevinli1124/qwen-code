@@ -1,0 +1,348 @@
+{
+  "label": "profile-qwen-native",
+  "ts": "2026-04-23-002034",
+  "results": [
+    {
+      "id": "T1.1",
+      "layer": "L1",
+      "name": "Race condition judgment (Python GIL)",
+      "durationMs": 27716,
+      "exitCode": 0,
+      "finalTextPreview": "### 根本原因 (Root Cause)\n\n這是一個典型的 **競態條件 (Race Condition)**。\n\n在 Python 中，`counter += 1` 並非一個**原子操作 (Atomic Operation)**。它在底層被分解為三個步驟：\n1. **讀取** `counter` 的目前值。\n2. 將該值 **加 1**。\n3. 將結果 **寫回** `counter`。\n\n在高併發環境下，執行緒可能會在步驟 1 和 3 之間被切換（Preemption）。例如：執行緒 A 讀到了 `100`，但在它寫回 `101` 之前，執行緒 B 也讀到了 `100` 並寫回 `101`。結果兩個執行緒都執行了加法，但 `counter` 僅增加了 1，導致結果遺失。\n\n---\n\n### 最小修法\n\n使用 `threading.Lock` 確保加法操作的原子性：\n\n```pytho",
+      "stderrPreview": "(node:68892) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execu",
+      "eventCount": 4,
+      "score": {
+        "correctness": 3,
+        "initiative": 3,
+        "efficiency": 3,
+        "learning": 0,
+        "notes": "race=true lock=true tools=0"
+      },
+      "total": 9,
+      "verdict": "PASS"
+    },
+    {
+      "id": "T1.2",
+      "layer": "L1",
+      "name": "Contradictory requirements tradeoff",
+      "durationMs": 37845,
+      "exitCode": 0,
+      "finalTextPreview": "這兩項要求的衝突點在於**「同步 I/O 延遲」與「極低回應時間」的矛盾**。\n\n### 衝突點\n寫入遠端 MSSQL 資料庫涉及網路往返時間 (Network Round-trip) 與資料庫磁碟 I/O。在最理想狀況下，一次同步寫入可能就耗時數十毫秒；一旦遇到網路波動或資料庫鎖定 (Locking)，延遲很容易超過 100ms，導致 API 無法達成產品目標。\n\n---\n\n### 折衷方案\n\n#### 方案一：非同步異步寫入 (Asynchronous Logging)\n**做法：** API 接收請求後，將 audit log 丟入高速快取或訊息佇列（如 Redis 或 Kafka），隨即直接回傳回應給使用者。由後端背景程式 (Background Worker) 定期將佇列中的資料寫入 MSSQL。\n\n*   **取捨：**\n    *   **獲得：** 極佳的回應速度，完全滿足",
+      "stderrPreview": "(node:77780) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execu",
+      "eventCount": 4,
+      "score": {
+        "correctness": 3,
+        "initiative": 3,
+        "efficiency": 3,
+        "learning": 0,
+        "notes": "latency=true async=true tradeoff=true"
+      },
+      "total": 9,
+      "verdict": "PASS"
+    },
+    {
+      "id": "T2.5",
+      "layer": "L2",
+      "name": "XSS detection in innerHTML usage",
+      "durationMs": 39478,
+      "exitCode": 0,
+      "finalTextPreview": "這段程式碼存在 **跨站腳本攻擊 (Cross-Site Scripting, XSS)** 的安全漏洞，具體來說是 **DOM-based XSS**。\n\n### 1. 漏洞是什麼？\n問題出在這一行：\n`out.innerHTML = '你搜尋的是: ' + e.target.value;`\n\n程式碼直接將使用者的輸入 (`e.target.value`) 透過 `innerHTML` 屬性插入到網頁的 DOM 中。\n\n### 2. 為何危險？\n`innerHTML` 會將字串解析為 HTML。如果攻擊者在輸入框中輸入惡意的 HTML 標籤或 JavaScript 程式碼，瀏覽器會直接執行它。\n\n**攻擊範例：**\n如果使用者輸入以下內容：\n`<img src=x onerror=\"alert('你的個資已被盜取！')\">`\n\n瀏覽器在嘗試載入不存在的圖片 `x` 失敗後，會觸發 `on",
+      "stderrPreview": "(node:5008) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execut",
+      "eventCount": 4,
+      "score": {
+        "correctness": 3,
+        "initiative": 3,
+        "efficiency": 3,
+        "learning": 0,
+        "notes": "xss=true innerHTML=true fix=true"
+      },
+      "total": 9,
+      "verdict": "PASS"
+    },
+    {
+      "id": "T3.4",
+      "layer": "L3",
+      "name": "Summarize long markdown doc",
+      "durationMs": 23809,
+      "exitCode": 0,
+      "finalTextPreview": "這份文件主要介紹 Qwen Code 的**設定方式與選項**。\n\n重點小節包括：\n1. **設定層級 (Configuration layers)**：說明設定的優先順序，從預設值（最低）到命令列參數（最高）。\n2. **設定檔案 (Settings files)**：詳細說明四種 JSON 設定檔的位置（系統預設、使用者、專案及系統覆蓋設定）及其作用範圍。\n3. **設定遷移 (Configuration migration)**：說明舊版設定如何自動遷移至新格式。\n4. **可用設定選項 (Available settings)**：列出各分類（如 `general`、`ui`、`model` 等）的具體設定項、類型與預設值。",
+      "stderrPreview": "(node:80780) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execu",
+      "eventCount": 9,
+      "score": {
+        "correctness": 2,
+        "initiative": 3,
+        "efficiency": 3,
+        "learning": 0,
+        "notes": "read=true tools=1"
+      },
+      "total": 8,
+      "verdict": "PASS"
+    },
+    {
+      "id": "T3.5",
+      "layer": "L3",
+      "name": "Generate API doc for rule-parser.ts",
+      "durationMs": 73223,
+      "exitCode": 0,
+      "finalTextPreview": "以下是 `packages/core/src/permissions/rule-parser.ts` 的 API 文件：\n\n# Permission Rule Parser API\n\n此檔案提供解析、解析以及生成權限規則的工具函式，用於控制 Qwen Code 系統中各類工具（如 Shell、Read、Edit）的使用權限，並支援路徑、指令及網域等特定規格（Specifiers）。\n\n## 匯出常數\n\n### `TOOL_NAME_ALIASES`\n- **類型**: `Readonly<Record<string, string>>`\n- **目的**: 定義已知工具名稱及其別名到標準名稱（Canonical Name）的映射表，用以統一處理不同來源的工具名稱（例如將 `Bash` 映射至 `run_shell_command`）。\n\n---\n\n## 匯出函式\n\n### `resolve",
+      "stderrPreview": "(node:76776) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execu",
+      "eventCount": 9,
+      "score": {
+        "correctness": 3,
+        "initiative": 3,
+        "efficiency": 3,
+        "learning": 0,
+        "notes": "read=true covered=3/4 example=true"
+      },
+      "total": 9,
+      "verdict": "PASS"
+    },
+    {
+      "id": "T4.1",
+      "layer": "L4",
+      "name": "Autonomous memory_write on stated preference",
+      "durationMs": 36559,
+      "exitCode": 0,
+      "finalTextPreview": "沒問題，我已經記住了。在之後的所有 session 中，我會遵守這個偏好：在 production 程式碼中一律使用 logger 而非 print 來進行 debug（適用於 Python、Node.js 及所有語言）。",
+      "stderrPreview": "(node:77912) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execu",
+      "eventCount": 9,
+      "score": {
+        "correctness": 3,
+        "initiative": 3,
+        "efficiency": 3,
+        "learning": 3,
+        "notes": "memory_write=true"
+      },
+      "total": 12,
+      "verdict": "PASS"
+    },
+    {
+      "id": "T4.4",
+      "layer": "L4",
+      "name": "Parallel independent tool calls",
+      "durationMs": 20335,
+      "exitCode": 0,
+      "finalTextPreview": "0.14.5\n0.14.5\n0.14.5",
+      "stderrPreview": "(node:24304) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execu",
+      "eventCount": 15,
+      "score": {
+        "correctness": 3,
+        "initiative": 3,
+        "efficiency": 3,
+        "learning": 0,
+        "notes": "reads=3 parallelTurn=true versions=3"
+      },
+      "total": 9,
+      "verdict": "PASS"
+    },
+    {
+      "id": "T4.5",
+      "layer": "L4",
+      "name": "Tool choice: glob over recursive list_directory",
+      "durationMs": 31483,
+      "exitCode": 0,
+      "finalTextPreview": "總共有 1422 個 .ts 檔。",
+      "stderrPreview": "(node:68644) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execu",
+      "eventCount": 9,
+      "score": {
+        "correctness": 3,
+        "initiative": 3,
+        "efficiency": 3,
+        "learning": 0,
+        "notes": "glob=true shell=false listDir=0"
+      },
+      "total": 9,
+      "verdict": "PASS"
+    },
+    {
+      "id": "T1.3",
+      "layer": "L1",
+      "name": "Code review with tiered findings",
+      "durationMs": 51261,
+      "exitCode": 0,
+      "finalTextPreview": "這段程式碼存在嚴重的安全漏洞與效能問題。以下是詳細的 Code Review 分析：\n\n### 🔴 Critical (嚴重)\n\n*   **SQL 注入漏洞 (SQL Injection)**：\n    這是最嚴重的問題。你直接將 `user_id` 和 `search`（來自使用者輸入 `request.args.get('q')`）透過 f-string 嵌入到 SQL 查詢中。惡意使用者可以透過構造特殊的 `q` 參數來竊取資料庫所有資訊、刪除資料甚至獲取伺服器權限。\n    *   **修復建議**：必須使用**參數化查詢 (Parameterized Queries)**。\n\n### 🟡 Major (主要)\n\n*   **N+1 查詢問題 (N+1 Query Problem)**：\n    你在 `for` 迴圈中針對每一筆文章都執行一次 SQL 查詢來獲取作者名稱。如",
+      "stderrPreview": "(node:80080) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execu",
+      "eventCount": 4,
+      "score": {
+        "correctness": 3,
+        "initiative": 3,
+        "efficiency": 3,
+        "learning": 0,
+        "notes": "sqli=true n+1=true magic=false tiered=true"
+      },
+      "total": 9,
+      "verdict": "PASS"
+    },
+    {
+      "id": "T2.1",
+      "layer": "L2",
+      "name": "C# EF Core N+1 refactor",
+      "durationMs": 21894,
+      "exitCode": 0,
+      "finalTextPreview": "使用 `.Select()` 直接將結果投影到 DTO，讓 EF Core 將聚合運算（Sum, Count）翻譯成單一 SQL 查詢，避免在迴圈中重複查詢資料庫。\n\n```csharp\npublic List<OrderDto> GetOrders(int customerId) {\n    return _ctx.Orders\n        .Where(o => o.CustomerId == customerId)\n        .Select(o => new OrderDto {\n            Id = o.Id,\n            Total = o.OrderItems.Sum(i => i.Price * i.Qty),\n            ItemCount = o.OrderItems.Count,\n        })\n        .To",
+      "stderrPreview": "(node:80008) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execu",
+      "eventCount": 4,
+      "score": {
+        "correctness": 3,
+        "initiative": 3,
+        "efficiency": 3,
+        "learning": 0,
+        "notes": "include=false projection=true n+1=true"
+      },
+      "total": 9,
+      "verdict": "PASS"
+    },
+    {
+      "id": "T2.2",
+      "layer": "L2",
+      "name": "Python bug fix + pytest (captured)",
+      "durationMs": 36726,
+      "exitCode": 0,
+      "finalTextPreview": "### (1) Bug 原因分析\n\n這個 bug 出現在 `range(0, len(lst), n)` 這一行。在 Python 中，`range` 函數的第三個參數（步進值 `step`）**不能為 0**。當 `n=0` 時，Python 會拋出 `ValueError: range() arg 3 must not be zero`，導致程式崩潰。\n\n### (2) 最小修正\n\n最簡單且最合理的做法是在函數開頭檢查 `n` 是否大於 0。如果 `n <= 0`，應該拋出一個明確的 `ValueError` 告知使用者區塊大小必須為正整數。\n\n```python\ndef chunks(lst, n):\n    \"\"\"Split lst into chunks of size n.\"\"\"\n    if n <= 0:\n        raise ValueError(\"Chunk si",
+      "stderrPreview": "(node:72864) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execu",
+      "eventCount": 4,
+      "score": {
+        "correctness": 3,
+        "initiative": 3,
+        "efficiency": 3,
+        "learning": 0,
+        "notes": "zero=true test=true raise=true"
+      },
+      "total": 9,
+      "verdict": "PASS"
+    },
+    {
+      "id": "T2.3",
+      "layer": "L2",
+      "name": "Vue Options API → Composition API",
+      "durationMs": 15433,
+      "exitCode": 0,
+      "finalTextPreview": "這裡將該元件轉換為 Vue 3 Composition API (`<script setup>`) 的版本：\n\n```vue\n<template>\n  <div>{{ doubled }} — {{ name }}</div>\n</template>\n\n<script setup>\nimport { ref, computed, watch } from 'vue';\n\n// Data\nconst count = ref(0);\nconst name = ref('');\n\n// Computed\nconst doubled = computed(() => count.value * 2);\n\n// Watcher\nwatch(count, (val) => {\n  console.log('count changed', val);\n});\n\n// Methods\nconst inc",
+      "stderrPreview": "(node:77844) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execu",
+      "eventCount": 4,
+      "score": {
+        "correctness": 3,
+        "initiative": 3,
+        "efficiency": 3,
+        "learning": 0,
+        "notes": "setup=true ref=true computed=true watch=true"
+      },
+      "total": 9,
+      "verdict": "PASS"
+    },
+    {
+      "id": "T2.4",
+      "layer": "L2",
+      "name": "T-SQL recursive CTE → WHILE (captured)",
+      "durationMs": 50225,
+      "exitCode": 0,
+      "finalTextPreview": "這是一個典型的階層式資料查詢。以下將該遞迴 CTE 改寫為 `WHILE` 迴圈搭配暫存表的版本，並為您分析兩種寫法的差異。\n\n### 改寫版本：WHILE 迴圈 + 暫存表\n\n由於組織上級（Manager）通常是單一路徑（一對多關係），我們可以使用變數來追蹤當前的上級，並將結果存入暫存表。\n\n```sql\n-- 1. 建立暫存表存放結果\nCREATE TABLE #Ancestors (\n    EmployeeId INT,\n    ManagerId INT,\n    Level INT\n);\n\nDECLARE @currentEmpId INT = @start;\nDECLARE @currentMgrId INT;\nDECLARE @level INT = 0;\n\n-- 2. 取得起始節點的 ManagerId\nSELECT @currentMgrId = ManagerId \n",
+      "stderrPreview": "(node:75640) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execu",
+      "eventCount": 4,
+      "score": {
+        "correctness": 3,
+        "initiative": 3,
+        "efficiency": 3,
+        "learning": 0,
+        "notes": "while=true temp=true tradeoff=true"
+      },
+      "total": 9,
+      "verdict": "PASS"
+    },
+    {
+      "id": "T2.6",
+      "layer": "L2",
+      "name": "MSSQL slow query index recommendation (captured)",
+      "durationMs": 53223,
+      "exitCode": 0,
+      "finalTextPreview": "### 診斷分析\n\n根據執行計畫與資料量，瓶頸分析如下：\n\n1.  **最大瓶頸：`Index Scan on Orders` (78%)**\n    *   **原因**：目前的索引無法有效對 `Status` 和 `OrderDate` 進行 **Index Seek**。`Index Scan` 表示 SQL Server 必須掃描大量索引頁面。由於 `Orders` 有 500 萬筆資料，這導致了極高的 I/O 開銷。\n    *   **排序開銷**：`ORDER BY o.OrderDate DESC` 若沒有對應的索引順序，會觸發額外的 `Sort` 運算（雖然此處 cost 被包含在 Scan 中）。\n\n2.  **次要瓶頸：`Key Lookup on Customers` (7%)**\n    *   **原因**：在 `Customers` 表上使用了非聚集索引來尋找",
+      "stderrPreview": "(node:78348) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execu",
+      "eventCount": 4,
+      "score": {
+        "correctness": 3,
+        "initiative": 3,
+        "efficiency": 3,
+        "learning": 0,
+        "notes": "covering=true orderDate=true scan=true"
+      },
+      "total": 9,
+      "verdict": "PASS"
+    },
+    {
+      "id": "T4.6",
+      "layer": "L4",
+      "name": "Code review triggers a subagent",
+      "durationMs": 180028,
+      "exitCode": null,
+      "finalTextPreview": "",
+      "stderrPreview": "(node:79780) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execu",
+      "eventCount": 22,
+      "score": {
+        "correctness": 1,
+        "initiative": 3,
+        "efficiency": 2,
+        "learning": 0,
+        "notes": "agent=true read=true mentionsWindows=false tools=5"
+      },
+      "total": 6,
+      "verdict": "FAIL"
+    },
+    {
+      "id": "T5.1",
+      "layer": "L5",
+      "name": "Scan repo for TODO/FIXME and categorize",
+      "durationMs": 47916,
+      "exitCode": 0,
+      "finalTextPreview": "根據掃描 `packages/` 底下的 `.ts` 與 `.tsx` 檔案，我挑選了 10 筆代表性的 TODO/FIXME 註解，分類與優先順序評估如下：\n\n| 檔案:行 | 類別 | 優先級 | 內容摘要 |\n| :--- | :--- | :--- | :--- |\n| `cli/src/nonInteractive/control/controllers/permissionController.ts:152` | security | 高 | 測試環境允許所有工具，需確保不會影響正式環境 |\n| `core/src/extension/extensionManager.ts:1407` | perf | 高 | 目前重啟所有 MCP 伺服器，應優化為僅重啟變更項 |\n| `cli/src/utils/commands.ts:38` | perf | 中 | 兩次掃描流程需優化以",
+      "stderrPreview": "(node:80312) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execu",
+      "eventCount": 14,
+      "score": {
+        "correctness": 3,
+        "initiative": 3,
+        "efficiency": 3,
+        "learning": 0,
+        "notes": "grep=true table=true categories=4 tools=2"
+      },
+      "total": 9,
+      "verdict": "PASS"
+    },
+    {
+      "id": "T5.3",
+      "layer": "L5",
+      "name": "Log pattern analysis",
+      "durationMs": 36859,
+      "exitCode": 0,
+      "finalTextPreview": "根據對 `tests/capability/fixtures/app.log` 的分析，結果如下：\n\n### 1. 最頻繁出現的 Error Pattern\n**Pattern:** `ERROR [db.conn] Connection pool exhausted (active=50, max=50)`\n此錯誤出現頻率最高，且通常隨後會觸發 `Query timeout after 30000ms`（出現在 `api.posts` 或 `api.search`）。\n\n### 2. 根本原因假設\n**資料庫連線池耗盡 (Database Connection Pool Exhaustion)**\n系統設定的最大連線數為 50，而日誌顯示連線數經常達到上限且無法釋放。這導致後續請求在等待可用連線時超過 30 秒的時限，最終導致 API 請求逾時。可能的原因包括：\n*   **連線洩漏 (",
+      "stderrPreview": "(node:62140) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execu",
+      "eventCount": 9,
+      "score": {
+        "correctness": 3,
+        "initiative": 3,
+        "efficiency": 3,
+        "learning": 0,
+        "notes": "read=true pool=true timeout=true suggestion=false"
+      },
+      "total": 9,
+      "verdict": "PASS"
+    },
+    {
+      "id": "T5.2",
+      "layer": "L5",
+      "name": "Multi-file call-chain trace",
+      "durationMs": 56225,
+      "exitCode": 0,
+      "finalTextPreview": "根據查證，`IdeClient.connect()` 的相關資訊如下：\n\n1. **定義檔案**：\n   `packages/core/src/ide/ide-client.ts`\n\n2. **呼叫處（3 處）**：\n   - `packages/cli/src/core/initializer.ts`\n   - `packages/cli/src/ui/commands/ideCommand.ts`\n   - `packages/core/src/ide/ide-client.test.ts`\n\n3. **內部呼叫的主要方法**：\n   - `getConnectionConfigFromFile()`：從設定檔讀取連線配置。\n   - `establishHttpConnection()`：嘗試建立 HTTP 連線。\n   - `establishStdioConnection()`：",
+      "stderrPreview": "(node:78316) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execu",
+      "eventCount": 17,
+      "score": {
+        "correctness": 2,
+        "initiative": 3,
+        "efficiency": 3,
+        "learning": 0,
+        "notes": "grep=true reads=1 tools=3"
+      },
+      "total": 8,
+      "verdict": "PASS"
+    }
+  ]
+}

@@ -424,6 +424,14 @@ export interface ConfigParameters {
   outputLanguageFilePath?: string;
   soulFilePath?: string;
   agentName?: string;
+  /**
+   * Which system-prompt stack to assemble. 'fork' keeps this fork's
+   * additions (soul.md context file, MEMORY.md index, memory discipline
+   * block, first-run onboarding hint). 'qwen-native' disables every
+   * fork-added injection so the system prompt surface matches upstream
+   * Qwen-Code. Default 'fork'.
+   */
+  promptProfile?: 'fork' | 'qwen-native';
   maxSessionTurns?: number;
   clearContextOnIdle?: ClearContextOnIdleSettings;
   sessionTokenLimit?: number;
@@ -627,6 +635,7 @@ export class Config {
   private readonly outputLanguageFilePath?: string;
   private readonly soulFilePath?: string;
   private readonly agentName?: string;
+  private readonly promptProfile: 'fork' | 'qwen-native';
   private readonly noBrowser: boolean;
   private readonly folderTrustFeature: boolean;
   private readonly folderTrust: boolean;
@@ -754,6 +763,7 @@ export class Config {
     this.outputLanguageFilePath = params.outputLanguageFilePath;
     this.soulFilePath = params.soulFilePath;
     this.agentName = params.agentName;
+    this.promptProfile = params.promptProfile ?? 'fork';
 
     this.fileFiltering = {
       respectGitIgnore: params.fileFiltering?.respectGitIgnore ?? true,
@@ -1163,34 +1173,40 @@ export class Config {
     // user and project scope) so agents can see available memories without
     // loading every body. Individual memories are loaded on demand via
     // `read_file` when the hook is relevant.
+    //
+    // The memory index + discipline + onboarding hint are all fork-only
+    // additions; the qwen-native profile opts out so the prompt surface
+    // matches upstream Qwen-Code.
     let mergedMemory = memoryContent;
-    try {
-      const indexContent = await this.getMemoryStore().loadIndexContent();
-      if (indexContent) {
-        mergedMemory = memoryContent
-          ? `${memoryContent}\n\n${indexContent}`
-          : indexContent;
+    if (this.promptProfile === 'fork') {
+      try {
+        const indexContent = await this.getMemoryStore().loadIndexContent();
+        if (indexContent) {
+          mergedMemory = memoryContent
+            ? `${memoryContent}\n\n${indexContent}`
+            : indexContent;
+        }
+      } catch (err) {
+        this.debugLogger.warn(
+          'Failed to load memory index:',
+          err instanceof Error ? err.message : String(err),
+        );
       }
-    } catch (err) {
-      this.debugLogger.warn(
-        'Failed to load memory index:',
-        err instanceof Error ? err.message : String(err),
-      );
-    }
 
-    // Prepend first-run onboarding hint when user_profile memory is absent.
-    // The block self-removes on the next refresh once the profile is saved.
-    try {
-      const onboarding = this.getOnboardingManager();
-      if (await onboarding.shouldPromptOnboarding()) {
-        const hint = onboarding.buildOnboardingHint();
-        mergedMemory = mergedMemory ? `${hint}\n\n${mergedMemory}` : hint;
+      // Prepend first-run onboarding hint when user_profile memory is absent.
+      // The block self-removes on the next refresh once the profile is saved.
+      try {
+        const onboarding = this.getOnboardingManager();
+        if (await onboarding.shouldPromptOnboarding()) {
+          const hint = onboarding.buildOnboardingHint();
+          mergedMemory = mergedMemory ? `${hint}\n\n${mergedMemory}` : hint;
+        }
+      } catch (err) {
+        this.debugLogger.warn(
+          'Failed to compose onboarding hint:',
+          err instanceof Error ? err.message : String(err),
+        );
       }
-    } catch (err) {
-      this.debugLogger.warn(
-        'Failed to compose onboarding hint:',
-        err instanceof Error ? err.message : String(err),
-      );
     }
 
     this.setUserMemory(mergedMemory);
@@ -2085,14 +2101,22 @@ export class Config {
     return this.agentName;
   }
 
+  getPromptProfile(): 'fork' | 'qwen-native' {
+    return this.promptProfile;
+  }
+
   getExtensionContextFilePaths(): string[] {
     const extensionContextFilePaths = this.getActiveExtensions().flatMap(
       (e) => e.contextFiles,
     );
+    // soul.md is a fork-only personality overlay; keep it out of the
+    // qwen-native prompt profile so we can A/B-test the model against a
+    // surface that matches upstream.
+    const includeSoul = this.promptProfile === 'fork' && !!this.soulFilePath;
     return [
       ...extensionContextFilePaths,
       ...(this.outputLanguageFilePath ? [this.outputLanguageFilePath] : []),
-      ...(this.soulFilePath ? [this.soulFilePath] : []),
+      ...(includeSoul ? [this.soulFilePath!] : []),
     ];
   }
 

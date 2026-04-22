@@ -502,6 +502,20 @@ const SETTINGS_SCHEMA = {
         description: 'Whether the initial setup wizard has been completed.',
         showInDialog: false,
       },
+      promptProfile: {
+        type: 'string',
+        label: 'Prompt Profile',
+        category: 'General',
+        requiresRestart: true,
+        default: 'fork' as 'fork' | 'qwen-native',
+        description:
+          "Which system-prompt profile to use. 'fork' enables this fork's additions (soul.md injection, MEMORY.md index, memory-discipline text, onboarding hints). 'qwen-native' disables all of them so you get the upstream Qwen-Code prompt surface — recommended when testing Qwen models that were trained against the original prompt.",
+        options: [
+          { value: 'fork', label: 'Fork (default; adds soul + memory layers)' },
+          { value: 'qwen-native', label: 'Qwen native (upstream prompt only)' },
+        ],
+        showInDialog: true,
+      },
     },
   },
   output: {

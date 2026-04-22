@@ -1136,8 +1136,15 @@ export async function loadCliConfig(
     bugCommand: settings.advanced?.bugCommand,
     model: resolvedModel,
     outputLanguageFilePath,
-    soulFilePath,
+    soulFilePath:
+      settings.general?.promptProfile === 'qwen-native'
+        ? undefined
+        : soulFilePath,
     agentName: settings.general?.agentName,
+    promptProfile:
+      settings.general?.promptProfile === 'qwen-native'
+        ? 'qwen-native'
+        : 'fork',
     sessionTokenLimit: settings.model?.sessionTokenLimit ?? -1,
     maxSessionTurns:
       argv.maxSessionTurns ?? settings.model?.maxSessionTurns ?? -1,

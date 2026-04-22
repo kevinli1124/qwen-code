@@ -21,11 +21,20 @@ node tests/capability/runner.mjs --label=baseline --cli=qwen.cmd
 # 只跑特定題
 node tests/capability/runner.mjs --only=T4.1,T4.4 --label=sanity
 
-# 針對 promptProfile 做 A/B
-# fork 全開（預設）
+# 針對 promptProfile 做 A/B — helper 自動備份 / 還原 ~/.qwen/settings.json
+node tests/capability/set-profile.mjs fork
 node tests/capability/runner.mjs --label=profile-fork
-# 在 settings.json 裡 general.promptProfile = "qwen-native" 之後重跑
+
+node tests/capability/set-profile.mjs qwen-native
 node tests/capability/runner.mjs --label=profile-qwen-native
+
+node tests/capability/set-profile.mjs restore  # 還原原本設定
+
+# 比對兩次結果
+node tests/capability/diff-runs.mjs \
+  tests/capability/runs/<ts>-profile-fork \
+  tests/capability/runs/<ts>-profile-qwen-native \
+  --out=tests/capability/runs/ab-report.md
 ```
 
 ## 產出
