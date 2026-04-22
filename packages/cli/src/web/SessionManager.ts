@@ -197,19 +197,29 @@ function translateAndBroadcast(session: ActiveSession, raw: unknown): void {
 
 export const SessionManager = {
   create(id: string, cwd: string, title: string): void {
-    // Spawn CLI in stream-json mode
+    // Spawn CLI in stream-json mode. In a Node SEA build (qwen.exe),
+    // process.argv[1] is the first user-facing flag (e.g. "--web") rather
+    // than a script path, so we must re-invoke the exe itself with only
+    // stream-json flags. In plain Node we still spawn `node dist/cli.js`.
     const nodeExe = process.argv[0];
     const cliScript = process.argv[1];
+    const isSea = typeof cliScript === 'string' && cliScript.startsWith('--');
 
-    const child = spawn(
-      nodeExe,
-      [cliScript, '--input-format', 'stream-json', '--yolo'],
-      {
-        cwd,
-        stdio: ['pipe', 'pipe', 'pipe'],
-        env: { ...process.env, QWEN_CODE_NO_RELAUNCH: '1' },
-      },
-    );
+    // yargs enforces that stream-json input pairs with stream-json output.
+    const streamJsonFlags = [
+      '--input-format',
+      'stream-json',
+      '--output-format',
+      'stream-json',
+      '--yolo',
+    ];
+    const spawnArgs = isSea ? streamJsonFlags : [cliScript, ...streamJsonFlags];
+
+    const child = spawn(nodeExe, spawnArgs, {
+      cwd,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, QWEN_CODE_NO_RELAUNCH: '1' },
+    });
 
     const session: ActiveSession = {
       id,

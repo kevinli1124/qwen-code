@@ -46,20 +46,51 @@ if (!fs.existsSync(CLI_BUNDLE)) {
   process.exit(1);
 }
 
-// 1. Re-bundle web-entry.ts as CJS for SEA
-// SEA only supports CommonJS. The full CLI entry uses Ink/yoga-layout which
-// have top-level await (incompatible with CJS). The web-entry.ts only imports
-// the HTTP web server and has no such dependencies.
-console.log('[build_exe] Bundling web-entry.ts as CJS for SEA...');
+// 1. Re-bundle sea-entry.ts as CJS for SEA.
+// SEA only supports CommonJS. The sea-entry dispatches between the embedded
+// web server and a headless stream-json CLI mode based on CLI args, so a
+// single exe can serve both the browser UI and the subprocess sessions that
+// the web server spawns for each chat. Ink / yoga-layout (interactive UI)
+// are deliberately excluded because they use top-level await, which is
+// incompatible with the CJS format required by SEA.
+console.log('[build_exe] Bundling sea-entry.ts as CJS for SEA...');
 const esbuild = (await import('esbuild')).default;
 const pkg = require(path.resolve(ROOT, 'package.json'));
+
+// Ink / yoga-layout / react-devtools-core are only needed when Ink is rendering
+// the interactive TUI. The SEA bundle never runs that code path (it only
+// serves the web UI and drives stream-json CLI sessions), but slash-command
+// modules like initCommand.ts `import { Text } from 'ink'` at module-top, so
+// a plain bundle fails with top-level-await errors from Ink/yoga.
+//
+// We satisfy those imports with SEA-only stubs that no-op. This keeps the
+// command registry requirable without pulling the Ink reconciler in.
+const SHIM_DIR = path.resolve(ROOT, 'scripts/sea-shims');
+const toFileAbs = (p) => path.resolve(ROOT, p).replace(/\\/g, '/');
+const alias = {
+  ink: toFileAbs('scripts/sea-shims/ink-stub.cjs'),
+  'yoga-layout': toFileAbs('scripts/sea-shims/yoga-stub.cjs'),
+  'react-devtools-core': toFileAbs(
+    'scripts/sea-shims/react-devtools-core-stub.cjs',
+  ),
+};
+// Sanity-check the shim files actually exist.
+for (const [mod, p] of Object.entries(alias)) {
+  if (!fs.existsSync(p)) {
+    console.warn(`[build_exe] WARNING: shim for ${mod} missing at ${p}`);
+  }
+}
+// `.wasm` files referenced by shellAstParser.js must be inlined so the SEA
+// bundle can read them without node_modules around at runtime.
 await esbuild.build({
-  entryPoints: ['packages/cli/src/web-entry.ts'],
+  entryPoints: ['packages/cli/src/sea-entry.ts'],
   bundle: true,
   outfile: SEA_BUNDLE,
   platform: 'node',
   format: 'cjs',
   target: 'node20',
+  alias,
+  loader: { '.wasm': 'binary' },
   // import.meta.url → CJS equivalent so FileURLToPath works at runtime
   banner: {
     js: "const __import_meta_url = require('url').pathToFileURL(__filename).href;",
@@ -71,6 +102,7 @@ await esbuild.build({
   },
   keepNames: true,
 });
+void SHIM_DIR;
 console.log('[build_exe] CJS bundle written to dist/cli-sea.cjs');
 
 // 2. Write SEA config

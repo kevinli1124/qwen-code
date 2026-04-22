@@ -20,6 +20,7 @@
 import { copyFileSync, existsSync, mkdirSync, statSync } from 'node:fs';
 import { dirname, join, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execSync } from 'node:child_process';
 import { glob } from 'glob';
 import fs from 'node:fs';
 
@@ -84,7 +85,51 @@ if (existsSync(userDocsDir)) {
   console.warn(`Warning: User docs directory not found at ${userDocsDir}`);
 }
 
+// Package the local vscode-ide-companion into a .vsix so the CLI's IDE
+// installer can install THIS build instead of pulling the marketplace version.
+// Failure is non-fatal: the installer will then report that no bundled
+// companion is available, rather than silently installing the upstream
+// `qwenlm.qwen-code-vscode-ide-companion` extension.
+packLocalVsix();
+
 console.log('\n✅ All bundle assets copied to dist/');
+
+/**
+ * Package packages/vscode-ide-companion into a .vsix and place the result at
+ * dist/bundled/vscode-ide-companion.vsix. Expects the companion workspace to
+ * have been built already (npm run build produces its dist/).
+ */
+function packLocalVsix() {
+  const companionDir = join(root, 'packages', 'vscode-ide-companion');
+  const companionDist = join(companionDir, 'dist');
+  if (!existsSync(companionDist)) {
+    console.warn(
+      `Skipping vsix packaging: ${companionDist} not found (run the full build first).`,
+    );
+    return;
+  }
+
+  const outDir = join(distDir, 'bundled');
+  if (!existsSync(outDir)) {
+    mkdirSync(outDir, { recursive: true });
+  }
+  const outFile = join(outDir, 'vscode-ide-companion.vsix');
+
+  try {
+    execSync(
+      `npx --yes @vscode/vsce package --no-dependencies --out "${outFile}"`,
+      { cwd: companionDir, stdio: 'inherit' },
+    );
+    console.log(`Packaged local vsix to ${outFile}`);
+  } catch (err) {
+    console.warn(
+      `Warning: failed to package vscode-ide-companion into .vsix: ${err?.message ?? err}`,
+    );
+    console.warn(
+      'The /ide install command will show an error until this is resolved.',
+    );
+  }
+}
 
 /**
  * Recursively copy directory

@@ -9,8 +9,56 @@ import * as process from 'node:process';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { IDE_DEFINITIONS, type IdeInfo } from './detect-ide.js';
 import { QWEN_CODE_COMPANION_EXTENSION_NAME } from './constants.js';
+
+const BUNDLED_VSIX_BASENAME = 'vscode-ide-companion.vsix';
+
+/**
+ * Find the locally packaged companion .vsix produced by
+ * scripts/copy_bundle_assets.js at bundle time. Returns null if not found —
+ * callers should surface a clear error rather than silently falling back to
+ * the upstream marketplace extension.
+ */
+function findBundledCompanionVsix(): string | null {
+  // 1. Bundled layout: dist/bundled/vscode-ide-companion.vsix, where this
+  //    file lives inside the esbuild-produced dist/cli.js.
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    path.join(here, 'bundled', BUNDLED_VSIX_BASENAME),
+    path.join(here, '..', 'bundled', BUNDLED_VSIX_BASENAME),
+    path.join(here, '..', '..', 'bundled', BUNDLED_VSIX_BASENAME),
+  ];
+
+  // 2. Dev layout: walk up looking for packages/vscode-ide-companion/*.vsix
+  //    so `npm run dev` + manual `npm run package` works.
+  let cursor = here;
+  for (let i = 0; i < 6; i++) {
+    const companionDir = path.join(cursor, 'packages', 'vscode-ide-companion');
+    if (fs.existsSync(companionDir)) {
+      try {
+        const vsix = fs
+          .readdirSync(companionDir)
+          .find((f) => f.endsWith('.vsix'));
+        if (vsix) {
+          candidates.push(path.join(companionDir, vsix));
+        }
+      } catch {
+        // ignore read errors
+      }
+      break;
+    }
+    const parent = path.dirname(cursor);
+    if (parent === cursor) break;
+    cursor = parent;
+  }
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return null;
+}
 
 function getVsCodeCommand(platform: NodeJS.Platform = process.platform) {
   return platform === 'win32' ? 'code.cmd' : 'code';
@@ -113,7 +161,18 @@ class VsCodeInstaller implements IdeInstaller {
     if (!commandPath) {
       return {
         success: false,
-        message: `${this.ideInfo.displayName} CLI not found. Please ensure 'code' is in your system's PATH. For help, see https://code.visualstudio.com/docs/configure/command-line#_code-is-not-recognized-as-an-internal-or-external-command. You can also install the '${QWEN_CODE_COMPANION_EXTENSION_NAME}' extension manually from the VS Code marketplace.`,
+        message: `${this.ideInfo.displayName} CLI not found. Please ensure 'code' is in your system's PATH. For help, see https://code.visualstudio.com/docs/configure/command-line#_code-is-not-recognized-as-an-internal-or-external-command.`,
+      };
+    }
+
+    // We deliberately install the .vsix packaged from this repo instead of
+    // the upstream marketplace extension, so the companion version always
+    // matches the CLI build the user is running.
+    const vsixPath = findBundledCompanionVsix();
+    if (!vsixPath) {
+      return {
+        success: false,
+        message: `Bundled ${QWEN_CODE_COMPANION_EXTENSION_NAME} (.vsix) was not found alongside this CLI build. Rebuild with 'npm run bundle' to regenerate it, then re-run /ide install.`,
       };
     }
 
@@ -121,11 +180,7 @@ class VsCodeInstaller implements IdeInstaller {
     try {
       const result = child_process.spawnSync(
         isWindows ? `"${commandPath}"` : commandPath,
-        [
-          '--install-extension',
-          'qwenlm.qwen-code-vscode-ide-companion',
-          '--force',
-        ],
+        ['--install-extension', vsixPath, '--force'],
         { stdio: 'pipe', shell: isWindows },
       );
 
@@ -137,12 +192,13 @@ class VsCodeInstaller implements IdeInstaller {
 
       return {
         success: true,
-        message: `${this.ideInfo.displayName} companion extension was installed successfully.`,
+        message: `${this.ideInfo.displayName} companion extension was installed successfully from the local build.`,
       };
-    } catch (_error) {
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
       return {
         success: false,
-        message: `Failed to install ${this.ideInfo.displayName} companion extension. Please try installing '${QWEN_CODE_COMPANION_EXTENSION_NAME}' manually from the ${this.ideInfo.displayName} extension marketplace.`,
+        message: `Failed to install ${this.ideInfo.displayName} companion extension from ${vsixPath}. ${detail}`,
       };
     }
   }

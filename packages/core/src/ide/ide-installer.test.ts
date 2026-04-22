@@ -53,16 +53,26 @@ describe('ide-installer', () => {
     function setup({
       ide = IDE_DEFINITIONS.vscode,
       existsResult = false,
+      vsixFound = true,
       execSync = () => '',
       platform = 'linux' as NodeJS.Platform,
     }: {
       ide?: IdeInfo;
       existsResult?: boolean;
+      vsixFound?: boolean;
       execSync?: () => string;
       platform?: NodeJS.Platform;
     } = {}) {
       vi.spyOn(child_process, 'execSync').mockImplementation(execSync);
-      vi.spyOn(fs, 'existsSync').mockReturnValue(existsResult);
+      // existsSync is used both for resolving the VS Code CLI and for locating
+      // the bundled .vsix. Allow tests to independently control the vsix
+      // lookup so CLI-detection tests stay focused on their own assertions.
+      vi.spyOn(fs, 'existsSync').mockImplementation((p) => {
+        if (typeof p === 'string' && p.endsWith('.vsix')) {
+          return vsixFound;
+        }
+        return existsResult;
+      });
       const installer = getIdeInstaller(ide, platform)!;
 
       return { installer };
@@ -107,7 +117,7 @@ describe('ide-installer', () => {
         },
       );
 
-      it('installs the extension using code cli', async () => {
+      it('installs the extension using code cli with the bundled vsix', async () => {
         const { installer } = setup({
           platform: 'linux',
         });
@@ -121,11 +131,18 @@ describe('ide-installer', () => {
           expectedCommand,
           [
             '--install-extension',
-            'qwenlm.qwen-code-vscode-ide-companion',
+            expect.stringMatching(/vscode-ide-companion(-.*)?\.vsix$/),
             '--force',
           ],
           { stdio: 'pipe', shell: isActuallyWindows },
         );
+      });
+
+      it('returns a failure when the bundled vsix is missing', async () => {
+        const { installer } = setup({ vsixFound: false });
+        const result = await installer.install();
+        expect(result.success).toBe(false);
+        expect(result.message).toContain('was not found');
       });
 
       it.each([
