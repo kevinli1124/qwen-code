@@ -58,7 +58,8 @@ interface PendingOutgoingRequest {
   controller: string;
   resolve: (response: ControlResponse) => void;
   reject: (error: Error) => void;
-  timeoutId: NodeJS.Timeout;
+  /** null when the request uses no timeout (e.g. permission prompts). */
+  timeoutId: NodeJS.Timeout | null;
 }
 
 /**
@@ -264,7 +265,7 @@ export class ControlDispatcher implements IPendingRequestRegistry {
       _requestId,
       pending,
     ] of this.pendingOutgoingRequests.entries()) {
-      clearTimeout(pending.timeoutId);
+      if (pending.timeoutId !== null) clearTimeout(pending.timeoutId);
       pending.reject(new Error('Dispatcher shutdown'));
     }
     this.pendingOutgoingRequests.clear();
@@ -311,7 +312,7 @@ export class ControlDispatcher implements IPendingRequestRegistry {
     controller: string,
     resolve: (response: ControlResponse) => void,
     reject: (error: Error) => void,
-    timeoutId: NodeJS.Timeout,
+    timeoutId: NodeJS.Timeout | null,
   ): void {
     this.pendingOutgoingRequests.set(requestId, {
       controller,
@@ -327,7 +328,7 @@ export class ControlDispatcher implements IPendingRequestRegistry {
   deregisterOutgoingRequest(requestId: string): void {
     const pending = this.pendingOutgoingRequests.get(requestId);
     if (pending) {
-      clearTimeout(pending.timeoutId);
+      if (pending.timeoutId !== null) clearTimeout(pending.timeoutId);
       this.pendingOutgoingRequests.delete(requestId);
     }
   }

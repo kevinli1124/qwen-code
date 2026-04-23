@@ -10,8 +10,12 @@ import { RightPanel } from '../components/layout/RightPanel';
 import { ConversationView } from '../components/conversation/ConversationView';
 import { InputBar } from '../components/conversation/InputBar';
 import { LoadingIndicator } from '../components/conversation/LoadingIndicator';
-import { PermissionModal } from '../components/conversation/PermissionModal';
+import {
+  PermissionCard,
+  type PermissionDecision,
+} from '../components/conversation/PermissionCard';
 import { QuestionModal } from '../components/conversation/QuestionModal';
+import { usePermissionRulesStore } from '../stores/permissionRulesStore';
 import { ErrorBanner } from '../components/shared/ErrorBanner';
 import { NewSessionModal } from '../components/session/NewSessionModal';
 import { SettingsModal } from '../components/shared/SettingsModal';
@@ -137,6 +141,9 @@ export const ChatView: FC = () => {
   } = useSettingsStore();
   const { collapsed: panelCollapsed, toggleCollapsed: togglePanel } =
     usePanelStore();
+  const allowForUser = usePermissionRulesStore((s) => s.allowForUser);
+  const allowForProject = usePermissionRulesStore((s) => s.allowForProject);
+  const isAllowed = usePermissionRulesStore((s) => s.isAllowed);
 
   // Load settings on mount; auto-open modal if no API key configured
   useEffect(() => {
@@ -250,6 +257,32 @@ export const ChatView: FC = () => {
     }
     setPendingPermission(null);
   };
+
+  const handlePermissionDecision = async (decision: PermissionDecision) => {
+    if (!activeSessionId || !pendingPermission) return;
+    const toolName = pendingPermission.toolName;
+    const cwd = activeSession?.cwd;
+    if (decision === 'allow_project' && cwd) {
+      allowForProject(toolName, cwd);
+    } else if (decision === 'allow_user') {
+      allowForUser(toolName);
+    }
+    const allowed = decision !== 'deny';
+    await handlePermissionRespond(allowed);
+  };
+
+  // Auto-approve when the user has previously chosen "always allow" for
+  // this tool (globally or for this project). The check runs whenever a
+  // permission_request arrives via SSE — the modal just flashes through.
+  useEffect(() => {
+    if (!pendingPermission || !activeSessionId) return;
+    if (isAllowed(pendingPermission.toolName, activeSession?.cwd)) {
+      void handlePermissionRespond(true);
+    }
+    // handlePermissionRespond is stable enough — we only want the
+    // effect tied to incoming permission requests.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingPermission?.requestId]);
 
   const handleQuestionSubmit = async (answers: Record<string, string>) => {
     if (!activeSessionId || !pendingQuestion) return;
@@ -394,11 +427,21 @@ export const ChatView: FC = () => {
             {/* Loading indicator — rotating witty phrase + pulsing dots
                 while the agent is producing output. Sits above the
                 input bar so it remains visible even when conversation
-                scrolls. */}
-            {activeSessionId && <LoadingIndicator visible={isStreaming} />}
+                scrolls. Hidden while a permission prompt is active. */}
+            {activeSessionId && !pendingPermission && (
+              <LoadingIndicator visible={isStreaming} />
+            )}
 
-            {/* Input */}
-            {activeSessionId && (
+            {/* Input area — swaps to PermissionCard when the agent is
+                awaiting approval so the user can review before reply. */}
+            {activeSessionId && pendingPermission && (
+              <PermissionCard
+                request={pendingPermission}
+                projectCwd={activeSession?.cwd}
+                onDecide={handlePermissionDecision}
+              />
+            )}
+            {activeSessionId && !pendingPermission && (
               <InputBar onSend={handleSend} onStop={handleStop} />
             )}
           </div>
@@ -406,13 +449,8 @@ export const ChatView: FC = () => {
         rightPanel={<RightPanel />}
       />
 
-      {/* Permission modal */}
-      {pendingPermission && (
-        <PermissionModal
-          request={pendingPermission}
-          onRespond={handlePermissionRespond}
-        />
-      )}
+      {/* Permission UI is now rendered inline in the InputBar slot
+          above; no overlay modal is used. */}
 
       {/* ask_user_question dialog */}
       {pendingQuestion && (

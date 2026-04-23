@@ -425,7 +425,7 @@ export class PermissionController extends BaseController {
           permission_suggestions: permissionSuggestions,
           blocked_path: null,
         } as CLIControlPermissionRequest,
-        undefined, // use default timeout
+        Infinity, // permission prompts wait for the user indefinitely
         this.context.abortSignal,
       );
 

@@ -44,7 +44,7 @@ export interface IPendingRequestRegistry {
     controller: string,
     resolve: (response: ControlResponse) => void,
     reject: (error: Error) => void,
-    timeoutId: NodeJS.Timeout,
+    timeoutId: NodeJS.Timeout | null,
   ): void;
   deregisterOutgoingRequest(requestId: string): void;
 }
@@ -154,17 +154,21 @@ export abstract class BaseController {
         signal.addEventListener('abort', abortHandler, { once: true });
       }
 
-      // Setup timeout
-      const timeoutId = setTimeout(() => {
-        if (signal) {
-          signal.removeEventListener('abort', abortHandler);
-        }
-        this.registry.deregisterOutgoingRequest(requestId);
-        reject(new Error('Control request timeout'));
-        this.debugLogger.warn(
-          `[${this.controllerName}] Outgoing request timeout: ${requestId}`,
-        );
-      }, timeoutMs);
+      // Setup timeout. Passing Infinity (or any non-finite value) skips
+      // the timer entirely — permission prompts should wait for the
+      // user indefinitely rather than auto-cancelling after 30 s.
+      const timeoutId: NodeJS.Timeout | null = Number.isFinite(timeoutMs)
+        ? setTimeout(() => {
+            if (signal) {
+              signal.removeEventListener('abort', abortHandler);
+            }
+            this.registry.deregisterOutgoingRequest(requestId);
+            reject(new Error('Control request timeout'));
+            this.debugLogger.warn(
+              `[${this.controllerName}] Outgoing request timeout: ${requestId}`,
+            );
+          }, timeoutMs)
+        : null;
 
       // Wrap resolve/reject to clean up abort listener
       const wrappedResolve = (response: ControlResponse) => {
