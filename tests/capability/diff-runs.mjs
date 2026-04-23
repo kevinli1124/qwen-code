@@ -29,6 +29,45 @@ function loadScorecard(dir) {
   return JSON.parse(fs.readFileSync(p, 'utf-8'));
 }
 
+/**
+ * Expand a glob-ish argument like "tests/capability/runs/*qwen35-fork" into
+ * a concrete directory. Windows cmd.exe does NOT expand `*`, so the argv
+ * contains the literal pattern — handle it here so the same command line
+ * works under bash / PowerShell / cmd without quoting tricks.
+ *
+ * When multiple matches exist, pick the most recent (by mtime) and warn.
+ */
+function resolveRunDir(arg) {
+  if (!arg.includes('*')) {
+    if (!fs.existsSync(arg)) {
+      throw new Error(`run directory not found: ${arg}`);
+    }
+    return arg;
+  }
+  const dir = path.dirname(arg);
+  const patternSuffix = path.basename(arg).replace(/\*/g, '');
+  if (!fs.existsSync(dir)) {
+    throw new Error(`runs parent directory missing: ${dir}`);
+  }
+  const candidates = fs
+    .readdirSync(dir, { withFileTypes: true })
+    .filter((e) => e.isDirectory() && e.name.includes(patternSuffix))
+    .map((e) => {
+      const full = path.join(dir, e.name);
+      return { full, mtime: fs.statSync(full).mtimeMs };
+    })
+    .sort((a, b) => b.mtime - a.mtime);
+  if (candidates.length === 0) {
+    throw new Error(`no run directory matching "${arg}"`);
+  }
+  if (candidates.length > 1) {
+    console.warn(
+      `[diff-runs] pattern "${arg}" matched ${candidates.length} dirs; using most recent: ${candidates[0].full}`,
+    );
+  }
+  return candidates[0].full;
+}
+
 function byId(card) {
   const m = new Map();
   for (const r of card.results) m.set(r.id, r);
@@ -42,9 +81,12 @@ if (args.length < 2) {
   );
   process.exit(1);
 }
-const [runA, runB] = args;
+const [rawA, rawB] = args;
 const outArg = args.find((a) => a.startsWith('--out='));
 const outPath = outArg ? outArg.slice(6) : undefined;
+
+const runA = resolveRunDir(rawA);
+const runB = resolveRunDir(rawB);
 
 const cardA = loadScorecard(runA);
 const cardB = loadScorecard(runB);
