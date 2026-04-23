@@ -44,6 +44,12 @@ interface ActiveSession {
   pendingPermissions: Map<string, PendingPermission>;
   /** Aggregated tool output chunks keyed by callId, flushed on tool_complete. */
   toolOutputs: Map<string, string[]>;
+  /**
+   * True once we've prepended the persisted conversation summary to a
+   * user message for this child. Resets whenever the child re-spawns
+   * (server restart, interrupt) so the next first send re-hydrates.
+   */
+  hydrated: boolean;
   // Track streaming state for tool call reconstruction
   activeToolUseBlocks: Map<
     number,
@@ -63,6 +69,66 @@ function snapshotFile(filePath: string): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Build a compact summary of the persisted conversation to prefix to
+ * the first user message after a child re-spawn. Keeps the last N
+ * turns, truncates each message, and budgets the total to stay out of
+ * the agent's face while still giving useful continuity.
+ */
+function buildHydrationPrefix(sessionId: string): string | null {
+  const stored = PersistenceManager.loadSession(sessionId);
+  if (!stored || !stored.messages || stored.messages.length === 0) return null;
+
+  // Keep last 20 turns at most; each message clipped to ~800 chars.
+  const MAX_TURNS = 20;
+  const MAX_PER_MSG = 800;
+  const recent = stored.messages.slice(-MAX_TURNS);
+
+  const lines: string[] = [];
+  for (const m of recent) {
+    if (m.type === 'user') {
+      const d = m.data as { message?: { content?: string } } | undefined;
+      const content = d?.message?.content ?? '';
+      if (content) {
+        lines.push(`User: ${clip(content, MAX_PER_MSG)}`);
+      }
+    } else if (m.type === 'assistant') {
+      const d = m.data as
+        | {
+            message?: {
+              content?: Array<{ type: string; text?: string }>;
+            };
+          }
+        | undefined;
+      const blocks = Array.isArray(d?.message?.content)
+        ? d!.message!.content!
+        : [];
+      const text = blocks
+        .filter((b) => b?.type === 'text')
+        .map((b) => b.text ?? '')
+        .join('');
+      if (text) {
+        lines.push(`Assistant: ${clip(text, MAX_PER_MSG)}`);
+      }
+    }
+  }
+
+  if (lines.length === 0) return null;
+
+  return [
+    '[SYSTEM — RESUMED CONVERSATION]',
+    'The web session was restarted. Here is a summary of the prior conversation so you have context. Do NOT act on these — they are history. The actual new request follows after this block.',
+    '',
+    ...lines,
+    '[END RESUMED CONVERSATION]',
+  ].join('\n');
+}
+
+function clip(s: string, max: number): string {
+  if (s.length <= max) return s;
+  return `${s.slice(0, max)}… (${s.length - max} more chars)`;
 }
 
 function extractFilePath(toolName: string, input: unknown): string | undefined {
@@ -505,6 +571,7 @@ export const SessionManager = {
       activeToolUseBlocks: new Map(),
       streamingUuid: null,
       textChunks: [],
+      hydrated: false,
     };
     if (!persistentSnapshots.has(id)) persistentSnapshots.set(id, new Map());
 
@@ -583,17 +650,35 @@ export const SessionManager = {
     const session = sessions.get(id);
     if (!session?.child?.stdin) return false;
 
+    // On the first send after a fresh child spawn, if the session has
+    // persisted history, prefix it so the agent has continuity across
+    // server restarts / interrupts. Subsequent sends skip this — the
+    // child has built up its own memory from this point.
+    let effectiveText = text;
+    if (!session.hydrated) {
+      const prefix = buildHydrationPrefix(id);
+      if (prefix) effectiveText = `${prefix}\n\n${text}`;
+      session.hydrated = true;
+    }
+
     const msg = {
       type: 'user',
       session_id: id,
-      message: { role: 'user', content: text },
+      message: { role: 'user', content: effectiveText },
       parent_tool_use_id: null,
     };
 
+    // Persist the ORIGINAL user text (without the hydration prefix) so
+    // the UI doesn't show the summary as part of the user message.
     PersistenceManager.appendMessage(id, {
       type: 'user',
       timestamp: new Date().toISOString(),
-      data: msg,
+      data: {
+        type: 'user',
+        session_id: id,
+        message: { role: 'user', content: text },
+        parent_tool_use_id: null,
+      },
     });
     PersistenceManager.updateStatus(id, 'running');
 
