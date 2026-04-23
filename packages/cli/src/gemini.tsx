@@ -220,10 +220,9 @@ export async function main() {
   await cleanupCheckpoints();
   profileCheckpoint('after_load_settings');
 
-  let argv = await parseArguments();
-  profileCheckpoint('after_parse_arguments');
-
-  // --web: start embedded HTTP server and open browser
+  // --web: start embedded HTTP server and open browser.
+  // Checked BEFORE parseArguments() because yargs.strict() would reject
+  // the unregistered --web flag. This path bypasses normal CLI arg parsing.
   if (process.argv.includes('--web')) {
     const portArg = process.argv.find((a) => a.startsWith('--port='));
     const port = portArg ? parseInt(portArg.split('=')[1] ?? '7788', 10) : 7788;
@@ -232,6 +231,9 @@ export async function main() {
     await startWebServer({ port, open: !noOpen });
     process.exit(0);
   }
+
+  let argv = await parseArguments();
+  profileCheckpoint('after_parse_arguments');
 
   // Check for invalid input combinations early to prevent crashes
   if (argv.promptInteractive && !process.stdin.isTTY) {
