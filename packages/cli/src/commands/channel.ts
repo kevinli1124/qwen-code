@@ -6,7 +6,8 @@ import {
   pairingListCommand,
   pairingApproveCommand,
 } from './channel/pairing.js';
-import { configureWeixinCommand } from './channel/configure.js';
+// [DISABLED 2026-04-23 — WeChat integration disabled; see commit msg for how to re-enable]
+// import { configureWeixinCommand } from './channel/configure.js';
 
 const pairingCommand: CommandModule = {
   command: 'pairing',
@@ -29,7 +30,8 @@ export const channelCommand: CommandModule = {
       .command(stopCommand)
       .command(statusCommand)
       .command(pairingCommand)
-      .command(configureWeixinCommand)
+      // [DISABLED 2026-04-23 — WeChat integration disabled; see commit msg for how to re-enable]
+      // .command(configureWeixinCommand)
       .demandCommand(1, 'You need at least one command before continuing.')
       .version(false),
   handler: () => {},

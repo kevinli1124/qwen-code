@@ -21,6 +21,11 @@ function ensureBuiltins(): Promise<void> {
         registry.set(mod.plugin.channelType, mod.plugin);
       }
       */
+      // [DISABLED 2026-04-23 — WeChat integration disabled; see commit msg for how to re-enable]
+      // Previous 2-way import (weixin + dingtalk) replaced with a dingtalk-only
+      // import. To re-enable, restore the commented block below and delete the
+      // dingtalk-only version.
+      /*
       const [weixin, dingtalk] = await Promise.all([
         import('@qwen-code/channel-weixin'),
         import('@qwen-code/channel-dingtalk'),
@@ -29,6 +34,9 @@ function ensureBuiltins(): Promise<void> {
       for (const mod of [weixin, dingtalk]) {
         registry.set(mod.plugin.channelType, mod.plugin);
       }
+      */
+      const dingtalk = await import('@qwen-code/channel-dingtalk');
+      registry.set(dingtalk.plugin.channelType, dingtalk.plugin);
     })();
   }
   return builtinsPromise;
