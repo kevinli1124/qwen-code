@@ -69,7 +69,26 @@ node tests/capability/diff-runs.mjs \
 }
 ```
 
+## Running against Qwen models
+
+Qwen family (qwen3.5 / qwen-max / qwen-plus) responds strongly to
+`~/.qwen/QWEN.md` guidance but ignores softly-worded rules in system
+context. Copy the validated guidance template before running:
+
+```cmd
+copy /y tests\capability\qwen-model-guidance.md %USERPROFILE%\.qwen\QWEN.md
+```
+
+Validated against Qwen3.5: **18/18 PASS, avg 9.00/12** (vs 17/18 / 8.89
+baseline). See `runs/qwen35-findings.md` for the full experiment log and
+why the directives are worded the way they are.
+
+Tip: stick with `promptProfile: fork` on Qwen — `qwen-native` scored
+lower (8.78) on Qwen3.5 even though it helped gemma slightly.
+
 ## 參考
 
 - 完整計畫：`plan.md`（含所有手動 / 自動題設計）
-- 最新基線：`runs/2026-04-22-final-report.md`
+- Qwen 模型實驗總結：`runs/qwen35-findings.md`
+- Qwen 配置模板：`qwen-model-guidance.md`
+- gemma 基線：`runs/2026-04-22-final-report.md`

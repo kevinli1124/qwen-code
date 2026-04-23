@@ -1,0 +1,25 @@
+{
+  "label": "qwen-md-subagent-boost",
+  "ts": "2026-04-23-083127",
+  "results": [
+    {
+      "id": "T4.6",
+      "layer": "L4",
+      "name": "Code review triggers a subagent",
+      "durationMs": 158956,
+      "exitCode": 0,
+      "finalTextPreview": "根據 `code-reviewer` 的分析，`packages/core/src/permissions/rule-parser.ts` 中的 Windows 路徑支援邏輯存在 3 個主要問題：\n\n### 1. 路徑比對大小寫敏感 (High)\n在路徑比對時強制使用了 `nocase: false`。由於 Windows 檔案系統並不區分大小寫，這會導致使用者定義的權限規則在路徑大小寫不完全一致時失效（例如 `C:\\Users` 與 `c:\\users` 被視為不同路徑）。\n\n### 2. UNC 路徑解析損壞 (High)\n`resolvePathPattern` 在處理 `//` 前綴時，若路徑為 UNC 格式（如 `//server/share`），會錯誤地剝離前導斜線並返回 `/server/share`。這導致後續使用 `picomatch` 進行匹配時，無法正確匹配實際以 `",
+      "stderrPreview": "(node:78716) Warning: Currently the require() provided to the main script embedded into single-executable applications only supports loading built-in modules.\nTo load a module from disk after the single executable application is launched, use require(\"module\").createRequire().\nSupport for bundled module loading or virtual file systems are under discussions in https://github.com/nodejs/single-execu",
+      "eventCount": 22,
+      "score": {
+        "correctness": 3,
+        "initiative": 3,
+        "efficiency": 3,
+        "learning": 0,
+        "notes": "agent=true read=true mentionsWindows=true tools=4"
+      },
+      "total": 9,
+      "verdict": "PASS"
+    }
+  ]
+}
