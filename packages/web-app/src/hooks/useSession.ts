@@ -24,6 +24,7 @@ export function useSessionEvents(sessionId: string) {
     recordFileMod,
     markFileReverted,
     patchToolCallMessage,
+    setApprovalMode,
     setTokenUsage,
     addSessionTokens,
     setConnectionError,
@@ -41,6 +42,13 @@ export function useSessionEvents(sessionId: string) {
               output: event.data.tokenLimits.output,
               model: event.data.model,
             });
+          }
+          // Seed the approval-mode cycle button with the child's current
+          // mode (default/plan/auto-edit/yolo). The child reports this
+          // on every init so the button stays accurate after re-spawn.
+          const pm = event.data?.['permission_mode'];
+          if (typeof pm === 'string') {
+            setApprovalMode(pm as 'default' | 'plan' | 'auto-edit' | 'yolo');
           }
           break;
         }
@@ -294,6 +302,7 @@ export function useSessionEvents(sessionId: string) {
       recordFileMod,
       markFileReverted,
       patchToolCallMessage,
+      setApprovalMode,
       setTokenUsage,
       addSessionTokens,
       setConnectionError,

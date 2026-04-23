@@ -468,6 +468,31 @@ async function handleApi(
     return;
   }
 
+  // POST /api/sessions/:id/approval-mode — swap the child's approval
+  // mode mid-session. Body: { mode: 'default' | 'plan' | 'auto-edit' }.
+  const approvalMatch = pathname.match(
+    /^\/api\/sessions\/([^/]+)\/approval-mode$/,
+  );
+  if (approvalMatch && method === 'POST') {
+    const id = approvalMatch[1]!;
+    const body = await readBody(req);
+    let parsed: { mode?: string } = {};
+    try {
+      parsed = JSON.parse(body) as typeof parsed;
+    } catch {
+      /* empty */
+    }
+    const mode = parsed.mode ?? 'default';
+    const validModes = ['default', 'plan', 'auto-edit', 'yolo'];
+    if (!validModes.includes(mode)) {
+      sendError(res, 400, `Invalid mode: ${mode}`);
+      return;
+    }
+    const ok = SessionManager.setApprovalMode(id, mode);
+    sendJson(res, ok ? 200 : 404, { ok });
+    return;
+  }
+
   // POST /api/sessions/:id/revert/:callId — restore the file snapshot
   // captured before the tool ran.
   const revertMatch = pathname.match(

@@ -42,4 +42,9 @@ export const sessionsApi = {
       `/api/sessions/${id}/revert/${callId}`,
       { method: 'POST' },
     ),
+  setApprovalMode: (id: string, mode: string) =>
+    apiFetch<{ ok: boolean }>(`/api/sessions/${id}/approval-mode`, {
+      method: 'POST',
+      body: JSON.stringify({ mode }),
+    }),
 };

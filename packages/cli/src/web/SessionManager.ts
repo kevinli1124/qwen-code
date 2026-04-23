@@ -653,6 +653,25 @@ export const SessionManager = {
     }
   },
 
+  /**
+   * Switch the child's approval mode at runtime. Valid values are
+   * 'default' | 'plan' | 'auto-edit' | 'yolo' — the child's
+   * permissionController dispatches a 'set_permission_mode' subtype and
+   * calls config.setApprovalMode(). Subsequent tool invocations follow
+   * the new mode immediately.
+   */
+  setApprovalMode(id: string, mode: string): boolean {
+    const session = sessions.get(id);
+    if (!session?.child?.stdin) return false;
+    const msg = {
+      type: 'control_request',
+      request_id: randomUUID(),
+      request: { subtype: 'set_permission_mode', mode },
+    };
+    session.child.stdin.write(`${JSON.stringify(msg)}\n`);
+    return true;
+  },
+
   interrupt(id: string): boolean {
     const session = sessions.get(id);
     if (!session?.child?.stdin) return false;

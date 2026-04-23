@@ -42,6 +42,9 @@ interface MessageStore {
   // Active model's context window (input/output token limits). Populated
   // from system_init so the UI can render a "context used" %
   modelLimits: { input?: number; output?: number; model?: string } | null;
+  // Current approval mode reported by the child (system_init) and
+  // updated optimistically when the user clicks the cycle button.
+  approvalMode: 'default' | 'plan' | 'auto-edit' | 'yolo' | null;
   // File modifications by the current session, keyed by callId so a
   // tool-call card can reveal the diff + offer Revert.
   fileModsBySession: Record<
@@ -80,6 +83,9 @@ interface MessageStore {
   resetSessionTokens: () => void;
   setModelLimits: (
     limits: { input?: number; output?: number; model?: string } | null,
+  ) => void;
+  setApprovalMode: (
+    mode: 'default' | 'plan' | 'auto-edit' | 'yolo' | null,
   ) => void;
   recordFileMod: (
     sessionId: string,
@@ -124,6 +130,7 @@ export const useMessageStore = create<MessageStore>((set) => ({
   tokenUsage: null,
   sessionTokens: { inputTokens: 0, outputTokens: 0, turns: 0 },
   modelLimits: null,
+  approvalMode: null,
   fileModsBySession: {},
   connectionError: null,
 
@@ -239,6 +246,7 @@ export const useMessageStore = create<MessageStore>((set) => ({
   resetSessionTokens: () =>
     set({ sessionTokens: { inputTokens: 0, outputTokens: 0, turns: 0 } }),
   setModelLimits: (limits) => set({ modelLimits: limits }),
+  setApprovalMode: (mode) => set({ approvalMode: mode }),
   recordFileMod: (sessionId, mod) =>
     set((s) => ({
       fileModsBySession: {
