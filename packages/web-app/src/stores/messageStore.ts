@@ -41,10 +41,14 @@ interface MessageStore {
     toolUseId: string;
     plan: string;
   } | null;
-  // Token usage for the most recent turn
-  tokenUsage: TokenUsage | null;
-  // Cumulative token usage for the current session (all turns summed)
-  sessionTokens: { inputTokens: number; outputTokens: number; turns: number };
+  // Token usage for the most recent turn, keyed per session so
+  // switching sessions shows the right conversation's usage.
+  tokenUsageBySession: Record<string, TokenUsage | null>;
+  // Cumulative token usage per session.
+  sessionTokensBySession: Record<
+    string,
+    { inputTokens: number; outputTokens: number; turns: number }
+  >;
   // Active model's context window (input/output token limits). Populated
   // from system_init so the UI can render a "context used" %
   modelLimits: { input?: number; output?: number; model?: string } | null;
@@ -84,10 +88,10 @@ interface MessageStore {
   setPendingPermission: (req: PermissionRequest | null) => void;
   setPendingQuestion: (req: MessageStore['pendingQuestion']) => void;
   setPendingPlan: (req: MessageStore['pendingPlan']) => void;
-  setTokenUsage: (usage: TokenUsage | null) => void;
+  setTokenUsage: (sessionId: string, usage: TokenUsage | null) => void;
   /** Add a turn's usage to the session cumulative total. */
-  addSessionTokens: (u: TokenUsage) => void;
-  resetSessionTokens: () => void;
+  addSessionTokens: (sessionId: string, u: TokenUsage) => void;
+  resetSessionTokens: (sessionId: string) => void;
   setModelLimits: (
     limits: { input?: number; output?: number; model?: string } | null,
   ) => void;
@@ -135,8 +139,8 @@ export const useMessageStore = create<MessageStore>((set) => ({
   pendingPermission: null,
   pendingQuestion: null,
   pendingPlan: null,
-  tokenUsage: null,
-  sessionTokens: { inputTokens: 0, outputTokens: 0, turns: 0 },
+  tokenUsageBySession: {},
+  sessionTokensBySession: {},
   modelLimits: null,
   approvalMode: null,
   fileModsBySession: {},
@@ -230,12 +234,18 @@ export const useMessageStore = create<MessageStore>((set) => ({
       const { [sessionId]: _f, ...files } = s.fileOpsBySession;
       const { [sessionId]: _p, ...plan } = s.planBySession;
       const { [sessionId]: _term, ...terminal } = s.terminalBySession;
+      const { [sessionId]: _tu, ...tokenUsage } = s.tokenUsageBySession;
+      const { [sessionId]: _st, ...sessionTokens } = s.sessionTokensBySession;
+      const { [sessionId]: _fm, ...fileMods } = s.fileModsBySession;
       return {
         messagesBySession: messages,
         toolCallsBySession: tools,
         fileOpsBySession: files,
         planBySession: plan,
         terminalBySession: terminal,
+        tokenUsageBySession: tokenUsage,
+        sessionTokensBySession: sessionTokens,
+        fileModsBySession: fileMods,
       };
     }),
 
@@ -243,17 +253,42 @@ export const useMessageStore = create<MessageStore>((set) => ({
   setPendingPermission: (req) => set({ pendingPermission: req }),
   setPendingQuestion: (req) => set({ pendingQuestion: req }),
   setPendingPlan: (req) => set({ pendingPlan: req }),
-  setTokenUsage: (usage) => set({ tokenUsage: usage }),
-  addSessionTokens: (u) =>
+  setTokenUsage: (sessionId, usage) =>
     set((s) => ({
-      sessionTokens: {
-        inputTokens: s.sessionTokens.inputTokens + (u.inputTokens ?? 0),
-        outputTokens: s.sessionTokens.outputTokens + (u.outputTokens ?? 0),
-        turns: s.sessionTokens.turns + 1,
+      tokenUsageBySession: {
+        ...s.tokenUsageBySession,
+        [sessionId]: usage,
       },
     })),
-  resetSessionTokens: () =>
-    set({ sessionTokens: { inputTokens: 0, outputTokens: 0, turns: 0 } }),
+  addSessionTokens: (sessionId, u) =>
+    set((s) => {
+      const current = s.sessionTokensBySession[sessionId] ?? {
+        inputTokens: 0,
+        outputTokens: 0,
+        turns: 0,
+      };
+      return {
+        sessionTokensBySession: {
+          ...s.sessionTokensBySession,
+          [sessionId]: {
+            inputTokens: current.inputTokens + (u.inputTokens ?? 0),
+            outputTokens: current.outputTokens + (u.outputTokens ?? 0),
+            turns: current.turns + 1,
+          },
+        },
+      };
+    }),
+  resetSessionTokens: (sessionId) =>
+    set((s) => ({
+      sessionTokensBySession: {
+        ...s.sessionTokensBySession,
+        [sessionId]: { inputTokens: 0, outputTokens: 0, turns: 0 },
+      },
+      tokenUsageBySession: {
+        ...s.tokenUsageBySession,
+        [sessionId]: null,
+      },
+    })),
   setModelLimits: (limits) => set({ modelLimits: limits }),
   setApprovalMode: (mode) => set({ approvalMode: mode }),
   recordFileMod: (sessionId, mod) =>

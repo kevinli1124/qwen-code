@@ -279,8 +279,8 @@ export function useSessionEvents(sessionId: string) {
         case 'result': {
           setStreaming(false);
           if (event.usage) {
-            setTokenUsage(event.usage);
-            addSessionTokens(event.usage);
+            setTokenUsage(sessionId, event.usage);
+            addSessionTokens(sessionId, event.usage);
           }
           updateSession(sessionId, {
             status: event.success ? 'completed' : 'error',

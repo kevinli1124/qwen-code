@@ -425,6 +425,27 @@ async function handleApi(
     return;
   }
 
+  // DELETE /api/sessions/:id/messages — clear the conversation but keep
+  // the session record. Wipes persisted messages on disk + interrupts
+  // the running child so its in-memory history is dropped. Next /query
+  // lazy-respawns a fresh child with no context.
+  const clearMsgMatch = pathname.match(/^\/api\/sessions\/([^/]+)\/messages$/);
+  if (clearMsgMatch && method === 'DELETE') {
+    const id = clearMsgMatch[1]!;
+    const existing = PersistenceManager.loadSession(id);
+    if (existing) {
+      PersistenceManager.saveSession({
+        ...existing,
+        messages: [],
+        status: 'idle',
+        updatedAt: new Date().toISOString(),
+      });
+    }
+    SessionManager.interrupt(id);
+    sendJson(res, 200, { ok: true });
+    return;
+  }
+
   // POST /api/sessions/:id/query
   const queryMatch = pathname.match(/^\/api\/sessions\/([^/]+)\/query$/);
   if (queryMatch && method === 'POST') {

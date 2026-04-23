@@ -5,6 +5,7 @@
  */
 import type { ChatMessageData } from '@qwen-code/webui';
 import type { CommandMetadata, SkillMetadata } from '../api/commands';
+import { sessionsApi } from '../api/sessions';
 
 export interface LocalCommandDeps {
   sessionId: string;
@@ -14,8 +15,10 @@ export interface LocalCommandDeps {
   skills: SkillMetadata[];
   tokenUsage?: { inputTokens: number; outputTokens: number } | null;
   sessionTokens: { inputTokens: number; outputTokens: number; turns: number };
-  /** Replace the visible messages with just what the user keeps. */
+  /** Wipe all per-session state from the local store. */
   clearSession: (sessionId: string) => void;
+  /** Reset per-session token counts to zero. */
+  resetSessionTokens: (sessionId: string) => void;
   /** Append an assistant-style message to the conversation. */
   appendMessage: (sessionId: string, msg: ChatMessageData) => void;
 }
@@ -54,10 +57,10 @@ function groupByCategory(
  * Commands handled locally: /help, /clear, /status, /stats, /skills,
  * /tools, /about.
  */
-export function handleLocalCommand(
+export async function handleLocalCommand(
   text: string,
   deps: LocalCommandDeps,
-): LocalCommandResult {
+): Promise<LocalCommandResult> {
   const trimmed = text.trim();
   if (!trimmed.startsWith('/')) return { handled: false };
 
@@ -69,11 +72,22 @@ export function handleLocalCommand(
 
   switch (cmdName) {
     case 'clear': {
+      // Wipe persisted messages on the backend + interrupt the CLI
+      // child so its in-memory history is dropped. Next prompt lazy-
+      // respawns a fresh child with zero context. Frontend store is
+      // cleared after the backend confirms, so a page reload doesn't
+      // bring the old conversation back.
+      try {
+        await sessionsApi.clearMessages(deps.sessionId);
+      } catch {
+        // Ignore — still clear local view below.
+      }
       deps.clearSession(deps.sessionId);
+      deps.resetSessionTokens(deps.sessionId);
       deps.appendMessage(
         deps.sessionId,
         makeAssistantMessage(
-          '✓ Conversation cleared (local view only — the CLI session still keeps its context).',
+          '✓ Conversation cleared. CLI history wiped; next prompt starts fresh.',
         ),
       );
       return { handled: true };

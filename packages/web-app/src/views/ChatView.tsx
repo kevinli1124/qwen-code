@@ -3,7 +3,7 @@
  * Copyright 2025 Qwen team
  * SPDX-License-Identifier: Apache-2.0
  */
-import { useState, useEffect, useCallback, type FC } from 'react';
+import { useState, useEffect, useCallback, useRef, type FC } from 'react';
 import { AppLayout } from '../components/layout/AppLayout';
 import { Sidebar } from '../components/layout/Sidebar';
 import { RightPanel } from '../components/layout/RightPanel';
@@ -60,9 +60,18 @@ export const ChatView: FC = () => {
     setMessages,
     messagesBySession,
     clearSession,
-    tokenUsage,
-    sessionTokens,
+    tokenUsageBySession,
+    sessionTokensBySession,
+    resetSessionTokens,
+    modelLimits,
   } = useMessageStore();
+
+  // Auto-compress at 90%: fire exactly once per high-water turn, reset
+  // once the usage drops back below the threshold (i.e. compression
+  // worked) so we don't spam /compress in a loop if the model keeps the
+  // context high.
+  const autoCompressSentRef = useRef(false);
+  const AUTO_COMPRESS_THRESHOLD = 0.9;
 
   const [commandList, setCommandList] = useState<CommandMetadata[]>([]);
   const [skillList, setSkillList] = useState<SkillMetadata[]>([]);
@@ -175,6 +184,38 @@ export const ChatView: FC = () => {
 
   const activeSession = sessions.find((s) => s.id === activeSessionId);
 
+  // Watch token usage for the active session; when it crosses the
+  // AUTO_COMPRESS_THRESHOLD fire /compress once. Flag resets when
+  // usage drops back under, so repeated high-usage turns after a
+  // compress that didn't help won't spam.
+  useEffect(() => {
+    if (!activeSessionId) return;
+    const usage = tokenUsageBySession[activeSessionId];
+    const limit = modelLimits?.input;
+    if (!usage || !limit || limit <= 0) return;
+    const pct = usage.inputTokens / limit;
+    if (pct < AUTO_COMPRESS_THRESHOLD) {
+      autoCompressSentRef.current = false;
+      return;
+    }
+    if (autoCompressSentRef.current) return;
+    autoCompressSentRef.current = true;
+    // Fire as a user message so it flows through the same channel as a
+    // manual /compress click.
+    appendMessage(activeSessionId, {
+      uuid: `auto-compress-${Date.now()}`,
+      type: 'assistant',
+      timestamp: new Date().toISOString(),
+      message: {
+        role: 'assistant',
+        content: `ℹ️ Context is at ${(pct * 100).toFixed(0)}% — auto-running /compress.`,
+      },
+    });
+    void sessionsApi.sendQuery(activeSessionId, '/compress').catch(() => {
+      autoCompressSentRef.current = false;
+    });
+  }, [activeSessionId, tokenUsageBySession, modelLimits, appendMessage]);
+
   const handleSend = async (text: string) => {
     if (!activeSessionId) return;
     // Echo the user message locally — the backend SSE stream does not
@@ -188,15 +229,20 @@ export const ChatView: FC = () => {
 
     // Intercept info-style slash commands locally — the child CLI rejects
     // them with "not supported in non-interactive mode" otherwise.
-    const local = handleLocalCommand(text, {
+    const local = await handleLocalCommand(text, {
       sessionId: activeSessionId,
       sessionTitle: activeSession?.title,
       sessionCwd: activeSession?.cwd,
       commands: commandList,
       skills: skillList,
-      tokenUsage,
-      sessionTokens,
+      tokenUsage: tokenUsageBySession[activeSessionId] ?? null,
+      sessionTokens: sessionTokensBySession[activeSessionId] ?? {
+        inputTokens: 0,
+        outputTokens: 0,
+        turns: 0,
+      },
       clearSession,
+      resetSessionTokens,
       appendMessage,
     });
     if (local.handled) return;

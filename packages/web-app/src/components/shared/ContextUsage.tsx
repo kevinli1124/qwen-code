@@ -5,6 +5,7 @@
  */
 import { type FC } from 'react';
 import { useMessageStore } from '../../stores/messageStore';
+import { useSessionStore } from '../../stores/sessionStore';
 
 function formatK(n: number): string {
   if (n < 1000) return `${n}`;
@@ -23,7 +24,10 @@ function formatK(n: number): string {
  *   ≥ 90%   red + tooltip suggesting /compress
  */
 export const ContextUsage: FC = () => {
-  const tokenUsage = useMessageStore((s) => s.tokenUsage);
+  const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const tokenUsage = useMessageStore((s) =>
+    activeSessionId ? s.tokenUsageBySession[activeSessionId] : null,
+  );
   const modelLimits = useMessageStore((s) => s.modelLimits);
 
   const inputLimit = modelLimits?.input;

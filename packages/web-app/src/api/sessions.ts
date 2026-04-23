@@ -47,6 +47,10 @@ export const sessionsApi = {
       method: 'POST',
       body: JSON.stringify({ mode }),
     }),
+  clearMessages: (id: string) =>
+    apiFetch<{ ok: boolean }>(`/api/sessions/${id}/messages`, {
+      method: 'DELETE',
+    }),
   respondPlan: (
     id: string,
     requestId: string,

@@ -83,8 +83,18 @@ export const InputBar: FC<InputBarProps> = ({ onSend, onStop }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileLookupSeqRef = useRef(0);
   const isStreaming = useMessageStore((s) => s.isStreaming);
-  const tokenUsage = useMessageStore((s) => s.tokenUsage);
-  const sessionTokens = useMessageStore((s) => s.sessionTokens);
+  const activeSessionIdForTokens = useSessionStore((s) => s.activeSessionId);
+  const tokenUsage = useMessageStore((s) =>
+    activeSessionIdForTokens
+      ? s.tokenUsageBySession[activeSessionIdForTokens]
+      : null,
+  );
+  const sessionTokens = useMessageStore(
+    (s) =>
+      (activeSessionIdForTokens
+        ? s.sessionTokensBySession[activeSessionIdForTokens]
+        : null) ?? { inputTokens: 0, outputTokens: 0, turns: 0 },
+  );
   const activeSession = useSessionStore((s) =>
     s.sessions.find((sess) => sess.id === s.activeSessionId),
   );
