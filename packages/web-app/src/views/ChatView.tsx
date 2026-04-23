@@ -16,11 +16,18 @@ import { SettingsModal } from '../components/shared/SettingsModal';
 import { useSessionStore } from '../stores/sessionStore';
 import { useMessageStore } from '../stores/messageStore';
 import { useSettingsStore } from '../stores/settingsStore';
+import { usePanelStore } from '../stores/panelStore';
 import { useSessionEvents } from '../hooks/useSession';
 import { useSSE } from '../hooks/useSSE';
 import { sessionsApi } from '../api/sessions';
 import { settingsApi } from '../api/settings';
 import { convertStoredToChatMessages } from '../utils/messageConverter';
+import { handleLocalCommand } from '../utils/localCommands';
+import {
+  commandsApi,
+  type CommandMetadata,
+  type SkillMetadata,
+} from '../api/commands';
 
 export const ChatView: FC = () => {
   const [showNewSession, setShowNewSession] = useState(false);
@@ -36,7 +43,24 @@ export const ChatView: FC = () => {
     appendMessage,
     setMessages,
     messagesBySession,
+    clearSession,
+    tokenUsage,
+    sessionTokens,
   } = useMessageStore();
+
+  const [commandList, setCommandList] = useState<CommandMetadata[]>([]);
+  const [skillList, setSkillList] = useState<SkillMetadata[]>([]);
+
+  useEffect(() => {
+    const lang = navigator.language;
+    Promise.all([
+      commandsApi.list(lang).catch(() => [] as CommandMetadata[]),
+      commandsApi.listSkills().catch(() => [] as SkillMetadata[]),
+    ]).then(([cmds, skills]) => {
+      setCommandList(cmds);
+      setSkillList(skills);
+    });
+  }, []);
 
   const [historyState, setHistoryState] = useState<{
     oldest: string | null;
@@ -104,6 +128,8 @@ export const ChatView: FC = () => {
     setServerSettings,
     serverSettings,
   } = useSettingsStore();
+  const { collapsed: panelCollapsed, toggleCollapsed: togglePanel } =
+    usePanelStore();
 
   // Load settings on mount; auto-open modal if no API key configured
   useEffect(() => {
@@ -137,6 +163,22 @@ export const ChatView: FC = () => {
       timestamp: new Date().toISOString(),
       message: { role: 'user', content: text },
     });
+
+    // Intercept info-style slash commands locally — the child CLI rejects
+    // them with "not supported in non-interactive mode" otherwise.
+    const local = handleLocalCommand(text, {
+      sessionId: activeSessionId,
+      sessionTitle: activeSession?.title,
+      sessionCwd: activeSession?.cwd,
+      commands: commandList,
+      skills: skillList,
+      tokenUsage,
+      sessionTokens,
+      clearSession,
+      appendMessage,
+    });
+    if (local.handled) return;
+
     setStreaming(true);
     try {
       await sessionsApi.sendQuery(activeSessionId, text);
@@ -244,6 +286,34 @@ export const ChatView: FC = () => {
                   <span>Running</span>
                 </div>
               )}
+              {/* Right panel toggle — useful for Terminal / Files / Plan
+                  panes. Stays reachable even after the panel is closed. */}
+              <button
+                onClick={togglePanel}
+                className="w-6 h-6 rounded hover:bg-[#2e2e2e] flex items-center justify-center text-[#8a8a8a] hover:text-[#e8e6e3] transition-colors"
+                title={
+                  panelCollapsed ? 'Open tools panel' : 'Close tools panel'
+                }
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  {panelCollapsed ? (
+                    <path
+                      d="M9 3v8M3 3h10M3 11h10M3 3v8"
+                      stroke="currentColor"
+                      strokeWidth="1.2"
+                      strokeLinecap="round"
+                    />
+                  ) : (
+                    <path
+                      d="M9 3v8M3 3h10M3 11h10M3 3v8"
+                      stroke="currentColor"
+                      strokeWidth="1.2"
+                      strokeLinecap="round"
+                      opacity="0.4"
+                    />
+                  )}
+                </svg>
+              </button>
             </div>
 
             {/* Error banner */}

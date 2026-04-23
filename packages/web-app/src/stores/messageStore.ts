@@ -24,8 +24,10 @@ interface MessageStore {
   isStreaming: boolean;
   // Active permission request
   pendingPermission: PermissionRequest | null;
-  // Token usage
+  // Token usage for the most recent turn
   tokenUsage: TokenUsage | null;
+  // Cumulative token usage for the current session (all turns summed)
+  sessionTokens: { inputTokens: number; outputTokens: number; turns: number };
   // Connection error
   connectionError: string | null;
 
@@ -42,6 +44,9 @@ interface MessageStore {
   setStreaming: (v: boolean) => void;
   setPendingPermission: (req: PermissionRequest | null) => void;
   setTokenUsage: (usage: TokenUsage | null) => void;
+  /** Add a turn's usage to the session cumulative total. */
+  addSessionTokens: (u: TokenUsage) => void;
+  resetSessionTokens: () => void;
   setConnectionError: (err: string | null) => void;
 }
 
@@ -55,6 +60,7 @@ export const useMessageStore = create<MessageStore>((set) => ({
   isStreaming: false,
   pendingPermission: null,
   tokenUsage: null,
+  sessionTokens: { inputTokens: 0, outputTokens: 0, turns: 0 },
   connectionError: null,
 
   setMessages: (sessionId, messages) =>
@@ -157,5 +163,15 @@ export const useMessageStore = create<MessageStore>((set) => ({
   setStreaming: (v) => set({ isStreaming: v }),
   setPendingPermission: (req) => set({ pendingPermission: req }),
   setTokenUsage: (usage) => set({ tokenUsage: usage }),
+  addSessionTokens: (u) =>
+    set((s) => ({
+      sessionTokens: {
+        inputTokens: s.sessionTokens.inputTokens + (u.inputTokens ?? 0),
+        outputTokens: s.sessionTokens.outputTokens + (u.outputTokens ?? 0),
+        turns: s.sessionTokens.turns + 1,
+      },
+    })),
+  resetSessionTokens: () =>
+    set({ sessionTokens: { inputTokens: 0, outputTokens: 0, turns: 0 } }),
   setConnectionError: (err) => set({ connectionError: err }),
 }));

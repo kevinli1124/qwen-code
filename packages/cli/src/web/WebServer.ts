@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { SessionManager } from './SessionManager.js';
 import { PersistenceManager } from './PersistenceManager.js';
 import { staticFiles } from './staticFiles.js';
-import { BUILTIN_COMMAND_METADATA } from './commandMetadata.js';
+import { getLocalizedCommandMetadata } from './commandMetadata.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -235,6 +235,70 @@ function serveStatic(
   });
 }
 
+interface SkillMeta {
+  name: string;
+  description: string;
+  category: string;
+  scope: 'user' | 'project' | 'bundled';
+}
+
+/**
+ * Scan the well-known skill directories for SKILL.md files and return
+ * {name, description} for each. Tries, in order:
+ *   - ~/.qwen/skills/               (user-level)
+ *   - <cwd>/.qwen/skills/           (project-level — uses process.cwd())
+ *   - <bundle>/bundled/skills/      (bundled with the CLI)
+ * The parser extracts `name:` and `description:` from YAML frontmatter
+ * without pulling a full YAML dep.
+ */
+function listSkills(): SkillMeta[] {
+  const dirs: Array<{ dir: string; scope: SkillMeta['scope'] }> = [
+    { dir: path.join(os.homedir(), '.qwen', 'skills'), scope: 'user' },
+    { dir: path.join(process.cwd(), '.qwen', 'skills'), scope: 'project' },
+    {
+      dir: path.join(__dirname, '..', '..', 'bundled', 'skills'),
+      scope: 'bundled',
+    },
+  ];
+  const out: SkillMeta[] = [];
+  const seen = new Set<string>();
+  for (const { dir, scope } of dirs) {
+    if (!fs.existsSync(dir)) continue;
+    let entries: fs.Dirent[] = [];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const skillPath = path.join(dir, entry.name, 'SKILL.md');
+      if (!fs.existsSync(skillPath)) continue;
+      try {
+        const raw = fs.readFileSync(skillPath, 'utf8');
+        const front = raw.match(/^---\s*\n([\s\S]*?)\n---/);
+        const name =
+          (front && front[1]?.match(/^name:\s*(.+)$/m)?.[1]?.trim()) ||
+          entry.name;
+        const description =
+          (front && front[1]?.match(/^description:\s*(.+)$/m)?.[1]?.trim()) ||
+          '';
+        if (seen.has(name)) continue;
+        seen.add(name);
+        out.push({
+          name,
+          description: description.replace(/^['"]|['"]$/g, ''),
+          category: 'skill',
+          scope,
+        });
+      } catch {
+        // skip unreadable
+      }
+    }
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name));
+}
+
 async function handleApi(
   req: http.IncomingMessage,
   res: http.ServerResponse,
@@ -259,11 +323,22 @@ async function handleApi(
     return;
   }
 
-  // GET /api/commands — static list of built-in slash commands so the web
-  // UI can offer autocomplete when the user types '/'. Keeps the web
-  // server free of CLI command dependencies.
+  // GET /api/commands?lang=<code> — static list of built-in slash commands
+  // so the web UI can offer autocomplete when the user types '/'. Keeps
+  // the web server free of CLI command dependencies. The lang query
+  // selects zh-TW / zh / en; other locales fall back to English.
   if (pathname === '/api/commands' && method === 'GET') {
-    sendJson(res, 200, BUILTIN_COMMAND_METADATA);
+    const lang = search.get('lang');
+    sendJson(res, 200, getLocalizedCommandMetadata(lang));
+    return;
+  }
+
+  // GET /api/skills — list skill packs discoverable under known paths so
+  // the web UI can surface them alongside slash commands. Skills are
+  // directories containing a SKILL.md with YAML frontmatter (name +
+  // description). We scan user-level + project-level + bundled dirs.
+  if (pathname === '/api/skills' && method === 'GET') {
+    sendJson(res, 200, listSkills());
     return;
   }
 

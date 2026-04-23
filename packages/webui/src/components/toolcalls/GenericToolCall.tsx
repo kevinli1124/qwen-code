@@ -84,6 +84,7 @@ export const GenericToolCall: FC<BaseToolCallProps> = ({
         toolCallId={toolCallId}
         isFirst={isFirst}
         isLast={isLast}
+        collapsible
       >
         {operationText || output}
       </ToolCallContainer>
@@ -103,6 +104,7 @@ export const GenericToolCall: FC<BaseToolCallProps> = ({
         toolCallId={toolCallId}
         isFirst={isFirst}
         isLast={isLast}
+        collapsible
       >
         <LocationsList locations={locations} />
       </ToolCallContainer>
@@ -122,6 +124,7 @@ export const GenericToolCall: FC<BaseToolCallProps> = ({
         toolCallId={toolCallId}
         isFirst={isFirst}
         isLast={isLast}
+        collapsible
       >
         {operationText}
       </ToolCallContainer>

@@ -175,13 +175,18 @@ function translateAndBroadcast(session: ActiveSession, raw: unknown): void {
     case 'result': {
       const isError = (msg['is_error'] as boolean) ?? false;
       const usage = msg['usage'] as Record<string, unknown> | undefined;
+      const durationMs = (msg['duration_ms'] as number) ?? 0;
+      // The child CLI emits snake_case (input_tokens / output_tokens); the
+      // frontend TokenUsage type expects camelCase plus durationMs, so the
+      // transform happens here. Without it the footer showed NaN.
       broadcast(session, 'message', {
         type: 'result',
         success: !isError,
         usage: usage
           ? {
-              input_tokens: usage['input_tokens'],
-              output_tokens: usage['output_tokens'],
+              inputTokens: (usage['input_tokens'] as number) ?? 0,
+              outputTokens: (usage['output_tokens'] as number) ?? 0,
+              durationMs,
             }
           : undefined,
       });

@@ -75,23 +75,41 @@ export const InputBar: FC<InputBarProps> = ({ onSend, onStop }) => {
   >([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [trigger, setTrigger] = useState<ActiveTrigger | null>(null);
+  // Prompt history: local array of user-sent prompts for Arrow-up recall.
+  // historyIndex: -1 = not navigating, 0 = most recent, larger = older.
+  const [history, setHistory] = useState<string[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const draftRef = useRef<string>('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileLookupSeqRef = useRef(0);
   const isStreaming = useMessageStore((s) => s.isStreaming);
   const tokenUsage = useMessageStore((s) => s.tokenUsage);
+  const sessionTokens = useMessageStore((s) => s.sessionTokens);
   const activeSession = useSessionStore((s) =>
     s.sessions.find((sess) => sess.id === s.activeSessionId),
   );
   const cwd = activeSession?.cwd ?? '.';
 
-  // Load slash-command metadata once on mount.
+  // Load slash-command metadata + discoverable skills once on mount. The
+  // lang param comes from the browser so descriptions come back in the
+  // user's language (zh-TW / zh / en currently supported server-side).
   useEffect(() => {
-    commandsApi
-      .list()
-      .then(setCommands)
-      .catch(() => {
-        // Non-fatal; menu just won't populate.
-      });
+    const lang = navigator.language;
+    Promise.all([
+      commandsApi.list(lang).catch(() => [] as CommandMetadata[]),
+      commandsApi.listSkills().catch(() => []),
+    ]).then(([cmds, skills]) => {
+      const merged: CommandMetadata[] = [
+        ...cmds,
+        ...skills.map((s) => ({
+          name: s.name,
+          description: s.description || `skill (${s.scope})`,
+          category: 'skill',
+          runner: 'cli' as const,
+        })),
+      ];
+      setCommands(merged);
+    });
   }, []);
 
   // When the @ trigger's query changes, fetch matching files from the
@@ -204,6 +222,33 @@ export const InputBar: FC<InputBarProps> = ({ onSend, onStop }) => {
     [trigger, text],
   );
 
+  const textareaIsEmpty = text.length === 0;
+
+  const navigateHistory = useCallback(
+    (direction: 'up' | 'down') => {
+      if (history.length === 0) return;
+      if (direction === 'up') {
+        const nextIdx = historyIndex === -1 ? 0 : historyIndex + 1;
+        if (nextIdx >= history.length) return;
+        if (historyIndex === -1) draftRef.current = text;
+        setHistoryIndex(nextIdx);
+        setText(history[history.length - 1 - nextIdx] ?? '');
+      } else {
+        if (historyIndex === -1) return;
+        const nextIdx = historyIndex - 1;
+        if (nextIdx < 0) {
+          setHistoryIndex(-1);
+          setText(draftRef.current);
+          draftRef.current = '';
+        } else {
+          setHistoryIndex(nextIdx);
+          setText(history[history.length - 1 - nextIdx] ?? '');
+        }
+      }
+    },
+    [history, historyIndex, text],
+  );
+
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     // Menu navigation takes priority when the menu is open.
     if (trigger && menuItems.length > 0) {
@@ -230,6 +275,26 @@ export const InputBar: FC<InputBarProps> = ({ onSend, onStop }) => {
       }
     }
 
+    // Prompt history recall (Arrow Up/Down) — only when not already
+    // walking a multi-line text field; trigger on caret at start, or
+    // when already navigating history.
+    if (e.key === 'ArrowUp' && !e.shiftKey) {
+      const el = e.currentTarget;
+      const caret = el.selectionStart ?? 0;
+      if (textareaIsEmpty || historyIndex !== -1 || caret === 0) {
+        e.preventDefault();
+        navigateHistory('up');
+        return;
+      }
+    }
+    if (e.key === 'ArrowDown' && !e.shiftKey) {
+      if (historyIndex !== -1) {
+        e.preventDefault();
+        navigateHistory('down');
+        return;
+      }
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -246,6 +311,13 @@ export const InputBar: FC<InputBarProps> = ({ onSend, onStop }) => {
     // queues user messages and processes them after the current turn
     // (packages/core/src/nonInteractive/session.ts userMessageQueue).
     onSend(trimmed);
+    setHistory((h) => {
+      // Push to history unless identical to most recent entry.
+      if (h[h.length - 1] === trimmed) return h;
+      return [...h, trimmed].slice(-100);
+    });
+    setHistoryIndex(-1);
+    draftRef.current = '';
     setText('');
     setTrigger(null);
     if (textareaRef.current) {
@@ -255,6 +327,12 @@ export const InputBar: FC<InputBarProps> = ({ onSend, onStop }) => {
 
   const handleChange = (value: string) => {
     setText(value);
+    // Any manual edit cancels history navigation — the draft is lost
+    // once the user diverges from a recalled entry.
+    if (historyIndex !== -1) {
+      setHistoryIndex(-1);
+      draftRef.current = '';
+    }
     const el = textareaRef.current;
     if (el) {
       recomputeTrigger(value, el.selectionStart ?? value.length);
@@ -370,7 +448,12 @@ export const InputBar: FC<InputBarProps> = ({ onSend, onStop }) => {
               Enter to send · Shift+Enter for newline
               {isStreaming && ' · Esc to stop'}
             </div>
-            {tokenUsage && <TokenUsageDisplay usage={tokenUsage} />}
+            {tokenUsage && (
+              <TokenUsageDisplay
+                usage={tokenUsage}
+                sessionTotal={sessionTokens}
+              />
+            )}
           </div>
         </div>
       </div>

@@ -8,7 +8,9 @@
  */
 
 import type { FC } from 'react';
+import { useState } from 'react';
 import { FileLink } from '../../layout/FileLink.js';
+import { ChevronIcon } from '../../icons/index.js';
 import './LayoutComponents.css';
 
 /**
@@ -31,6 +33,14 @@ export interface ToolCallContainerProps {
   isFirst?: boolean;
   /** Whether this is the last item in an AI response sequence (for timeline) */
   isLast?: boolean;
+  /**
+   * When true, render a chevron toggle next to the label so the user can
+   * expand/collapse the body — matching the ThinkingMessage collapse UX.
+   * Defaults to false to avoid changing layout of tool calls that don't
+   * want it. Initial state: expanded while status is 'loading', else
+   * collapsed (common UX: live progress visible, completed calls tucked).
+   */
+  collapsible?: boolean;
 }
 
 /**
@@ -46,27 +56,62 @@ export const ToolCallContainer: FC<ToolCallContainerProps> = ({
   className: _className,
   isFirst = false,
   isLast = false,
-}) => (
-  <div
-    className={`qwen-message message-item ${_className || ''} relative pl-[30px] py-2 select-text toolcall-container toolcall-status-${status}`}
-    data-first={isFirst}
-    data-last={isLast}
-  >
-    <div className="toolcall-content-wrapper flex flex-col min-w-0 max-w-full">
-      <div className="flex items-baseline gap-1.5 relative min-w-0">
-        <span className="text-[14px] leading-none font-bold text-[var(--app-primary-foreground)]">
-          {label}
-        </span>
-        <span className="text-[11px] text-[var(--app-secondary-foreground)]">
-          {labelSuffix}
-        </span>
+  // Default true — users asked for thinking-style collapsibility across
+  // tool calls. The chevron only shows when there is actual body content
+  // (see showToggle below), so title-only cards stay unaffected.
+  collapsible = true,
+}) => {
+  const [expanded, setExpanded] = useState(status === 'loading');
+  const showToggle = collapsible && !!children;
+
+  return (
+    <div
+      className={`qwen-message message-item ${_className || ''} relative pl-[30px] py-2 select-text toolcall-container toolcall-status-${status}`}
+      data-first={isFirst}
+      data-last={isLast}
+    >
+      <div className="toolcall-content-wrapper flex flex-col min-w-0 max-w-full">
+        <div className="flex items-baseline gap-1.5 relative min-w-0">
+          {showToggle ? (
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              className="inline-flex items-baseline gap-1.5 bg-transparent border-0 p-0 cursor-pointer"
+              aria-expanded={expanded}
+              aria-label={expanded ? 'Collapse' : 'Expand'}
+            >
+              <span className="text-[14px] leading-none font-bold text-[var(--app-primary-foreground)]">
+                {label}
+              </span>
+              <span className="text-[11px] text-[var(--app-secondary-foreground)]">
+                {labelSuffix}
+              </span>
+              <ChevronIcon
+                size={10}
+                direction={expanded ? 'up' : 'down'}
+                className="opacity-60"
+              />
+            </button>
+          ) : (
+            <>
+              <span className="text-[14px] leading-none font-bold text-[var(--app-primary-foreground)]">
+                {label}
+              </span>
+              <span className="text-[11px] text-[var(--app-secondary-foreground)]">
+                {labelSuffix}
+              </span>
+            </>
+          )}
+        </div>
+        {children && (!showToggle || expanded) && (
+          <div className="text-[var(--app-secondary-foreground)]">
+            {children}
+          </div>
+        )}
       </div>
-      {children && (
-        <div className="text-[var(--app-secondary-foreground)]">{children}</div>
-      )}
     </div>
-  </div>
-);
+  );
+};
 
 /**
  * Props for ToolCallCard

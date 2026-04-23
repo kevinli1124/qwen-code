@@ -1,10 +1,14 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import type { ChatMessageData } from '@qwen-code/webui';
 import { useMessageStore } from '../stores/messageStore';
 import { useSessionStore } from '../stores/sessionStore';
 import type { StreamEvent, ToolCallEntry } from '../types/message';
 
 export function useSessionEvents(sessionId: string) {
+  // Track subagent metadata so tool calls emitted with a non-'main'
+  // agentId can be labelled with the subagent's type (e.g. "code-reviewer").
+  // Keyed by subagentId.
+  const subagentTypesRef = useRef<Map<string, string>>(new Map());
   const {
     appendMessage,
     updateStreamingText,
@@ -14,6 +18,7 @@ export function useSessionEvents(sessionId: string) {
     setStreaming,
     setPendingPermission,
     setTokenUsage,
+    addSessionTokens,
     setConnectionError,
   } = useMessageStore();
   const { updateSession } = useSessionStore();
@@ -44,7 +49,17 @@ export function useSessionEvents(sessionId: string) {
 
         case 'tool_start': {
           const kind = mapToolNameToKind(event.toolName);
-          const title = formatToolTitle(event.toolName, event.args);
+          const baseTitle = formatToolTitle(event.toolName, event.args);
+          // If this call came from a subagent, tag the title so the user
+          // knows which subagent is acting. agentId === 'main' is the
+          // top-level agent; anything else is a spawned subagent.
+          const isSubagent = event.agentId && event.agentId !== 'main';
+          const subagentType = isSubagent
+            ? (subagentTypesRef.current.get(event.agentId) ?? 'subagent')
+            : null;
+          const title = subagentType
+            ? `[${subagentType}] ${baseTitle}`
+            : baseTitle;
           const entry: ToolCallEntry = {
             callId: event.callId,
             toolName: event.toolName,
@@ -55,7 +70,6 @@ export function useSessionEvents(sessionId: string) {
             rawInput: event.args,
           };
           upsertToolCall(sessionId, entry);
-          // Add as ChatMessage for ChatViewer (webui uses toolCallId)
           const msg: ChatMessageData = {
             uuid: `tool-${event.callId}`,
             type: 'tool_call',
@@ -103,10 +117,12 @@ export function useSessionEvents(sessionId: string) {
         }
 
         case 'agent_spawn': {
-          // Render a sub-agent spawn as its own tool-call-shaped bubble
-          // so the existing ChatViewer collapse/expand UI reuses.
-          const callId = `agent-${event.subagentId}`;
           const subagentType = event.subagentType || 'subagent';
+          // Remember the subagent type so subsequent tool_start events
+          // with this subagentId can be labelled (see tool_start above).
+          subagentTypesRef.current.set(event.subagentId, subagentType);
+
+          const callId = `agent-${event.subagentId}`;
           const entry: ToolCallEntry = {
             callId,
             toolName: 'agent_spawn',
@@ -140,7 +156,10 @@ export function useSessionEvents(sessionId: string) {
 
         case 'result': {
           setStreaming(false);
-          if (event.usage) setTokenUsage(event.usage);
+          if (event.usage) {
+            setTokenUsage(event.usage);
+            addSessionTokens(event.usage);
+          }
           updateSession(sessionId, {
             status: event.success ? 'completed' : 'error',
           });
@@ -167,6 +186,7 @@ export function useSessionEvents(sessionId: string) {
       setStreaming,
       setPendingPermission,
       setTokenUsage,
+      addSessionTokens,
       setConnectionError,
       updateSession,
     ],
