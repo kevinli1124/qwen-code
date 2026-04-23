@@ -215,9 +215,10 @@ export const setupGatewayCommand: SlashCommand = {
     // `--scaffold-only` falls back to the file-template behavior for scripted
     // setups (no dialog, just write `.qwen/triggers/<channel>.md`).
     if (!wantScaffoldFile) {
-      if (head === 'telegram') {
-        return { type: 'dialog', dialog: 'setup_gateway_telegram' };
-      }
+      // [DISABLED 2026-04-23 — Telegram integration disabled; see commit msg for how to re-enable]
+      // if (head === 'telegram') {
+      //   return { type: 'dialog', dialog: 'setup_gateway_telegram' };
+      // }
       const known = findProvider(head);
       if (known && !known.available) {
         emit(

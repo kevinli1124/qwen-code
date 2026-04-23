@@ -551,7 +551,11 @@ export const useSlashCommandProcessor = (
                       actions.openSetupGatewayDialog();
                       return { type: 'handled' };
                     case 'setup_gateway_telegram':
-                      actions.openSetupGatewayDialog('telegram');
+                      // [DISABLED 2026-04-23 — Telegram integration disabled; see commit msg for how to re-enable]
+                      // actions.openSetupGatewayDialog('telegram');
+                      // Case kept (not removed) so the dialog-union exhaustive
+                      // check still passes; the action call is stubbed out
+                      // until Telegram is re-enabled.
                       return { type: 'handled' };
                     case 'help':
                       return { type: 'handled' };

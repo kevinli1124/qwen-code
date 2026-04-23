@@ -5,7 +5,8 @@
  */
 
 import type { GatewaySetupProvider } from './types.js';
-import { telegramSetup } from './telegram-setup.js';
+// [DISABLED 2026-04-23 — Telegram integration disabled; see commit msg for how to re-enable]
+// import { telegramSetup } from './telegram-setup.js';
 
 /**
  * Registered gateway setup providers. Each entry is either `available: true`
@@ -16,7 +17,8 @@ import { telegramSetup } from './telegram-setup.js';
  * write a provider here, and append to the array.
  */
 export const gatewaySetupProviders: GatewaySetupProvider[] = [
-  telegramSetup,
+  // [DISABLED 2026-04-23 — Telegram integration disabled; see commit msg for how to re-enable]
+  // telegramSetup,
   // discordSetup — TODO
   // slackSetup    — TODO
 ];
@@ -28,5 +30,6 @@ export function findProvider(
   return gatewaySetupProviders.find((p) => p.channel === target);
 }
 
-export { telegramSetup };
+// [DISABLED 2026-04-23 — Telegram integration disabled; see commit msg for how to re-enable]
+// export { telegramSetup };
 export type { GatewaySetupProvider } from './types.js';

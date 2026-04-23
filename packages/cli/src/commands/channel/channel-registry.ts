@@ -6,6 +6,11 @@ let builtinsPromise: Promise<void> | null = null;
 function ensureBuiltins(): Promise<void> {
   if (!builtinsPromise) {
     builtinsPromise = (async () => {
+      // [DISABLED 2026-04-23 — Telegram integration disabled; see commit msg for how to re-enable]
+      // Original 3-way import (telegram + weixin + dingtalk) replaced with a
+      // 2-way import that skips @qwen-code/channel-telegram. To re-enable,
+      // restore the commented block below and delete the telegram-less version.
+      /*
       const [telegram, weixin, dingtalk] = await Promise.all([
         import('@qwen-code/channel-telegram'),
         import('@qwen-code/channel-weixin'),
@@ -13,6 +18,15 @@ function ensureBuiltins(): Promise<void> {
       ]);
 
       for (const mod of [telegram, weixin, dingtalk]) {
+        registry.set(mod.plugin.channelType, mod.plugin);
+      }
+      */
+      const [weixin, dingtalk] = await Promise.all([
+        import('@qwen-code/channel-weixin'),
+        import('@qwen-code/channel-dingtalk'),
+      ]);
+
+      for (const mod of [weixin, dingtalk]) {
         registry.set(mod.plugin.channelType, mod.plugin);
       }
     })();

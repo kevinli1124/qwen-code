@@ -46,7 +46,10 @@ function buildContext(
   });
 }
 
-describe('/setup-gateway', () => {
+// [DISABLED 2026-04-23 — Telegram integration disabled; see commit msg for
+// how to re-enable. Change `.skip` back to `describe(...)` when Telegram is
+// restored; the tests themselves are untouched.]
+describe.skip('/setup-gateway', () => {
   const OLD_ENV = { ...process.env };
   let tmp: string;
 

@@ -7,7 +7,8 @@
 import { createDebugLogger } from '../utils/debugLogger.js';
 import { ConversationStore } from '../messaging/conversation-store.js';
 import { MessageDispatcher } from '../messaging/dispatcher.js';
-import { TelegramGateway } from '../messaging/telegram-gateway.js';
+// [DISABLED 2026-04-23 — Telegram integration disabled; see commit msg for how to re-enable]
+// import { TelegramGateway } from '../messaging/telegram-gateway.js';
 import type {
   HistoryWindow,
   MessagingChannel,
@@ -57,12 +58,19 @@ export interface MessageTriggerGatewayFactory {
 
 const defaultGatewayFactory: MessageTriggerGatewayFactory = {
   create(ctx: MessageGatewayFactoryContext): MessagingGateway {
+    // [DISABLED 2026-04-23 — Telegram integration disabled; see commit msg for how to re-enable]
+    // The telegram case below is commented out because TelegramGateway import
+    // is disabled. ctx.resolvedToken / ctx.resolvedAllowedUserIds are unused
+    // while Telegram is disabled — they are referenced below to suppress
+    // the "unused parameter" lint warning without removing the parameter.
+    void ctx.resolvedToken;
+    void ctx.resolvedAllowedUserIds;
     switch (ctx.spec.channel) {
-      case 'telegram':
-        return new TelegramGateway({
-          token: ctx.resolvedToken,
-          allowedUserIds: ctx.resolvedAllowedUserIds,
-        });
+      // case 'telegram':
+      //   return new TelegramGateway({
+      //     token: ctx.resolvedToken,
+      //     allowedUserIds: ctx.resolvedAllowedUserIds,
+      //   });
       default:
         throw new TriggerError(
           `MessageTrigger: channel "${ctx.spec.channel}" not yet supported (phase 1 is Telegram only)`,
@@ -104,6 +112,20 @@ export class MessageTrigger extends BaseTrigger {
   }
 
   override validate(): void {
+    // [DISABLED 2026-04-23 — Telegram integration disabled; see commit msg for how to re-enable]
+    // Original validation pipeline is commented out below. While every messaging
+    // channel is disabled, validate() throws immediately with a clear message so
+    // stale trigger configs surface an actionable error instead of silently
+    // failing at start() time. To re-enable, delete the throw + void block and
+    // uncomment the original body.
+    const spec = this.cfg.spec as Record<string, unknown>;
+    const channel = spec['channel'];
+    throw new TriggerError(
+      `MessageTrigger "${this.cfg.id}": all messaging channels are currently disabled (see 2026-04-23 security audit) — requested channel="${typeof channel === 'string' ? channel : '(missing)'}"`,
+      TriggerErrorCode.INVALID_CONFIG,
+      this.cfg.id,
+    );
+    /*
     const spec = this.cfg.spec as Record<string, unknown>;
     const channel = spec['channel'];
     if (typeof channel !== 'string') {
@@ -161,6 +183,7 @@ export class MessageTrigger extends BaseTrigger {
         this.cfg.id,
       );
     }
+    */
   }
 
   async start(onFire: OnFireCallback): Promise<void> {
