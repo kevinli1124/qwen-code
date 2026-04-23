@@ -20,6 +20,7 @@ export function useSessionEvents(sessionId: string) {
     setStreaming,
     setPendingPermission,
     setPendingQuestion,
+    setPendingPlan,
     setModelLimits,
     recordFileMod,
     markFileReverted,
@@ -226,6 +227,17 @@ export function useSessionEvents(sessionId: string) {
           break;
         }
 
+        case 'plan_request': {
+          setStreaming(false);
+          setPendingPlan(event.request);
+          // Also seed the Plan panel with the plan's bullet / numbered
+          // items so the user can glance at it from the side panel even
+          // before accepting.
+          const items = parsePlanMarkdownToItems(event.request.plan);
+          if (items.length > 0) setPlan(sessionId, items);
+          break;
+        }
+
         case 'agent_spawn': {
           const subagentType = event.subagentType || 'subagent';
           // Remember the subagent type so subsequent tool_start events
@@ -298,6 +310,7 @@ export function useSessionEvents(sessionId: string) {
       setStreaming,
       setPendingPermission,
       setPendingQuestion,
+      setPendingPlan,
       setModelLimits,
       recordFileMod,
       markFileReverted,
@@ -354,6 +367,48 @@ function classifyFileOp(toolName: string): 'read' | 'write' | 'edit' | null {
 function isTodoWriteTool(toolName: string): boolean {
   const n = toolName.toLowerCase();
   return n === 'todo_write' || n === 'todowrite' || n === 'update_todos';
+}
+
+// Extract a list of bullet / numbered items from plan markdown for the
+// Plan panel. Accepts `- item`, `* item`, `1. item`, `[ ] item`, and
+// `[x] item` styles. Returns prefix-coded strings the PlanPanel renders.
+function parsePlanMarkdownToItems(plan: string): string[] {
+  if (!plan) return [];
+  const items: string[] = [];
+  for (const rawLine of plan.split('\n')) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    // [x] done / [X] done
+    const done = line.match(/^[-*]\s*\[[xX]\]\s*(.+)$/);
+    if (done) {
+      items.push(`✅ ${done[1]}`);
+      continue;
+    }
+    // [ ] pending / [-] in-progress
+    const pending = line.match(/^[-*]\s*\[\s\]\s*(.+)$/);
+    if (pending) {
+      items.push(`⬜ ${pending[1]}`);
+      continue;
+    }
+    const inProgress = line.match(/^[-*]\s*\[-\]\s*(.+)$/);
+    if (inProgress) {
+      items.push(`⏳ ${inProgress[1]}`);
+      continue;
+    }
+    // Plain bullet
+    const bullet = line.match(/^[-*]\s+(.+)$/);
+    if (bullet) {
+      items.push(`⬜ ${bullet[1]}`);
+      continue;
+    }
+    // Numbered list
+    const numbered = line.match(/^\d+[.)]\s+(.+)$/);
+    if (numbered) {
+      items.push(`⬜ ${numbered[1]}`);
+      continue;
+    }
+  }
+  return items;
 }
 
 // Format a rough one-line diff for the Files panel expand view. Doesn't

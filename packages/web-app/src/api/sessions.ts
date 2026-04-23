@@ -47,4 +47,14 @@ export const sessionsApi = {
       method: 'POST',
       body: JSON.stringify({ mode }),
     }),
+  respondPlan: (
+    id: string,
+    requestId: string,
+    action: 'accept-ask' | 'accept-auto' | 'reject',
+    feedback?: string,
+  ) =>
+    apiFetch<{ ok: boolean }>(`/api/sessions/${id}/plan/${requestId}`, {
+      method: 'POST',
+      body: JSON.stringify({ action, feedback }),
+    }),
 };

@@ -528,6 +528,32 @@ async function handleApi(
     return;
   }
 
+  // POST /api/sessions/:id/plan/:reqId — decision for an
+  // exit_plan_mode prompt. Body: { action: 'accept-ask'|'accept-auto'|
+  // 'reject', feedback?: string }.
+  const planMatch = pathname.match(/^\/api\/sessions\/([^/]+)\/plan\/([^/]+)$/);
+  if (planMatch && method === 'POST') {
+    const [, id, reqId] = planMatch;
+    const body = await readBody(req);
+    let parsed: {
+      action?: 'accept-ask' | 'accept-auto' | 'reject';
+      feedback?: string;
+    } = {};
+    try {
+      parsed = JSON.parse(body) as typeof parsed;
+    } catch {
+      /* empty */
+    }
+    const action = parsed.action ?? 'reject';
+    if (!['accept-ask', 'accept-auto', 'reject'].includes(action)) {
+      sendError(res, 400, `Invalid action: ${action}`);
+      return;
+    }
+    SessionManager.respondPlan(id!, reqId!, action, parsed.feedback);
+    sendJson(res, 200, { ok: true });
+    return;
+  }
+
   // POST /api/sessions/:id/question/:reqId — submit answers to an
   // ask_user_question prompt. Cancelled: { cancelled: true }; submitted:
   // { answers: { <header>: <value>, ... } }.

@@ -90,6 +90,14 @@ export type StreamEvent =
     }
   | { type: 'permission_request'; request: PermissionRequest }
   | {
+      type: 'plan_request';
+      request: {
+        requestId: string;
+        toolUseId: string;
+        plan: string;
+      };
+    }
+  | {
       type: 'question_request';
       request: {
         requestId: string;

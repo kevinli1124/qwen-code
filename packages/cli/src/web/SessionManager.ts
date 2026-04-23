@@ -304,6 +304,24 @@ function translateAndBroadcast(session: ActiveSession, raw: unknown): void {
           break;
         }
 
+        // exit_plan_mode is the agent's "here's my plan, approve?"
+        // request. The tool's input.plan is markdown. Route to a
+        // dedicated plan_request event so the UI can render a modal with
+        // the plan + Accept/Deny + an optional follow-up comment.
+        if (toolName === 'exit_plan_mode') {
+          const input = (req['input'] ?? {}) as Record<string, unknown>;
+          const plan = (input['plan'] as string) ?? '';
+          broadcast(session, 'message', {
+            type: 'plan_request',
+            request: {
+              requestId,
+              toolUseId: perm.toolUseId,
+              plan,
+            },
+          });
+          break;
+        }
+
         broadcast(session, 'message', {
           type: 'permission_request',
           request: {
@@ -651,6 +669,51 @@ export const SessionManager = {
         reason: e instanceof Error ? e.message : String(e),
       };
     }
+  },
+
+  /**
+   * Respond to an exit_plan_mode prompt. `action`:
+   *   - 'accept-ask'   → switch approval mode to default, then allow
+   *   - 'accept-auto'  → switch approval mode to auto-edit, then allow
+   *   - 'reject'       → deny the plan tool (agent stays in plan mode)
+   * Optional `feedback` is sent as a follow-up user message (useful when
+   * the user wants to accept the plan with additional instructions).
+   */
+  respondPlan(
+    id: string,
+    requestId: string,
+    action: 'accept-ask' | 'accept-auto' | 'reject',
+    feedback?: string,
+  ): boolean {
+    const session = sessions.get(id);
+    if (!session?.child?.stdin) return false;
+
+    if (action === 'reject') {
+      return this.respondPermission(id, requestId, false);
+    }
+
+    // Approve first. The plan tool's onConfirm (triggered by behavior:
+    // 'allow') resolves to ProceedOnce and sets approval mode to
+    // 'default' inside the child. For accept-auto we override to
+    // 'auto-edit' AFTER a short delay so our setApprovalMode isn't
+    // clobbered by the plan tool's own side-effect.
+    const ok = this.respondPermission(id, requestId, true);
+    if (!ok) return false;
+
+    if (action === 'accept-auto') {
+      setTimeout(() => {
+        this.setApprovalMode(id, 'auto-edit');
+      }, 600);
+    }
+
+    // Optional follow-up user message — sent after the plan tool
+    // finishes so it's the next thing the agent sees.
+    if (feedback && feedback.trim().length > 0) {
+      setTimeout(() => {
+        this.sendQuery(id, feedback.trim());
+      }, 800);
+    }
+    return true;
   },
 
   /**

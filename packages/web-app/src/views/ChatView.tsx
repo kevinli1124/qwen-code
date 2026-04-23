@@ -17,6 +17,10 @@ import {
   type PermissionDecision,
 } from '../components/conversation/PermissionCard';
 import { QuestionModal } from '../components/conversation/QuestionModal';
+import {
+  PlanConfirmationModal,
+  type PlanAction,
+} from '../components/conversation/PlanConfirmationModal';
 import { usePermissionRulesStore } from '../stores/permissionRulesStore';
 import { ErrorBanner } from '../components/shared/ErrorBanner';
 import { NewSessionModal } from '../components/session/NewSessionModal';
@@ -45,9 +49,11 @@ export const ChatView: FC = () => {
     isStreaming,
     pendingPermission,
     pendingQuestion,
+    pendingPlan,
     connectionError,
     setPendingPermission,
     setPendingQuestion,
+    setPendingPlan,
     setConnectionError,
     setStreaming,
     appendMessage,
@@ -300,6 +306,21 @@ export const ChatView: FC = () => {
     setPendingQuestion(null);
   };
 
+  const handlePlanDecide = async (action: PlanAction, feedback?: string) => {
+    if (!activeSessionId || !pendingPlan) return;
+    try {
+      await sessionsApi.respondPlan(
+        activeSessionId,
+        pendingPlan.requestId,
+        action,
+        feedback,
+      );
+    } catch {
+      // ignore
+    }
+    setPendingPlan(null);
+  };
+
   const handleQuestionCancel = async () => {
     if (!activeSessionId || !pendingQuestion) return;
     try {
@@ -462,6 +483,14 @@ export const ChatView: FC = () => {
           questions={pendingQuestion.questions}
           onSubmit={handleQuestionSubmit}
           onCancel={handleQuestionCancel}
+        />
+      )}
+
+      {/* exit_plan_mode plan review dialog */}
+      {pendingPlan && (
+        <PlanConfirmationModal
+          plan={pendingPlan.plan}
+          onDecide={handlePlanDecide}
         />
       )}
 
