@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { SessionManager } from './SessionManager.js';
 import { PersistenceManager } from './PersistenceManager.js';
 import { staticFiles } from './staticFiles.js';
+import { BUILTIN_COMMAND_METADATA } from './commandMetadata.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -255,6 +256,14 @@ async function handleApi(
   // GET /api/health
   if (pathname === '/api/health') {
     sendJson(res, 200, { status: 'ok' });
+    return;
+  }
+
+  // GET /api/commands — static list of built-in slash commands so the web
+  // UI can offer autocomplete when the user types '/'. Keeps the web
+  // server free of CLI command dependencies.
+  if (pathname === '/api/commands' && method === 'GET') {
+    sendJson(res, 200, BUILTIN_COMMAND_METADATA);
     return;
   }
 

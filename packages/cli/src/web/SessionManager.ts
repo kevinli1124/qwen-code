@@ -224,6 +224,66 @@ function translateAndBroadcast(session: ActiveSession, raw: unknown): void {
       break;
     }
 
+    case 'agent_spawn': {
+      // CLIAgentSpawnMessage from the child CLI (nonInteractiveCli.ts:389):
+      // { type:'agent_spawn', subagent_id, parent_agent_id,
+      //   parent_tool_call_id, subagent_type, timestamp }
+      // Forward as a discoverable SSE event so the UI can render a
+      // collapsible card for "spawning <code-reviewer> subagent..."
+      broadcast(session, 'message', {
+        type: 'agent_spawn',
+        subagentId: msg['subagent_id'] as string,
+        parentAgentId: msg['parent_agent_id'] as string,
+        parentToolCallId: msg['parent_tool_call_id'] as string,
+        subagentType: msg['subagent_type'] as string,
+      });
+      break;
+    }
+
+    // Top-level tool events emitted by stream-json mode (see
+    // nonInteractiveCli.ts onToolStart / onToolComplete at line ~357 for
+    // main agent, and the AgentEventType subscribers at line ~401 for
+    // subagents). Both pipelines emit identical shapes — only agent_id
+    // differs ('main' vs subagent UUID).
+    case 'tool_start': {
+      const callId = (msg['call_id'] as string) ?? '';
+      const toolName = (msg['tool_name'] as string) ?? '';
+      session.activeToolUseBlocks.set(callId.length, {
+        id: callId,
+        name: toolName,
+        started: Date.now(),
+      });
+      broadcast(session, 'message', {
+        type: 'tool_start',
+        callId,
+        toolName,
+        args: (msg['args'] as Record<string, unknown>) ?? {},
+        agentId: (msg['agent_id'] as string) ?? 'main',
+      });
+      break;
+    }
+
+    case 'tool_complete': {
+      broadcast(session, 'message', {
+        type: 'tool_complete',
+        callId: (msg['call_id'] as string) ?? '',
+        toolName: (msg['tool_name'] as string) ?? '',
+        success: (msg['success'] as boolean) ?? true,
+        durationMs: (msg['duration_ms'] as number) ?? 0,
+        ...(msg['error'] ? { error: msg['error'] as string } : {}),
+      });
+      break;
+    }
+
+    case 'tool_output_chunk': {
+      broadcast(session, 'message', {
+        type: 'tool_output_chunk',
+        callId: (msg['call_id'] as string) ?? '',
+        chunk: msg['chunk'],
+      });
+      break;
+    }
+
     default:
       break;
   }

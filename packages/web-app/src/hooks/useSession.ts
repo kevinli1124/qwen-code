@@ -94,7 +94,47 @@ export function useSessionEvents(sessionId: string) {
         }
 
         case 'permission_request': {
+          // Pause streaming animation while waiting for the user — the
+          // child CLI has suspended the turn and no further SSE arrives
+          // until respondPermission runs.
+          setStreaming(false);
           setPendingPermission(event.request);
+          break;
+        }
+
+        case 'agent_spawn': {
+          // Render a sub-agent spawn as its own tool-call-shaped bubble
+          // so the existing ChatViewer collapse/expand UI reuses.
+          const callId = `agent-${event.subagentId}`;
+          const subagentType = event.subagentType || 'subagent';
+          const entry: ToolCallEntry = {
+            callId,
+            toolName: 'agent_spawn',
+            kind: 'agent_spawn',
+            title: `Spawning subagent: ${subagentType}`,
+            status: 'in_progress',
+            args: {
+              subagentId: event.subagentId,
+              parentAgentId: event.parentAgentId,
+              parentToolCallId: event.parentToolCallId,
+              subagentType,
+            },
+          };
+          upsertToolCall(sessionId, entry);
+          const msg: ChatMessageData = {
+            uuid: `agent-spawn-${event.subagentId}`,
+            type: 'tool_call',
+            timestamp: new Date().toISOString(),
+            toolCall: {
+              toolCallId: callId,
+              kind: 'agent_spawn',
+              title: `Subagent: ${subagentType}`,
+              status: 'in_progress',
+              rawInput: entry.args,
+              content: [],
+            },
+          };
+          appendMessage(sessionId, msg);
           break;
         }
 

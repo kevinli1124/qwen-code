@@ -7,25 +7,166 @@ import {
   useState,
   useRef,
   useCallback,
+  useEffect,
+  useMemo,
   type FC,
   type KeyboardEvent,
 } from 'react';
 import { useMessageStore } from '../../stores/messageStore';
+import { useSessionStore } from '../../stores/sessionStore';
 import { TokenUsageDisplay } from '../shared/TokenUsage';
 import { FolderBrowser } from '../shared/FolderBrowser';
 import { filesystemApi } from '../../api/filesystem';
+import { commandsApi, type CommandMetadata } from '../../api/commands';
+import { CommandMenu, type MenuItem } from './CommandMenu';
 
 interface InputBarProps {
   onSend: (text: string) => void;
   onStop: () => void;
 }
 
+type MenuMode = 'slash' | 'at' | null;
+
+interface ActiveTrigger {
+  mode: MenuMode;
+  /** Character index in text where the trigger (/ or @) starts. */
+  startIndex: number;
+  /** The text typed after the trigger, e.g. 'he' for "/he". */
+  query: string;
+}
+
+/**
+ * Detect whether the caret is inside a slash-command or @-mention trigger.
+ * Slash: only when '/' is the first char of the text (first-line first-char,
+ * matching the CLI's isSlashCommand check).
+ * At: anywhere, when '@' is preceded by start-of-line or whitespace.
+ */
+function detectTrigger(text: string, caret: number): ActiveTrigger | null {
+  if (text.startsWith('/') && caret > 0) {
+    const upToCaret = text.slice(0, caret);
+    // Only trigger while the first line still begins with / and has no spaces yet
+    const firstLine = upToCaret.split('\n')[0];
+    if (firstLine.startsWith('/') && !firstLine.includes(' ')) {
+      return { mode: 'slash', startIndex: 0, query: firstLine.slice(1) };
+    }
+  }
+  // Look backward from caret for an @ bounded by whitespace or start.
+  for (let i = caret - 1; i >= 0; i--) {
+    const ch = text[i];
+    if (ch === '@') {
+      if (i === 0 || /\s/.test(text[i - 1] ?? '')) {
+        return { mode: 'at', startIndex: i, query: text.slice(i + 1, caret) };
+      }
+      return null;
+    }
+    if (/\s/.test(ch ?? '')) break;
+  }
+  return null;
+}
+
+const MAX_MENU_RESULTS = 12;
+
 export const InputBar: FC<InputBarProps> = ({ onSend, onStop }) => {
   const [text, setText] = useState('');
   const [showFilePicker, setShowFilePicker] = useState(false);
+  const [commands, setCommands] = useState<CommandMetadata[]>([]);
+  const [fileMatches, setFileMatches] = useState<
+    Array<{ path: string; isDir: boolean }>
+  >([]);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [trigger, setTrigger] = useState<ActiveTrigger | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileLookupSeqRef = useRef(0);
   const isStreaming = useMessageStore((s) => s.isStreaming);
   const tokenUsage = useMessageStore((s) => s.tokenUsage);
+  const activeSession = useSessionStore((s) =>
+    s.sessions.find((sess) => sess.id === s.activeSessionId),
+  );
+  const cwd = activeSession?.cwd ?? '.';
+
+  // Load slash-command metadata once on mount.
+  useEffect(() => {
+    commandsApi
+      .list()
+      .then(setCommands)
+      .catch(() => {
+        // Non-fatal; menu just won't populate.
+      });
+  }, []);
+
+  // When the @ trigger's query changes, fetch matching files from the
+  // session's cwd. Debounce-ish via a monotonic seq: drop stale responses.
+  useEffect(() => {
+    if (trigger?.mode !== 'at') {
+      setFileMatches([]);
+      return;
+    }
+    const seq = ++fileLookupSeqRef.current;
+    const q = trigger.query;
+    // If the user has typed a path segment, browse that subdir; else cwd.
+    const lastSlash = q.lastIndexOf('/');
+    const subdir = lastSlash >= 0 ? q.slice(0, lastSlash) : '';
+    const fragment = lastSlash >= 0 ? q.slice(lastSlash + 1) : q;
+    const browsePath =
+      subdir.length > 0 ? `${cwd.replace(/[/\\]+$/, '')}/${subdir}` : cwd;
+    filesystemApi
+      .browse(browsePath)
+      .then((result) => {
+        if (seq !== fileLookupSeqRef.current) return;
+        const lower = fragment.toLowerCase();
+        const dirs = result.dirs
+          .filter((d) => d.toLowerCase().includes(lower))
+          .map((d) => ({
+            path: subdir ? `${subdir}/${d}` : d,
+            isDir: true,
+          }));
+        const files = result.files
+          .filter((f) => f.toLowerCase().includes(lower))
+          .map((f) => ({
+            path: subdir ? `${subdir}/${f}` : f,
+            isDir: false,
+          }));
+        setFileMatches([...dirs, ...files].slice(0, 50));
+      })
+      .catch(() => {
+        if (seq !== fileLookupSeqRef.current) return;
+        setFileMatches([]);
+      });
+  }, [trigger, cwd]);
+
+  // Compute menu items based on current trigger mode.
+  const menuItems = useMemo<MenuItem[]>(() => {
+    if (!trigger) return [];
+    if (trigger.mode === 'slash') {
+      const q = trigger.query.toLowerCase();
+      const filtered = commands.filter(
+        (c) =>
+          c.name.toLowerCase().startsWith(q) ||
+          c.name.toLowerCase().includes(q),
+      );
+      return filtered.slice(0, MAX_MENU_RESULTS).map((c) => ({
+        value: c.name,
+        label: `/${c.name}`,
+        description: c.description,
+        badge: c.category,
+      }));
+    }
+    return fileMatches.slice(0, MAX_MENU_RESULTS).map((f) => ({
+      value: f.path,
+      label: `@${f.path}${f.isDir ? '/' : ''}`,
+      description: f.isDir ? 'directory' : undefined,
+      badge: f.isDir ? 'dir' : undefined,
+    }));
+  }, [trigger, commands, fileMatches]);
+
+  // Clamp activeIndex when menu items change so arrow-nav stays in range.
+  useEffect(() => {
+    if (activeIndex >= menuItems.length) setActiveIndex(0);
+  }, [menuItems.length, activeIndex]);
+
+  const recomputeTrigger = useCallback((value: string, caret: number) => {
+    setTrigger(detectTrigger(value, caret));
+  }, []);
 
   const handleFileSelect = useCallback(async (filePath: string) => {
     setShowFilePicker(false);
@@ -39,7 +180,56 @@ export const InputBar: FC<InputBarProps> = ({ onSend, onStop }) => {
     }
   }, []);
 
+  const applyMenuSelection = useCallback(
+    (item: MenuItem) => {
+      if (!trigger || !textareaRef.current) return;
+      const el = textareaRef.current;
+      const endIndex = trigger.startIndex + 1 + trigger.query.length; // trigger char + query
+      const insertion =
+        trigger.mode === 'slash'
+          ? `/${item.value}${item.value.includes(':') ? '' : ' '}`
+          : `@${item.value}${item.value.endsWith('/') ? '' : ' '}`;
+      const next =
+        text.slice(0, trigger.startIndex) + insertion + text.slice(endIndex);
+      setText(next);
+      setTrigger(null);
+      setActiveIndex(0);
+      // Restore caret to just after inserted text.
+      requestAnimationFrame(() => {
+        const pos = trigger.startIndex + insertion.length;
+        el.focus();
+        el.setSelectionRange(pos, pos);
+      });
+    },
+    [trigger, text],
+  );
+
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    // Menu navigation takes priority when the menu is open.
+    if (trigger && menuItems.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setActiveIndex((i) => (i + 1) % menuItems.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setActiveIndex((i) => (i - 1 + menuItems.length) % menuItems.length);
+        return;
+      }
+      if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
+        e.preventDefault();
+        const picked = menuItems[activeIndex];
+        if (picked) applyMenuSelection(picked);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setTrigger(null);
+        return;
+      }
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -51,24 +241,54 @@ export const InputBar: FC<InputBarProps> = ({ onSend, onStop }) => {
 
   const handleSend = useCallback(() => {
     const trimmed = text.trim();
-    if (!trimmed || isStreaming) return;
+    if (!trimmed) return;
+    // Sending mid-turn is allowed — the child CLI's stream-json reader
+    // queues user messages and processes them after the current turn
+    // (packages/core/src/nonInteractive/session.ts userMessageQueue).
     onSend(trimmed);
     setText('');
+    setTrigger(null);
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
-  }, [text, isStreaming, onSend]);
+  }, [text, onSend]);
+
+  const handleChange = (value: string) => {
+    setText(value);
+    const el = textareaRef.current;
+    if (el) {
+      recomputeTrigger(value, el.selectionStart ?? value.length);
+    }
+  };
 
   const handleInput = () => {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+    recomputeTrigger(el.value, el.selectionStart ?? el.value.length);
   };
 
   return (
     <>
-      <div className="border-t border-[#2e2e2e] bg-[#1a1a1a] px-4 py-3">
+      <div className="border-t border-[#2e2e2e] bg-[#1a1a1a] px-4 py-3 relative">
+        {/* Autocomplete menu — positioned above the input row. */}
+        {trigger && (
+          <div className="absolute left-4 right-4 bottom-full mb-1 z-20">
+            <CommandMenu
+              items={menuItems}
+              activeIndex={activeIndex}
+              onSelect={applyMenuSelection}
+              onHoverIndex={setActiveIndex}
+              emptyLabel={
+                trigger.mode === 'slash'
+                  ? 'No matching commands'
+                  : 'No matching files in cwd'
+              }
+            />
+          </div>
+        )}
+
         <div className="flex flex-col gap-2">
           <div className="flex items-end gap-3 bg-[#242424] border border-[#2e2e2e] rounded-lg px-3 py-2 focus-within:border-[#3e3e3e] transition-colors">
             {/* Attach file button */}
@@ -88,39 +308,33 @@ export const InputBar: FC<InputBarProps> = ({ onSend, onStop }) => {
               </svg>
             </button>
 
-            {/* Textarea */}
+            {/* Textarea — always enabled; mid-turn typing is allowed and
+                queues on the backend. Placeholder shifts when running. */}
             <textarea
               ref={textareaRef}
               value={text}
-              onChange={(e) => setText(e.target.value)}
+              onChange={(e) => handleChange(e.target.value)}
               onKeyDown={handleKeyDown}
+              onKeyUp={handleInput}
+              onClick={handleInput}
               onInput={handleInput}
               placeholder={
                 isStreaming
-                  ? 'Waiting for response...'
-                  : 'Ask anything... (Enter to send, Shift+Enter for newline)'
+                  ? 'Type a follow-up… (will queue after current turn)'
+                  : 'Ask anything... ("/" for commands, "@" for files)'
               }
-              disabled={isStreaming}
               rows={1}
-              className="flex-1 resize-none bg-transparent text-sm text-[#e8e6e3] placeholder:text-[#8a8a8a] focus:outline-none leading-relaxed disabled:opacity-50 min-h-[24px] max-h-[200px]"
+              className="flex-1 resize-none bg-transparent text-sm text-[#e8e6e3] placeholder:text-[#8a8a8a] focus:outline-none leading-relaxed min-h-[24px] max-h-[200px]"
               style={{ fontFamily: 'Inter, system-ui, sans-serif' }}
             />
 
-            {/* Send / Stop button */}
-            <button
-              onClick={isStreaming ? onStop : handleSend}
-              disabled={!isStreaming && !text.trim()}
-              className={[
-                'flex-shrink-0 w-7 h-7 rounded flex items-center justify-center transition-colors',
-                isStreaming
-                  ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
-                  : text.trim()
-                    ? 'bg-accent text-white hover:bg-accent-hover'
-                    : 'bg-[#2e2e2e] text-[#8a8a8a] cursor-not-allowed',
-              ].join(' ')}
-              title={isStreaming ? 'Stop (Esc)' : 'Send (Enter)'}
-            >
-              {isStreaming ? (
+            {/* Stop button while running, plus separate Send */}
+            {isStreaming && (
+              <button
+                onClick={onStop}
+                className="flex-shrink-0 w-7 h-7 rounded flex items-center justify-center bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+                title="Stop current turn (Esc)"
+              >
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
                   <rect
                     x="1"
@@ -131,11 +345,22 @@ export const InputBar: FC<InputBarProps> = ({ onSend, onStop }) => {
                     fill="currentColor"
                   />
                 </svg>
-              ) : (
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                  <path d="M1 11L11 6 1 1v4l7 1-7 1v4z" fill="currentColor" />
-                </svg>
-              )}
+              </button>
+            )}
+            <button
+              onClick={handleSend}
+              disabled={!text.trim()}
+              className={[
+                'flex-shrink-0 w-7 h-7 rounded flex items-center justify-center transition-colors',
+                text.trim()
+                  ? 'bg-accent text-white hover:bg-accent-hover'
+                  : 'bg-[#2e2e2e] text-[#8a8a8a] cursor-not-allowed',
+              ].join(' ')}
+              title="Send (Enter)"
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path d="M1 11L11 6 1 1v4l7 1-7 1v4z" fill="currentColor" />
+              </svg>
             </button>
           </div>
 

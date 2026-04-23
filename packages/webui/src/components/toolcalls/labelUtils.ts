@@ -98,6 +98,10 @@ export const getToolDisplayLabel = ({
       return 'ExitPlanMode';
     case 'task':
       return 'Task';
+    case 'agent':
+    case 'agent_spawn':
+    case 'subagent':
+      return 'Agent';
     case 'skill':
       return 'Skill';
     case 'think':
