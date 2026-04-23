@@ -8,6 +8,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { randomUUID } from 'node:crypto';
 import type { ServerResponse } from 'node:http';
+import { tokenLimit } from '@qwen-code/qwen-code-core';
 import { PersistenceManager } from './PersistenceManager.js';
 
 export interface SseClient {
@@ -251,9 +252,28 @@ function translateAndBroadcast(session: ActiveSession, raw: unknown): void {
     }
 
     case 'system': {
-      // Broadcast system init to let clients know the session is ready
+      // Broadcast system init to let clients know the session is ready.
+      // Enrich with the model's known context-window size so the web UI
+      // can render a "context usage" indicator without duplicating the
+      // model→limit table that already lives in core/tokenLimits.
       if (msg['subtype'] === 'init') {
-        broadcast(session, 'message', { type: 'system_init', data: msg });
+        const modelName = (msg['model'] as string) ?? '';
+        const inputLimit = modelName
+          ? tokenLimit(modelName, 'input')
+          : undefined;
+        const outputLimit = modelName
+          ? tokenLimit(modelName, 'output')
+          : undefined;
+        broadcast(session, 'message', {
+          type: 'system_init',
+          data: {
+            ...msg,
+            tokenLimits: {
+              input: inputLimit,
+              output: outputLimit,
+            },
+          },
+        });
       }
       break;
     }

@@ -20,6 +20,7 @@ export function useSessionEvents(sessionId: string) {
     setStreaming,
     setPendingPermission,
     setPendingQuestion,
+    setModelLimits,
     setTokenUsage,
     addSessionTokens,
     setConnectionError,
@@ -29,6 +30,18 @@ export function useSessionEvents(sessionId: string) {
   const handleEvent = useCallback(
     (event: StreamEvent) => {
       switch (event.type) {
+        case 'system_init': {
+          // Enriched by SessionManager with tokenLimits from core.
+          if (event.data?.tokenLimits) {
+            setModelLimits({
+              input: event.data.tokenLimits.input,
+              output: event.data.tokenLimits.output,
+              model: event.data.model,
+            });
+          }
+          break;
+        }
+
         case 'stream_text': {
           updateStreamingText(event.uuid, event.delta);
           break;
@@ -229,6 +242,7 @@ export function useSessionEvents(sessionId: string) {
       setStreaming,
       setPendingPermission,
       setPendingQuestion,
+      setModelLimits,
       setTokenUsage,
       addSessionTokens,
       setConnectionError,

@@ -43,6 +43,14 @@ export interface TokenUsage {
 
 export type StreamEvent =
   | { type: 'system'; data: Record<string, unknown> }
+  | {
+      type: 'system_init';
+      data: {
+        model?: string;
+        tokenLimits?: { input?: number; output?: number };
+        [key: string]: unknown;
+      };
+    }
   | { type: 'assistant'; uuid: string; content: string; model: string }
   | { type: 'stream_text'; uuid: string; delta: string }
   | { type: 'thinking'; uuid: string; content: string }

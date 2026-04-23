@@ -39,6 +39,9 @@ interface MessageStore {
   tokenUsage: TokenUsage | null;
   // Cumulative token usage for the current session (all turns summed)
   sessionTokens: { inputTokens: number; outputTokens: number; turns: number };
+  // Active model's context window (input/output token limits). Populated
+  // from system_init so the UI can render a "context used" %
+  modelLimits: { input?: number; output?: number; model?: string } | null;
   // Connection error
   connectionError: string | null;
 
@@ -59,6 +62,9 @@ interface MessageStore {
   /** Add a turn's usage to the session cumulative total. */
   addSessionTokens: (u: TokenUsage) => void;
   resetSessionTokens: () => void;
+  setModelLimits: (
+    limits: { input?: number; output?: number; model?: string } | null,
+  ) => void;
   setConnectionError: (err: string | null) => void;
 }
 
@@ -74,6 +80,7 @@ export const useMessageStore = create<MessageStore>((set) => ({
   pendingQuestion: null,
   tokenUsage: null,
   sessionTokens: { inputTokens: 0, outputTokens: 0, turns: 0 },
+  modelLimits: null,
   connectionError: null,
 
   setMessages: (sessionId, messages) =>
@@ -187,5 +194,6 @@ export const useMessageStore = create<MessageStore>((set) => ({
     })),
   resetSessionTokens: () =>
     set({ sessionTokens: { inputTokens: 0, outputTokens: 0, turns: 0 } }),
+  setModelLimits: (limits) => set({ modelLimits: limits }),
   setConnectionError: (err) => set({ connectionError: err }),
 }));

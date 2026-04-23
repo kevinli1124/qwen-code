@@ -82,6 +82,13 @@ function resolveLocale(lang: string | undefined): 'en' | 'zh-TW' | 'zh' {
 
 const ROTATE_MS = 15000;
 
+function formatElapsed(ms: number): string {
+  const totalSec = Math.floor(ms / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return m > 0 ? `${m}m${s}s` : `${s}s`;
+}
+
 interface LoadingIndicatorProps {
   /** True while the agent is producing output (isStreaming). */
   visible: boolean;
@@ -92,17 +99,33 @@ export const LoadingIndicator: FC<LoadingIndicatorProps> = ({ visible }) => {
   const [phrase, setPhrase] = useState(
     () => phrases[Math.floor(Math.random() * phrases.length)] ?? '',
   );
+  // Track the moment streaming started + current tick for elapsed time.
+  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [now, setNow] = useState<number>(() => Date.now());
 
+  // Reset the clock each time visibility flips to true; rotate phrase
+  // every ROTATE_MS and tick the clock every second while visible.
   useEffect(() => {
-    if (!visible) return;
-    const tick = () => {
+    if (!visible) {
+      setStartedAt(null);
+      return;
+    }
+    setStartedAt(Date.now());
+    setNow(Date.now());
+    setPhrase(phrases[Math.floor(Math.random() * phrases.length)] ?? '');
+    const rotate = setInterval(() => {
       setPhrase(phrases[Math.floor(Math.random() * phrases.length)] ?? '');
+    }, ROTATE_MS);
+    const tick = setInterval(() => setNow(Date.now()), 1000);
+    return () => {
+      clearInterval(rotate);
+      clearInterval(tick);
     };
-    const id = setInterval(tick, ROTATE_MS);
-    return () => clearInterval(id);
   }, [visible, phrases]);
 
   if (!visible) return null;
+
+  const elapsed = startedAt ? now - startedAt : 0;
 
   return (
     <div className="flex items-center gap-2 px-4 py-1.5 text-xs text-[#8a8a8a]">
@@ -121,6 +144,9 @@ export const LoadingIndicator: FC<LoadingIndicatorProps> = ({ visible }) => {
         />
       </div>
       <span className="italic">{phrase}</span>
+      <span className="font-mono text-[#6e6e6e]">
+        ({formatElapsed(elapsed)})
+      </span>
     </div>
   );
 };

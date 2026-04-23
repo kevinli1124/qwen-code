@@ -10,6 +10,7 @@ import { RightPanel } from '../components/layout/RightPanel';
 import { ConversationView } from '../components/conversation/ConversationView';
 import { InputBar } from '../components/conversation/InputBar';
 import { LoadingIndicator } from '../components/conversation/LoadingIndicator';
+import { ContextUsage } from '../components/shared/ContextUsage';
 import {
   PermissionCard,
   type PermissionDecision,
@@ -354,6 +355,7 @@ export const ChatView: FC = () => {
                   <span>Running</span>
                 </div>
               )}
+              <ContextUsage />
               {/* Right panel toggle — useful for Terminal / Files / Plan
                   panes. Stays reachable even after the panel is closed. */}
               <button
