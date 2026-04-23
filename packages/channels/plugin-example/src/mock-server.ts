@@ -40,12 +40,22 @@ export interface MockServerOptions {
   wsPort?: number;
   /** Timeout for agent responses in ms (default: 120000) */
   responseTimeoutMs?: number;
+  /**
+   * Bind address for both HTTP and WebSocket servers.
+   * Defaults to `127.0.0.1` (loopback only) so the mock server is not
+   * exposed to the local network. Set to `0.0.0.0` only in trusted
+   * environments such as CI containers.
+   */
+  host?: string;
 }
 
 export function createMockServer(
   options?: MockServerOptions,
 ): Promise<MockServerHandle> {
   const responseTimeoutMs = options?.responseTimeoutMs ?? 120_000;
+  // Default to loopback-only binding to avoid LAN exposure. Callers in
+  // trusted environments (e.g. CI containers) may pass host: '0.0.0.0'.
+  const host = options?.host ?? '127.0.0.1';
 
   let pluginWs: WebSocket | null = null;
   let connectionResolver: (() => void) | null = null;
@@ -61,7 +71,7 @@ export function createMockServer(
   >();
 
   // --- WebSocket server ---
-  const wss = new WebSocketServer({ port: options?.wsPort ?? 0 });
+  const wss = new WebSocketServer({ port: options?.wsPort ?? 0, host });
 
   wss.on('connection', (ws) => {
     pluginWs = ws;
@@ -199,7 +209,7 @@ export function createMockServer(
     }
     const wsPort = wsAddress.port;
 
-    httpServer.listen(options?.httpPort ?? 0, () => {
+    httpServer.listen(options?.httpPort ?? 0, host, () => {
       const httpAddress = httpServer.address();
       if (!httpAddress || typeof httpAddress === 'string') {
         reject(new Error('HTTP server failed to bind'));

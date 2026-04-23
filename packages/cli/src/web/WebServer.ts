@@ -125,8 +125,11 @@ async function testConnection(
         'anthropic-version': '2023-06-01',
       };
     } else if (authType === 'gemini') {
-      url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
-      headers = {};
+      // Pass the API key via header rather than query string so it can't
+      // leak into URL logs, HTTP referer, or error messages that echo the
+      // request URL. Gemini API accepts both forms.
+      url = 'https://generativelanguage.googleapis.com/v1beta/models';
+      headers = { 'x-goog-api-key': apiKey };
     } else {
       // openai-compatible (Qwen DashScope, OpenAI, custom)
       const base = (baseUrl || 'https://api.openai.com/v1').replace(/\/$/, '');

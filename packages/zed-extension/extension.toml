@@ -10,23 +10,31 @@ repository = "https://github.com/QwenLM/qwen-code"
 name = "Qwen Code"
 icon = "qwen-code.svg"
 
+# SHA-256 pin below mitigates supply-chain tampering of the downloaded tarball.
+# When bumping the qwen-code version, recompute the hash with:
+#   curl -sL <archive-url> | shasum -a 256
+
 [agent_servers.qwen-code.targets.darwin-aarch64]
 archive = "https://registry.npmjs.org/@qwen-code/qwen-code/-/qwen-code-0.10.0.tgz"
+sha256 = "1e90693e696984ea227f033cd4ced0fe9210d58ddb7b45a281e15905a9265670"
 cmd = "node"
 args = ["./package/cli.js", "--acp"]
 
 [agent_servers.qwen-code.targets.darwin-x86_64]
 archive = "https://registry.npmjs.org/@qwen-code/qwen-code/-/qwen-code-0.10.0.tgz"
+sha256 = "1e90693e696984ea227f033cd4ced0fe9210d58ddb7b45a281e15905a9265670"
 cmd = "node"
 args = ["./package/cli.js", "--acp"]
 
 [agent_servers.qwen-code.targets.linux-x86_64]
 archive = "https://registry.npmjs.org/@qwen-code/qwen-code/-/qwen-code-0.10.0.tgz"
+sha256 = "1e90693e696984ea227f033cd4ced0fe9210d58ddb7b45a281e15905a9265670"
 cmd = "node"
 args = ["./package/cli.js", "--acp"]
 
 [agent_servers.qwen-code.targets.windows-x86_64]
 archive = "https://registry.npmjs.org/@qwen-code/qwen-code/-/qwen-code-0.10.0.tgz"
+sha256 = "1e90693e696984ea227f033cd4ced0fe9210d58ddb7b45a281e15905a9265670"
 cmd = "node"
 args = ["./package/cli.js", "--acp"]
 

@@ -9,19 +9,23 @@
  *   node node_modules/@qwen-code/channel-plugin-example/dist/start-server.js
  *
  * Environment variables:
- *   HTTP_PORT  (default: 9200)
- *   WS_PORT    (default: 9201)
+ *   HTTP_PORT    (default: 9200)
+ *   WS_PORT      (default: 9201)
+ *   PLUGIN_HOST  (default: 127.0.0.1) — bind address. Defaults to loopback so
+ *                the mock server is not exposed to the local network. Set to
+ *                0.0.0.0 only in trusted environments (e.g. CI containers).
  */
 import { createMockServer } from './mock-server.js';
 
 const httpPort = parseInt(process.env['HTTP_PORT'] || '9200', 10);
 const wsPort = parseInt(process.env['WS_PORT'] || '9201', 10);
+const host = process.env['PLUGIN_HOST'] || '127.0.0.1';
 
-const server = await createMockServer({ httpPort, wsPort });
+const server = await createMockServer({ httpPort, wsPort, host });
 
 console.log(`Mock server running:`);
-console.log(`  HTTP: http://localhost:${server.httpPort}`);
-console.log(`  WS:   ws://localhost:${server.wsPort}`);
+console.log(`  HTTP: http://${host}:${server.httpPort}`);
+console.log(`  WS:   ws://${host}:${server.wsPort}`);
 console.log();
 console.log(`Send a test message:`);
 console.log(`  curl -sX POST http://localhost:${server.httpPort}/message \\`);

@@ -1,9 +1,27 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { createHash } from 'node:crypto';
 import { build } from 'esbuild';
 import { buildConfig } from './esbuild.config.mjs';
 import prettier from 'prettier';
+
+/**
+ * Download the given URL and return a Subresource Integrity string
+ * (e.g. "sha384-<base64>") suitable for the `integrity` attribute.
+ * Computed at build time so the emitted HTML pins the exact bytes that
+ * were live on the CDN when the template was built.
+ */
+const computeSri = async (url) => {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(
+      `Failed to fetch ${url} for SRI: ${response.status} ${response.statusText}`,
+    );
+  }
+  const buffer = Buffer.from(await response.arrayBuffer());
+  return 'sha384-' + createHash('sha384').update(buffer).digest('base64');
+};
 
 const assetsDir = dirname(fileURLToPath(import.meta.url));
 const srcDir = join(assetsDir, 'src');
@@ -35,6 +53,24 @@ const webuiVersion = getDependencyVersion('@qwen-code/webui');
 const reactUmdVersion = '18.2.0';
 const reactDomUmdVersion = '18.2.0';
 
+// Compute SRI hashes for every CDN-loaded resource so the generated
+// export HTML refuses to execute tampered scripts/styles.
+const [reactUmdSri, reactDomUmdSri, webuiJsSri, webuiCssSri] =
+  await Promise.all([
+    computeSri(
+      `https://unpkg.com/react@${reactUmdVersion}/umd/react.production.min.js`,
+    ),
+    computeSri(
+      `https://unpkg.com/react-dom@${reactDomUmdVersion}/umd/react-dom.production.min.js`,
+    ),
+    computeSri(
+      `https://unpkg.com/@qwen-code/webui@${webuiVersion}/dist/index.umd.js`,
+    ),
+    computeSri(
+      `https://unpkg.com/@qwen-code/webui@${webuiVersion}/dist/styles.css`,
+    ),
+  ]);
+
 const buildResult = await build(buildConfig);
 
 const jsBundle = buildResult.outputFiles.find((file) =>
@@ -60,6 +96,10 @@ const htmlOutput = htmlTemplate
   .replaceAll('__REACT_UMD_VERSION__', reactUmdVersion)
   .replaceAll('__REACT_DOM_UMD_VERSION__', reactDomUmdVersion)
   .replaceAll('__WEBUI_VERSION__', webuiVersion)
+  .replaceAll('__REACT_UMD_SRI__', reactUmdSri)
+  .replaceAll('__REACT_DOM_UMD_SRI__', reactDomUmdSri)
+  .replaceAll('__WEBUI_JS_SRI__', webuiJsSri)
+  .replaceAll('__WEBUI_CSS_SRI__', webuiCssSri)
   .replace('__FAVICON_SVG__', faviconSvg.trim())
   .replace('__FAVICON_DATA__', faviconData);
 

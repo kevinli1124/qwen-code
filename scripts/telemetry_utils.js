@@ -178,6 +178,17 @@ export function waitForPort(port, timeout = 10000) {
   });
 }
 
+// TODO(security): This helper downloads GitHub release assets by dynamic
+// "latest" version (see local_telemetry.js / telemetry_gcp.js callers) and
+// therefore cannot carry a static SHA-256 pin today. Supply-chain hardening
+// options to consider:
+//   1. Pin specific versions of otelcol-contrib / jaeger in callers and
+//      hard-code SHA-256 in a CHECKSUMS map here;
+//   2. Fetch and verify the *.sig / *.minisig signatures published alongside
+//      each release (cosign / GPG key of the upstream project);
+//   3. Require an explicit --allow-download flag before any fetch.
+// See https://github.com/open-telemetry/opentelemetry-collector-releases/releases
+// and https://github.com/jaegertracing/jaeger/releases for upstream checksums.
 export async function ensureBinary(
   executableName,
   repo,

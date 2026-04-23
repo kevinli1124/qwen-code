@@ -7,7 +7,8 @@
  */
 
 import { execSync } from 'node:child_process';
-import { mkdirSync, rmSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -16,6 +17,48 @@ const SHELLCHECK_VERSION = '0.11.0';
 const YAMLLINT_VERSION = '1.35.1';
 
 const TEMP_DIR = join(tmpdir(), 'qwen-code-linters');
+
+// Pinned SHA-256 checksums for downloaded linter tarballs. Supply-chain
+// defense: if an attacker replaces the release asset we refuse to install.
+// When bumping a version, update the corresponding entry below.
+// Actionlint checksums are published at
+//   https://github.com/rhysd/actionlint/releases/download/v<ver>/actionlint_<ver>_checksums.txt
+// Shellcheck does not publish a checksum file; hashes are computed locally
+// from the GitHub release asset bytes.
+const EXPECTED_CHECKSUMS = {
+  // actionlint 1.7.7
+  'actionlint_1.7.7_linux_amd64.tar.gz':
+    '023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757',
+  'actionlint_1.7.7_darwin_amd64.tar.gz':
+    '28e5de5a05fc558474f638323d736d822fff183d2d492f0aecb2b73cc44584f5',
+  'actionlint_1.7.7_darwin_arm64.tar.gz':
+    '2693315b9093aeacb4ebd91a993fea54fc215057bf0da2659056b4bc033873db',
+  // shellcheck 0.11.0
+  'shellcheck-v0.11.0.linux.x86_64.tar.xz':
+    '8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198',
+  'shellcheck-v0.11.0.darwin.x86_64.tar.xz':
+    '3c89db4edcab7cf1c27bff178882e0f6f27f7afdf54e859fa041fca10febe4c6',
+  'shellcheck-v0.11.0.darwin.aarch64.tar.xz':
+    '56affdd8de5527894dca6dc3d7e0a99a873b0f004d7aabc30ae407d3f48b0a79',
+};
+
+function verifyChecksum(filePath, assetName) {
+  const expected = EXPECTED_CHECKSUMS[assetName];
+  if (!expected) {
+    throw new Error(
+      `No pinned SHA-256 checksum for asset "${assetName}". ` +
+        `Add one to EXPECTED_CHECKSUMS in scripts/lint.js before installing.`,
+    );
+  }
+  const actual = createHash('sha256')
+    .update(readFileSync(filePath))
+    .digest('hex');
+  if (actual !== expected) {
+    throw new Error(
+      `Checksum mismatch for ${assetName}.\n  expected ${expected}\n  got      ${actual}`,
+    );
+  }
+}
 
 function getPlatformArch() {
   const platform = process.platform;
@@ -43,6 +86,9 @@ function getPlatformArch() {
 
 const platformArch = getPlatformArch();
 
+const ACTIONLINT_ASSET = `actionlint_${ACTIONLINT_VERSION}_${platformArch.actionlint}.tar.gz`;
+const SHELLCHECK_ASSET = `shellcheck-v${SHELLCHECK_VERSION}.${platformArch.shellcheck}.tar.xz`;
+
 /**
  * @typedef {{
  *   check: string;
@@ -57,9 +103,13 @@ const platformArch = getPlatformArch();
 const LINTERS = {
   actionlint: {
     check: 'command -v actionlint',
-    installer: `
+    downloadPath: `${TEMP_DIR}/.actionlint.tgz`,
+    assetName: ACTIONLINT_ASSET,
+    download: `
       mkdir -p "${TEMP_DIR}/actionlint"
-      curl -sSLo "${TEMP_DIR}/.actionlint.tgz" "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_${platformArch.actionlint}.tar.gz"
+      curl -fsSLo "${TEMP_DIR}/.actionlint.tgz" "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/${ACTIONLINT_ASSET}"
+    `,
+    extract: `
       tar -xzf "${TEMP_DIR}/.actionlint.tgz" -C "${TEMP_DIR}/actionlint"
     `,
     run: `
@@ -73,9 +123,13 @@ const LINTERS = {
   },
   shellcheck: {
     check: 'command -v shellcheck',
-    installer: `
+    downloadPath: `${TEMP_DIR}/.shellcheck.txz`,
+    assetName: SHELLCHECK_ASSET,
+    download: `
       mkdir -p "${TEMP_DIR}/shellcheck"
-      curl -sSLo "${TEMP_DIR}/.shellcheck.txz" "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/shellcheck-v${SHELLCHECK_VERSION}.${platformArch.shellcheck}.tar.xz"
+      curl -fsSLo "${TEMP_DIR}/.shellcheck.txz" "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/${SHELLCHECK_ASSET}"
+    `,
+    extract: `
       tar -xf "${TEMP_DIR}/.shellcheck.txz" -C "${TEMP_DIR}/shellcheck" --strip-components=1
     `,
     run: `
@@ -92,7 +146,9 @@ const LINTERS = {
   },
   yamllint: {
     check: 'command -v yamllint',
-    installer: `pip3 install --user "yamllint==${YAMLLINT_VERSION}"`,
+    // pip install from PyPI; pinned version above. PyPI itself verifies its
+    // own package index signatures, so no separate SHA is needed here.
+    install: `pip3 install --user "yamllint==${YAMLLINT_VERSION}"`,
     run: "git ls-files | grep -E '\\.(yaml|yml)' | xargs yamllint --format github",
   },
 };
@@ -120,12 +176,36 @@ export function setupLinters() {
   mkdirSync(TEMP_DIR, { recursive: true });
 
   for (const linter in LINTERS) {
-    const { check, installer } = LINTERS[linter];
-    if (!runCommand(check, 'ignore')) {
+    const entry = LINTERS[linter];
+    if (!runCommand(entry.check, 'ignore')) {
       console.log(`Installing ${linter}...`);
-      if (!runCommand(installer)) {
+      // Two modes: PyPI-style single-command install, or download→verify→extract.
+      if (entry.install) {
+        if (!runCommand(entry.install)) {
+          console.error(
+            `Failed to install ${linter}. Please install it manually.`,
+          );
+          process.exit(1);
+        }
+        continue;
+      }
+      if (!runCommand(entry.download)) {
         console.error(
-          `Failed to install ${linter}. Please install it manually.`,
+          `Failed to download ${linter}. Please install it manually.`,
+        );
+        process.exit(1);
+      }
+      try {
+        verifyChecksum(entry.downloadPath, entry.assetName);
+      } catch (err) {
+        console.error(
+          `Checksum verification failed for ${linter}: ${err.message}`,
+        );
+        process.exit(1);
+      }
+      if (!runCommand(entry.extract)) {
+        console.error(
+          `Failed to extract ${linter}. Please install it manually.`,
         );
         process.exit(1);
       }

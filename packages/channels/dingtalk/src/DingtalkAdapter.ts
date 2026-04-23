@@ -90,6 +90,29 @@ const ACK_EMOTION_ID = '2659900';
 const ACK_EMOTION_BG_ID = 'im_bg_1';
 const EMOTION_API = 'https://api.dingtalk.com/v1.0/robot/emotion';
 
+/**
+ * SSRF guard: the sessionWebhook URL in an inbound message is attacker
+ * controlled. We only POST replies to hosts in this whitelist, which are the
+ * canonical DingTalk open-platform endpoints. Anything else (internal IPs,
+ * arbitrary external hosts) is rejected — both at ingest (when caching the
+ * webhook) and at send time (defense in depth).
+ */
+const ALLOWED_DINGTALK_WEBHOOK_HOSTS = new Set([
+  'oapi.dingtalk.com',
+  'api.dingtalk.com',
+]);
+
+function isAllowedDingtalkWebhook(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return (
+      u.protocol === 'https:' && ALLOWED_DINGTALK_WEBHOOK_HOSTS.has(u.hostname)
+    );
+  } catch {
+    return false;
+  }
+}
+
 export class DingtalkChannel extends ChannelBase {
   private client: DWClient;
   private seenMessages: Map<string, number> = new Map();
@@ -154,6 +177,20 @@ export class DingtalkChannel extends ChannelBase {
       process.stderr.write(
         `[DingTalk:${this.name}] No webhook for chatId ${chatId}, cannot send.\n`,
       );
+      return;
+    }
+
+    // Defense in depth: re-validate the cached webhook before sending.
+    // Even though we validate at cache-time, a future code path might insert
+    // an unverified URL — this guarantees we never POST outside the whitelist.
+    if (!isAllowedDingtalkWebhook(webhook)) {
+      let hostname = '<unparseable>';
+      try {
+        hostname = new URL(webhook).hostname;
+      } catch {
+        // leave as <unparseable>
+      }
+      process.stderr.write(`[dingtalk] rejected webhook host: ${hostname}\n`);
       return;
     }
 
@@ -526,9 +563,22 @@ export class DingtalkChannel extends ChannelBase {
         return;
       }
 
-      // Cache webhook by conversationId so sendMessage can look it up
+      // Cache webhook by conversationId so sendMessage can look it up.
+      // SSRF guard: only cache URLs with a whitelisted host/scheme.
       if (conversationId) {
-        this.webhooks.set(conversationId, sessionWebhook);
+        if (isAllowedDingtalkWebhook(sessionWebhook)) {
+          this.webhooks.set(conversationId, sessionWebhook);
+        } else {
+          let hostname = '<unparseable>';
+          try {
+            hostname = new URL(sessionWebhook).hostname;
+          } catch {
+            // leave as <unparseable>
+          }
+          process.stderr.write(
+            `[dingtalk] rejected webhook host: ${hostname}\n`,
+          );
+        }
       }
 
       const isMentioned = Boolean(data.isInAtList);

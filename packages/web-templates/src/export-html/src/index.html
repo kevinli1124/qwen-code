@@ -9,11 +9,13 @@
       href="data:image/svg+xml,__FAVICON_DATA__"
     />
     <script
-      crossorigin
+      crossorigin="anonymous"
+      integrity="__REACT_UMD_SRI__"
       src="https://unpkg.com/react@__REACT_UMD_VERSION__/umd/react.production.min.js"
     ></script>
     <script
-      crossorigin
+      crossorigin="anonymous"
+      integrity="__REACT_DOM_UMD_SRI__"
       src="https://unpkg.com/react-dom@__REACT_DOM_UMD_VERSION__/umd/react-dom.production.min.js"
     ></script>
     <script>
@@ -31,9 +33,15 @@
       window['react/jsx-runtime'] = jsxRuntime;
       window['react/jsx-dev-runtime'] = jsxRuntime;
     </script>
-    <script src="https://unpkg.com/@qwen-code/webui@__WEBUI_VERSION__/dist/index.umd.js"></script>
+    <script
+      crossorigin="anonymous"
+      integrity="__WEBUI_JS_SRI__"
+      src="https://unpkg.com/@qwen-code/webui@__WEBUI_VERSION__/dist/index.umd.js"
+    ></script>
     <link
       rel="stylesheet"
+      crossorigin="anonymous"
+      integrity="__WEBUI_CSS_SRI__"
       href="https://unpkg.com/@qwen-code/webui@__WEBUI_VERSION__/dist/styles.css"
     />
     <title>Qwen Code Chat Export</title>

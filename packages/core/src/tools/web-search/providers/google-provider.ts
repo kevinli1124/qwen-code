@@ -11,6 +11,16 @@ import type {
   GoogleProviderConfig,
 } from '../types.js';
 
+/**
+ * Google Custom Search only accepts the API key as a URL query parameter
+ * (`?key=...`). That means any error that surfaces the request URL — fetch
+ * error causes, response bodies that echo the query, downstream logging —
+ * will leak the key. Scrub before throwing or logging.
+ */
+function sanitizeGoogleSearchUrl(s: string): string {
+  return String(s).replace(/([?&])key=[^&]*/gi, '$1key=<redacted>');
+}
+
 interface GoogleSearchItem {
   title: string;
   link: string;
@@ -63,15 +73,25 @@ export class GoogleProvider extends BaseWebSearchProvider {
 
     const url = `https://www.googleapis.com/customsearch/v1?${params.toString()}`;
 
-    const response = await fetch(url, {
-      method: 'GET',
-      signal,
-    });
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: 'GET',
+        signal,
+      });
+    } catch (err) {
+      // undici wraps the failing URL in the error message / cause chain on
+      // `TypeError: fetch failed`. Scrub the key before re-throwing.
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(sanitizeGoogleSearchUrl(msg));
+    }
 
     if (!response.ok) {
       const text = await response.text().catch(() => '');
       throw new Error(
-        `API error: ${response.status} ${response.statusText}${text ? ` - ${text}` : ''}`,
+        sanitizeGoogleSearchUrl(
+          `API error: ${response.status} ${response.statusText}${text ? ` - ${text}` : ''}`,
+        ),
       );
     }
 

@@ -1,5 +1,8 @@
 # Build stage
-FROM docker.io/library/node:20-slim AS builder
+# Pinned to a specific digest for supply-chain security.
+# To update: run `docker pull docker.io/library/node:20-slim` and use
+# `docker inspect --format='{{index .RepoDigests 0}}' docker.io/library/node:20-slim`
+FROM docker.io/library/node:20-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0 AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -27,7 +30,8 @@ RUN npm ci \
   && cd dist && npm pack
 
 # Runtime stage
-FROM docker.io/library/node:20-slim
+# Must match the digest pinned in the builder stage above.
+FROM docker.io/library/node:20-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0
 
 ARG SANDBOX_NAME="qwen-code-sandbox"
 ARG CLI_VERSION_ARG
