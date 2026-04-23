@@ -67,7 +67,10 @@ function makeSubagentManager(replyText = 'pong') {
   };
 }
 
-describe('MessageTrigger', () => {
+// [DISABLED 2026-04-23 — Telegram integration disabled; see 89d362772. Change
+// `.skip` back to `describe(...)` when Telegram is re-enabled; tests are
+// untouched otherwise.]
+describe.skip('MessageTrigger', () => {
   let tmp: string;
 
   beforeEach(async () => {
