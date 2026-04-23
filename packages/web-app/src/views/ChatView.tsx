@@ -32,6 +32,7 @@ export const ChatView: FC = () => {
     setPendingPermission,
     setConnectionError,
     setStreaming,
+    appendMessage,
   } = useMessageStore();
   const {
     toggleSidebar,
@@ -65,6 +66,14 @@ export const ChatView: FC = () => {
 
   const handleSend = async (text: string) => {
     if (!activeSessionId) return;
+    // Echo the user message locally — the backend SSE stream does not
+    // re-broadcast user input, so without this the prompt never appears.
+    appendMessage(activeSessionId, {
+      uuid: `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      type: 'user',
+      timestamp: new Date().toISOString(),
+      message: { role: 'user', content: text },
+    });
     setStreaming(true);
     try {
       await sessionsApi.sendQuery(activeSessionId, text);

@@ -126,8 +126,42 @@ function translateAndBroadcast(session: ActiveSession, raw: unknown): void {
     }
 
     case 'assistant': {
-      // Finalize the streaming text as a proper assistant message
+      // The child CLI's stream-json output emits a single `assistant`
+      // message per turn carrying the full `message.content[]` (text +
+      // thinking blocks), NOT per-token `stream_event` deltas. Synthesize
+      // stream_text / thinking events from the content so the frontend's
+      // existing handlers (finalizeStreamingText / thinking case) work.
       const uuid = (msg['uuid'] as string) ?? randomUUID();
+      const innerMsg = msg['message'] as Record<string, unknown> | undefined;
+      const blocks = Array.isArray(innerMsg?.['content'])
+        ? (innerMsg!['content'] as Array<Record<string, unknown>>)
+        : [];
+
+      let assistantText = '';
+      for (const block of blocks) {
+        const blockType = block['type'];
+        if (blockType === 'text') {
+          assistantText += (block['text'] as string) ?? '';
+        } else if (blockType === 'thinking') {
+          broadcast(session, 'message', {
+            type: 'thinking',
+            uuid: `thinking-${uuid}`,
+            content: (block['thinking'] as string) ?? '',
+          });
+        }
+      }
+
+      if (assistantText.length > 0) {
+        // Seed the frontend's streamingText buffer with the full text as a
+        // single delta, then the assistant event finalizes it into the
+        // persisted message list.
+        broadcast(session, 'message', {
+          type: 'stream_text',
+          uuid,
+          delta: assistantText,
+        });
+      }
+
       session.streamingUuid = null;
       broadcast(session, 'message', { type: 'assistant', uuid });
       PersistenceManager.appendMessage(session.id, {
