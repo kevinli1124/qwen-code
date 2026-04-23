@@ -2,6 +2,7 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { createHash } from 'node:crypto';
+import { Buffer } from 'node:buffer';
 import { build } from 'esbuild';
 import { buildConfig } from './esbuild.config.mjs';
 import prettier from 'prettier';
@@ -13,7 +14,7 @@ import prettier from 'prettier';
  * were live on the CDN when the template was built.
  */
 const computeSri = async (url) => {
-  const response = await fetch(url);
+  const response = await globalThis.fetch(url);
   if (!response.ok) {
     throw new Error(
       `Failed to fetch ${url} for SRI: ${response.status} ${response.statusText}`,
