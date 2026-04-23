@@ -9,6 +9,7 @@ import { Sidebar } from '../components/layout/Sidebar';
 import { RightPanel } from '../components/layout/RightPanel';
 import { ConversationView } from '../components/conversation/ConversationView';
 import { InputBar } from '../components/conversation/InputBar';
+import { LoadingIndicator } from '../components/conversation/LoadingIndicator';
 import { PermissionModal } from '../components/conversation/PermissionModal';
 import { QuestionModal } from '../components/conversation/QuestionModal';
 import { ErrorBanner } from '../components/shared/ErrorBanner';
@@ -389,6 +390,12 @@ export const ChatView: FC = () => {
                 </div>
               )}
             </div>
+
+            {/* Loading indicator — rotating witty phrase + pulsing dots
+                while the agent is producing output. Sits above the
+                input bar so it remains visible even when conversation
+                scrolls. */}
+            {activeSessionId && <LoadingIndicator visible={isStreaming} />}
 
             {/* Input */}
             {activeSessionId && (

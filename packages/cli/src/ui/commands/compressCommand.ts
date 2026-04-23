@@ -9,6 +9,34 @@ import { MessageType } from '../types.js';
 import type { SlashCommand } from './types.js';
 import { CommandKind } from './types.js';
 import { t } from '../../i18n/index.js';
+import { CompressionStatus } from '@qwen-code/qwen-code-core';
+
+// Produce a user-facing message for the compression result. Core returns
+// the inflated token count when compression was rejected (because the
+// summary would add more tokens than it saves), so "Context compressed
+// (20037 -> 20580)" was technically informative but read like a bug.
+// Branch on compressionStatus to explain what actually happened.
+function compressionMessage(result: {
+  originalTokenCount: number;
+  newTokenCount: number;
+  compressionStatus: CompressionStatus;
+}): string {
+  const { originalTokenCount, newTokenCount, compressionStatus } = result;
+  switch (compressionStatus) {
+    case CompressionStatus.COMPRESSED:
+      return `Context compressed (${originalTokenCount} → ${newTokenCount}).`;
+    case CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT:
+      return `Compression skipped — the summary would use ${newTokenCount} tokens vs. the current ${originalTokenCount}, so the context was left unchanged. This is normal for short conversations.`;
+    case CompressionStatus.COMPRESSION_FAILED_EMPTY_SUMMARY:
+      return `Compression skipped — the model returned an empty summary. Context unchanged (${originalTokenCount} tokens).`;
+    case CompressionStatus.COMPRESSION_FAILED_TOKEN_COUNT_ERROR:
+      return `Compression skipped — token count unavailable. Context unchanged (${originalTokenCount} tokens).`;
+    case CompressionStatus.NOOP:
+      return `No compression needed — context is already small (${originalTokenCount} tokens).`;
+    default:
+      return `Context compression: ${originalTokenCount} → ${newTokenCount}.`;
+  }
+}
 
 export const compressCommand: SlashCommand = {
   name: 'compress',
@@ -75,7 +103,7 @@ export const compressCommand: SlashCommand = {
           }
           yield {
             messageType: 'info' as const,
-            content: `Context compressed (${compressed.originalTokenCount} -> ${compressed.newTokenCount}).`,
+            content: compressionMessage(compressed),
           };
         } catch (e) {
           yield {

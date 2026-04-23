@@ -493,8 +493,20 @@ export const SessionManager = {
     const session = sessions.get(id);
     if (!session?.child?.stdin) return false;
 
-    const cancel = { type: 'control_cancel_request' };
-    session.child.stdin.write(`${JSON.stringify(cancel)}\n`);
+    // control_cancel_request only aborts the dispatcher's pending
+    // control requests — it does NOT abort the main LLM streaming loop.
+    // What actually stops the turn is systemController's interrupt
+    // handler, which fires onInterrupt → session.abortController.abort()
+    // → the `for await` loop in nonInteractiveCli.ts trips its
+    // `if (signal.aborted)` check and process.exit()s. The child's close
+    // handler then drops the session from the in-memory map; the next
+    // /query re-spawns a fresh child.
+    const interruptMsg = {
+      type: 'control_request',
+      request_id: randomUUID(),
+      request: { subtype: 'interrupt' },
+    };
+    session.child.stdin.write(`${JSON.stringify(interruptMsg)}\n`);
     return true;
   },
 
