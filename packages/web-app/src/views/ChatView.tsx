@@ -3,7 +3,7 @@
  * Copyright 2025 Qwen team
  * SPDX-License-Identifier: Apache-2.0
  */
-import { useState, useEffect, type FC } from 'react';
+import { useState, useEffect, useCallback, type FC } from 'react';
 import { AppLayout } from '../components/layout/AppLayout';
 import { Sidebar } from '../components/layout/Sidebar';
 import { RightPanel } from '../components/layout/RightPanel';
@@ -20,6 +20,7 @@ import { useSessionEvents } from '../hooks/useSession';
 import { useSSE } from '../hooks/useSSE';
 import { sessionsApi } from '../api/sessions';
 import { settingsApi } from '../api/settings';
+import { convertStoredToChatMessages } from '../utils/messageConverter';
 
 export const ChatView: FC = () => {
   const [showNewSession, setShowNewSession] = useState(false);
@@ -33,7 +34,69 @@ export const ChatView: FC = () => {
     setConnectionError,
     setStreaming,
     appendMessage,
+    setMessages,
+    messagesBySession,
   } = useMessageStore();
+
+  const [historyState, setHistoryState] = useState<{
+    oldest: string | null;
+    hasMore: boolean;
+    isLoading: boolean;
+  }>({ oldest: null, hasMore: false, isLoading: false });
+
+  // On session activation, fetch the most recent slice of persisted
+  // history. The backend returns newest-N messages; older ones are paged
+  // in via loadMore when the user scrolls to the top.
+  useEffect(() => {
+    if (!activeSessionId) {
+      setHistoryState({ oldest: null, hasMore: false, isLoading: false });
+      return;
+    }
+    sessionsApi
+      .getHistory(activeSessionId, 50)
+      .then((data) => {
+        const msgs = convertStoredToChatMessages(data.messages);
+        setMessages(activeSessionId, msgs);
+        setHistoryState({
+          oldest: data.messages[0]?.timestamp ?? null,
+          hasMore: !!data.hasMore,
+          isLoading: false,
+        });
+      })
+      .catch(() => {
+        // Mock mode / no server — leave whatever is in the store.
+        setHistoryState({ oldest: null, hasMore: false, isLoading: false });
+      });
+  }, [activeSessionId, setMessages]);
+
+  const loadMore = useCallback(async () => {
+    if (!activeSessionId) return;
+    if (
+      !historyState.hasMore ||
+      historyState.isLoading ||
+      !historyState.oldest
+    ) {
+      return;
+    }
+    setHistoryState((s) => ({ ...s, isLoading: true }));
+    try {
+      const data = await sessionsApi.getHistory(
+        activeSessionId,
+        50,
+        historyState.oldest,
+      );
+      const older = convertStoredToChatMessages(data.messages);
+      const existing = messagesBySession[activeSessionId] ?? [];
+      setMessages(activeSessionId, [...older, ...existing]);
+      setHistoryState({
+        oldest: data.messages[0]?.timestamp ?? null,
+        hasMore: !!data.hasMore,
+        isLoading: false,
+      });
+    } catch {
+      setHistoryState((s) => ({ ...s, isLoading: false }));
+    }
+  }, [activeSessionId, historyState, messagesBySession, setMessages]);
   const {
     toggleSidebar,
     showSettingsModal,
@@ -194,7 +257,12 @@ export const ChatView: FC = () => {
             {/* Conversation */}
             <div className="flex-1 min-h-0 overflow-hidden">
               {activeSessionId ? (
-                <ConversationView sessionId={activeSessionId} />
+                <ConversationView
+                  sessionId={activeSessionId}
+                  hasMore={historyState.hasMore}
+                  isLoadingMore={historyState.isLoading}
+                  onLoadMore={loadMore}
+                />
               ) : (
                 <div className="h-full flex flex-col items-center justify-center gap-4 text-[#8a8a8a]">
                   <div className="w-16 h-16 rounded-full bg-[#2e2e2e] flex items-center justify-center">

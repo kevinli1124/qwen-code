@@ -12,13 +12,15 @@ export interface SessionSummary {
 
 export interface SessionDetail extends SessionSummary {
   messages: StoredMessage[];
+  hasMore?: boolean;
+  total?: number;
 }
 
+// Wire-format message as persisted by the backend PersistenceManager.
+// `data` is the raw stream-json payload (user = {message:{role,content}},
+// assistant = {uuid, message:{content:[text|thinking|...blocks]}}).
 export interface StoredMessage {
-  uuid: string;
-  type: 'user' | 'assistant' | 'system' | 'tool_call';
+  type: string;
   timestamp: string;
-  content?: string;
-  role?: string;
-  toolCall?: import('./message').ToolCallEntry;
+  data: unknown;
 }

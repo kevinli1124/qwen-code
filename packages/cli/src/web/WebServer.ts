@@ -298,7 +298,10 @@ async function handleApi(
     return;
   }
 
-  // GET /api/sessions/:id
+  // GET /api/sessions/:id?limit=N&before=<ISO timestamp>
+  // Returns the latest N messages; pass `before` to page backwards through
+  // history. `hasMore` indicates whether older messages exist beyond the
+  // returned slice.
   const sessionDetailMatch = pathname.match(/^\/api\/sessions\/([^/]+)$/);
   if (sessionDetailMatch && method === 'GET') {
     const id = sessionDetailMatch[1]!;
@@ -307,7 +310,25 @@ async function handleApi(
       sendError(res, 404, 'Session not found');
       return;
     }
-    sendJson(res, 200, session);
+    const limitParam = search.get('limit');
+    const beforeParam = search.get('before');
+    const limit = limitParam
+      ? Math.max(1, Math.min(500, parseInt(limitParam, 10) || 50))
+      : 50;
+
+    let msgs = session.messages;
+    if (beforeParam) {
+      msgs = msgs.filter((m) => m.timestamp < beforeParam);
+    }
+    const hasMore = msgs.length > limit;
+    const slice = msgs.slice(-limit);
+
+    sendJson(res, 200, {
+      ...session,
+      messages: slice,
+      hasMore,
+      total: session.messages.length,
+    });
     return;
   }
 

@@ -3,26 +3,54 @@
  * Copyright 2025 Qwen team
  * SPDX-License-Identifier: Apache-2.0
  */
-import { type FC, type ComponentType } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  type FC,
+  type ComponentType,
+  type ForwardedRef,
+} from 'react';
 import { ChatViewer, PlatformProvider } from '@qwen-code/webui';
 import '@qwen-code/webui/styles.css';
 import { useMessageStore } from '../../stores/messageStore';
 import { useSessionStore } from '../../stores/sessionStore';
-import type { ChatMessageData, ChatViewerProps } from '@qwen-code/webui';
+import type {
+  ChatMessageData,
+  ChatViewerProps,
+  ChatViewerHandle,
+} from '@qwen-code/webui';
 
-// Workaround for React 18/19 @types version mismatch between webui and web-app
-const ChatViewerComp = ChatViewer as unknown as ComponentType<ChatViewerProps>;
+// Workaround for React 18/19 @types version mismatch between webui and web-app.
+// We also need to preserve the ref type so useRef<ChatViewerHandle> works.
+const ChatViewerComp = ChatViewer as unknown as ComponentType<
+  ChatViewerProps & { ref?: ForwardedRef<ChatViewerHandle> }
+>;
 
 interface ConversationViewProps {
   sessionId: string;
+  hasMore?: boolean;
+  isLoadingMore?: boolean;
+  onLoadMore?: () => Promise<void> | void;
 }
 
-export const ConversationView: FC<ConversationViewProps> = ({ sessionId }) => {
+const SCROLL_TOP_THRESHOLD_PX = 80;
+
+export const ConversationView: FC<ConversationViewProps> = ({
+  sessionId,
+  hasMore,
+  isLoadingMore,
+  onLoadMore,
+}) => {
   const messagesBySession = useMessageStore((s) => s.messagesBySession);
   const streamingText = useMessageStore((s) => s.streamingText);
   const activeSession = useSessionStore((s) =>
     s.sessions.find((sess) => sess.id === sessionId),
   );
+
+  const chatRef = useRef<ChatViewerHandle>(null);
+  const prevScrollHeightRef = useRef<number | null>(null);
+  const loadingTriggeredRef = useRef(false);
 
   // Merge streaming messages into the list for live display
   const messages = messagesBySession[sessionId] ?? [];
@@ -47,6 +75,41 @@ export const ConversationView: FC<ConversationViewProps> = ({ sessionId }) => {
       });
     }
   });
+
+  // Scroll listener: trigger loadMore when user approaches the top.
+  // Capture the current scrollHeight so we can restore scroll position
+  // after older messages are prepended.
+  useEffect(() => {
+    const el = chatRef.current?.getScrollContainer();
+    if (!el || !onLoadMore) return;
+    const onScroll = () => {
+      if (loadingTriggeredRef.current) return;
+      if (!hasMore || isLoadingMore) return;
+      if (el.scrollTop < SCROLL_TOP_THRESHOLD_PX) {
+        loadingTriggeredRef.current = true;
+        prevScrollHeightRef.current = el.scrollHeight;
+        Promise.resolve(onLoadMore()).catch(() => {
+          loadingTriggeredRef.current = false;
+          prevScrollHeightRef.current = null;
+        });
+      }
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [onLoadMore, hasMore, isLoadingMore]);
+
+  // After older messages render, adjust scrollTop so the user's viewport
+  // stays anchored to the same message (instead of jumping to the top).
+  useLayoutEffect(() => {
+    if (prevScrollHeightRef.current === null) return;
+    const el = chatRef.current?.getScrollContainer();
+    if (el) {
+      const diff = el.scrollHeight - prevScrollHeightRef.current;
+      el.scrollTop = diff;
+    }
+    prevScrollHeightRef.current = null;
+    loadingTriggeredRef.current = false;
+  }, [displayMessages.length]);
 
   if (displayMessages.length === 0) {
     return (
@@ -78,12 +141,20 @@ export const ConversationView: FC<ConversationViewProps> = ({ sessionId }) => {
         onMessage: () => () => {},
       }}
     >
-      <ChatViewerComp
-        messages={displayMessages}
-        theme="dark"
-        autoScroll={true}
-        className="h-full"
-      />
+      <div className="relative h-full">
+        {isLoadingMore && (
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 px-3 py-1 rounded-full bg-[#2e2e2e] text-xs text-[#8a8a8a] shadow">
+            Loading older messages…
+          </div>
+        )}
+        <ChatViewerComp
+          ref={chatRef}
+          messages={displayMessages}
+          theme="dark"
+          autoScroll={true}
+          className="h-full"
+        />
+      </div>
     </PlatformProvider>
   );
 };

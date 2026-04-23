@@ -4,6 +4,11 @@ import type { SessionSummary, SessionDetail } from '../types/session';
 export const sessionsApi = {
   list: () => apiFetch<SessionSummary[]>('/api/sessions'),
   get: (id: string) => apiFetch<SessionDetail>(`/api/sessions/${id}`),
+  getHistory: (id: string, limit = 50, before?: string) => {
+    const q = new URLSearchParams({ limit: String(limit) });
+    if (before) q.set('before', before);
+    return apiFetch<SessionDetail>(`/api/sessions/${id}?${q.toString()}`);
+  },
   create: (cwd: string, title?: string) =>
     apiFetch<{ sessionId: string }>('/api/sessions', {
       method: 'POST',
