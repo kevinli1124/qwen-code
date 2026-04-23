@@ -35,8 +35,16 @@ function ensureBuiltins(): Promise<void> {
         registry.set(mod.plugin.channelType, mod.plugin);
       }
       */
-      const dingtalk = await import('@qwen-code/channel-dingtalk');
-      registry.set(dingtalk.plugin.channelType, dingtalk.plugin);
+      // [DISABLED 2026-04-23 — DingTalk integration disabled; see commit msg for how to re-enable]
+      // Previous dingtalk-only import removed; registry now stays empty.
+      // To re-enable, uncomment the two lines below.
+      // const dingtalk = await import('@qwen-code/channel-dingtalk');
+      // registry.set(dingtalk.plugin.channelType, dingtalk.plugin);
+      //
+      // All built-in channel adapters (Telegram, WeChat, DingTalk) are
+      // disabled as of 2026-04-23; ensureBuiltins() is now a no-op.
+      // Callers of getPlugin() will receive undefined and must handle
+      // that case (start.ts and config-utils.ts already do).
     })();
   }
   return builtinsPromise;
