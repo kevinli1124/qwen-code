@@ -39,6 +39,13 @@ interface ActiveSession {
 
 const sessions = new Map<string, ActiveSession>();
 
+// SSE clients that connect BEFORE the session has been lazily created
+// (the common case: user clicks an old session in the sidebar → SSE
+// connects → later types a prompt → session finally spawned). Without
+// this pending queue the frontend would open an EventSource that
+// receives nothing, and the UI would silently appear to hang.
+const pendingSseClients = new Map<string, Set<SseClient>>();
+
 function sendSse(client: SseClient, event: string, data: unknown): void {
   try {
     client.res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
@@ -333,6 +340,15 @@ export const SessionManager = {
 
     sessions.set(id, session);
 
+    // Drain any SSE clients that connected before this session existed.
+    // See pendingSseClients — they've been waiting for broadcast without
+    // receiving anything because there was no session to attach to.
+    const pending = pendingSseClients.get(id);
+    if (pending) {
+      for (const c of pending) session.sseClients.add(c);
+      pendingSseClients.delete(id);
+    }
+
     // Save initial record
     PersistenceManager.saveSession({
       id,
@@ -428,12 +444,28 @@ export const SessionManager = {
 
   addSseClient(client: SseClient): void {
     const session = sessions.get(client.sessionId);
-    if (session) session.sseClients.add(client);
+    if (session) {
+      session.sseClients.add(client);
+      return;
+    }
+    // Session not active yet (will be lazily created on first /query).
+    // Park the client in pendingSseClients; create() will drain it.
+    let pending = pendingSseClients.get(client.sessionId);
+    if (!pending) {
+      pending = new Set();
+      pendingSseClients.set(client.sessionId, pending);
+    }
+    pending.add(client);
   },
 
   removeSseClient(client: SseClient): void {
     const session = sessions.get(client.sessionId);
     if (session) session.sseClients.delete(client);
+    const pending = pendingSseClients.get(client.sessionId);
+    if (pending) {
+      pending.delete(client);
+      if (pending.size === 0) pendingSseClients.delete(client.sessionId);
+    }
   },
 
   isActive(id: string): boolean {
