@@ -15,6 +15,8 @@ export function useSessionEvents(sessionId: string) {
     finalizeStreamingText,
     upsertToolCall,
     appendTerminal,
+    addFileOp,
+    setPlan,
     setStreaming,
     setPendingPermission,
     setTokenUsage,
@@ -84,6 +86,36 @@ export function useSessionEvents(sessionId: string) {
             },
           };
           appendMessage(sessionId, msg);
+
+          // Side-feed the right panels: Files for file-touching tools,
+          // Plan for todo_write updates. Both panels read from their own
+          // store slices, so the main message timeline is unaffected.
+          const fileOpType = classifyFileOp(event.toolName);
+          if (fileOpType) {
+            const path =
+              (event.args?.['file_path'] as string | undefined) ??
+              (event.args?.['path'] as string | undefined) ??
+              (event.args?.['filePath'] as string | undefined);
+            if (path) {
+              addFileOp(sessionId, {
+                type: fileOpType,
+                path,
+                callId: event.callId,
+                timestamp: new Date().toISOString(),
+                content:
+                  (event.args?.['content'] as string | undefined) ?? undefined,
+                diff: formatDiff(event.args),
+              });
+            }
+          }
+
+          if (isTodoWriteTool(event.toolName)) {
+            const planItems = parseTodosToPlanItems(event.args);
+            if (planItems.length > 0) {
+              setPlan(sessionId, planItems);
+            }
+          }
+
           setStreaming(true);
           break;
         }
@@ -183,6 +215,8 @@ export function useSessionEvents(sessionId: string) {
       finalizeStreamingText,
       upsertToolCall,
       appendTerminal,
+      addFileOp,
+      setPlan,
       setStreaming,
       setPendingPermission,
       setTokenUsage,
@@ -218,4 +252,59 @@ function formatToolTitle(
   if (path) return `${toolName}: ${String(path)}`;
   if (cmd) return `${String(cmd).slice(0, 60)}`;
   return toolName;
+}
+
+// Classify whether a tool actually mutates / reads file content so the
+// Files panel stays meaningful. glob / list_directory / grep don't
+// "touch" files in the Files-panel sense.
+function classifyFileOp(toolName: string): 'read' | 'write' | 'edit' | null {
+  const n = toolName.toLowerCase();
+  if (n === 'read_file' || n === 'readfile' || n === 'read_many_files')
+    return 'read';
+  if (n === 'write_file' || n === 'writefile' || n === 'create_file')
+    return 'write';
+  if (n === 'edit' || n === 'replace' || n === 'apply_patch') return 'edit';
+  return null;
+}
+
+function isTodoWriteTool(toolName: string): boolean {
+  const n = toolName.toLowerCase();
+  return n === 'todo_write' || n === 'todowrite' || n === 'update_todos';
+}
+
+// Format a rough one-line diff for the Files panel expand view. Doesn't
+// try to be a real patch — just show what changed.
+function formatDiff(
+  args: Record<string, unknown> | undefined,
+): string | undefined {
+  if (!args) return undefined;
+  const oldText = args['old_string'] ?? args['oldText'];
+  const newText = args['new_string'] ?? args['newText'];
+  if (oldText == null && newText == null) return undefined;
+  const oldStr = String(oldText ?? '').slice(0, 200);
+  const newStr = String(newText ?? '').slice(0, 200);
+  return `- ${oldStr}\n+ ${newStr}`;
+}
+
+// todo_write's args.todos is [{ id, content, status }] (see
+// packages/core/src/tools/todoWrite.ts). Map to the prefix-emoji format
+// the existing PlanPanel renders.
+function parseTodosToPlanItems(
+  args: Record<string, unknown> | undefined,
+): string[] {
+  if (!args) return [];
+  const todos = args['todos'];
+  if (!Array.isArray(todos)) return [];
+  return todos
+    .map((t) => {
+      if (!t || typeof t !== 'object') return null;
+      const obj = t as { content?: unknown; status?: unknown };
+      const content = typeof obj.content === 'string' ? obj.content : '';
+      if (!content) return null;
+      const status = String(obj.status ?? 'pending');
+      const prefix =
+        status === 'completed' ? '✅' : status === 'in_progress' ? '⏳' : '⬜';
+      return `${prefix} ${content}`;
+    })
+    .filter((s): s is string => s !== null);
 }

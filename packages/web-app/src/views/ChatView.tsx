@@ -68,14 +68,17 @@ export const ChatView: FC = () => {
     isLoading: boolean;
   }>({ oldest: null, hasMore: false, isLoading: false });
 
-  // On session activation, fetch the most recent slice of persisted
-  // history. The backend returns newest-N messages; older ones are paged
-  // in via loadMore when the user scrolls to the top.
+  // On session activation, clear stale per-session panel state (Files /
+  // Plan / Terminal) from whichever session was active before, then fetch
+  // the most recent slice of persisted history. The backend returns
+  // newest-N messages; older ones are paged in via loadMore when the
+  // user scrolls to the top.
   useEffect(() => {
     if (!activeSessionId) {
       setHistoryState({ oldest: null, hasMore: false, isLoading: false });
       return;
     }
+    clearSession(activeSessionId);
     sessionsApi
       .getHistory(activeSessionId, 50)
       .then((data) => {
@@ -91,7 +94,7 @@ export const ChatView: FC = () => {
         // Mock mode / no server — leave whatever is in the store.
         setHistoryState({ oldest: null, hasMore: false, isLoading: false });
       });
-  }, [activeSessionId, setMessages]);
+  }, [activeSessionId, setMessages, clearSession]);
 
   const loadMore = useCallback(async () => {
     if (!activeSessionId) return;
