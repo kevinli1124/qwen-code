@@ -208,13 +208,35 @@ function translateAndBroadcast(session: ActiveSession, raw: unknown): void {
       const req = msg['request'] as Record<string, unknown>;
       if (req?.['subtype'] === 'can_use_tool') {
         const requestId = msg['request_id'] as string;
+        const toolName = req['tool_name'] as string;
         const perm: PendingPermission = {
           requestId,
-          toolName: req['tool_name'] as string,
+          toolName,
           toolUseId: req['tool_use_id'] as string,
           input: req['input'],
         };
         session.pendingPermissions.set(requestId, perm);
+
+        // ask_user_question piggybacks on the can_use_tool channel but
+        // carries a structured questions[] payload that deserves its own
+        // UI. Route it to a dedicated event so the frontend renders the
+        // AskUserQuestionDialog instead of a generic allow/deny modal.
+        if (toolName === 'ask_user_question') {
+          const input = (req['input'] ?? {}) as Record<string, unknown>;
+          const questions = Array.isArray(input['questions'])
+            ? (input['questions'] as Array<Record<string, unknown>>)
+            : [];
+          broadcast(session, 'message', {
+            type: 'question_request',
+            request: {
+              requestId,
+              toolUseId: perm.toolUseId,
+              questions,
+            },
+          });
+          break;
+        }
+
         broadcast(session, 'message', {
           type: 'permission_request',
           request: {
@@ -312,12 +334,17 @@ export const SessionManager = {
     const isSea = typeof cliScript === 'string' && cliScript.startsWith('--');
 
     // yargs enforces that stream-json input pairs with stream-json output.
+    // NB: --yolo is intentionally NOT set. With YOLO, each tool's
+    // getDefaultPermission() returns 'allow' and the child skips the
+    // confirmation round-trip entirely, so destructive tools (write_file,
+    // edit, run_shell_command) never surface a permission prompt to the
+    // web UI. Default approval mode lets the permissionController send
+    // can_use_tool requests back to us, which we render as PermissionModal.
     const streamJsonFlags = [
       '--input-format',
       'stream-json',
       '--output-format',
       'stream-json',
-      '--yolo',
     ];
     const spawnArgs = isSea ? streamJsonFlags : [cliScript, ...streamJsonFlags];
 
@@ -339,6 +366,22 @@ export const SessionManager = {
     };
 
     sessions.set(id, session);
+
+    // Activate the child's control system by sending an 'initialize'
+    // control_request as the very first stdin message. Without this, the
+    // child's session (packages/cli/src/nonInteractive/session.ts) leaves
+    // controlSystemEnabled=false, which means the permissionController is
+    // never wired up and destructive tools run without a permission
+    // round-trip. The initialize request is a no-op in terms of hooks /
+    // MCP — we only need to flip the switch.
+    if (child.stdin) {
+      const initMsg = {
+        type: 'control_request',
+        request_id: randomUUID(),
+        request: { subtype: 'initialize' },
+      };
+      child.stdin.write(`${JSON.stringify(initMsg)}\n`);
+    }
 
     // Drain any SSE clients that connected before this session existed.
     // See pendingSseClients — they've been waiting for broadcast without
@@ -415,18 +458,31 @@ export const SessionManager = {
     return true;
   },
 
-  respondPermission(id: string, requestId: string, allowed: boolean): boolean {
+  respondPermission(
+    id: string,
+    requestId: string,
+    allowed: boolean,
+    extra?: Record<string, unknown>,
+  ): boolean {
     const session = sessions.get(id);
     if (!session?.child?.stdin) return false;
 
     session.pendingPermissions.delete(requestId);
 
+    // The CLI's permissionController reads `payload.behavior` ('allow' |
+    // 'deny'), NOT the legacy `allowed` boolean. Sending `{ allowed }`
+    // silently produced an undefined behavior → every tool interpreted
+    // as denied. We merge any extra payload (e.g. answers from the
+    // ask_user_question dialog) so the core can forward it to onConfirm.
     const response = {
       type: 'control_response',
       response: {
         subtype: 'success',
         request_id: requestId,
-        response: { allowed },
+        response: {
+          behavior: allowed ? 'allow' : 'deny',
+          ...(extra ?? {}),
+        },
       },
     };
     session.child.stdin.write(`${JSON.stringify(response)}\n`);

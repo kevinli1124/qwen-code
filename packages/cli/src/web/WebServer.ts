@@ -487,6 +487,32 @@ async function handleApi(
     return;
   }
 
+  // POST /api/sessions/:id/question/:reqId — submit answers to an
+  // ask_user_question prompt. Cancelled: { cancelled: true }; submitted:
+  // { answers: { <header>: <value>, ... } }.
+  const questionMatch = pathname.match(
+    /^\/api\/sessions\/([^/]+)\/question\/([^/]+)$/,
+  );
+  if (questionMatch && method === 'POST') {
+    const [, id, reqId] = questionMatch;
+    const body = await readBody(req);
+    let parsed: { cancelled?: boolean; answers?: Record<string, string> } = {};
+    try {
+      parsed = JSON.parse(body) as typeof parsed;
+    } catch {
+      /* empty */
+    }
+    const cancelled = parsed.cancelled === true;
+    SessionManager.respondPermission(
+      id!,
+      reqId!,
+      !cancelled,
+      cancelled ? undefined : { answers: parsed.answers ?? {} },
+    );
+    sendJson(res, 200, { ok: true });
+    return;
+  }
+
   // GET /api/stream/:id  (SSE)
   const streamMatch = pathname.match(/^\/api\/stream\/([^/]+)$/);
   if (streamMatch && method === 'GET') {

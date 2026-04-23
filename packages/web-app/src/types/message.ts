@@ -70,5 +70,18 @@ export type StreamEvent =
       subagentType: string;
     }
   | { type: 'permission_request'; request: PermissionRequest }
+  | {
+      type: 'question_request';
+      request: {
+        requestId: string;
+        toolUseId: string;
+        questions: Array<{
+          question: string;
+          header: string;
+          options: Array<{ label: string; description: string }>;
+          multiSelect: boolean;
+        }>;
+      };
+    }
   | { type: 'result'; success: boolean; usage?: TokenUsage; error?: string }
   | { type: 'error'; message: string };

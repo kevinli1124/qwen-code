@@ -445,8 +445,18 @@ export class PermissionController extends BaseController {
         if (updatedInput && typeof updatedInput === 'object') {
           toolCall.request.args = updatedInput as Record<string, unknown>;
         }
+        // Forward structured payload (currently just ask_user_question's
+        // `answers` map) so the tool's onConfirm receives the data it
+        // needs. Without this the ask_user_question tool fires but gets
+        // no answers and returns empty to the model.
+        const answers = payload['answers'];
+        const confirmPayload =
+          answers && typeof answers === 'object'
+            ? { answers: answers as Record<string, string> }
+            : undefined;
         await toolCall.confirmationDetails.onConfirm(
           ToolConfirmationOutcome.ProceedOnce,
+          confirmPayload,
         );
       } else {
         // Extract cancel message from response if available

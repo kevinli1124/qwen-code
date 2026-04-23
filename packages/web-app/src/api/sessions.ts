@@ -28,4 +28,13 @@ export const sessionsApi = {
       method: 'POST',
       body: JSON.stringify({ allowed }),
     }),
+  respondQuestion: (
+    id: string,
+    requestId: string,
+    payload: { cancelled: true } | { answers: Record<string, string> },
+  ) =>
+    apiFetch<void>(`/api/sessions/${id}/question/${requestId}`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
 };

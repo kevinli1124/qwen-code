@@ -19,6 +19,7 @@ export function useSessionEvents(sessionId: string) {
     setPlan,
     setStreaming,
     setPendingPermission,
+    setPendingQuestion,
     setTokenUsage,
     addSessionTokens,
     setConnectionError,
@@ -148,6 +149,14 @@ export function useSessionEvents(sessionId: string) {
           break;
         }
 
+        case 'question_request': {
+          // ask_user_question dialog. Suspends streaming exactly like a
+          // permission prompt; resolved via /api/.../question/<reqId>.
+          setStreaming(false);
+          setPendingQuestion(event.request);
+          break;
+        }
+
         case 'agent_spawn': {
           const subagentType = event.subagentType || 'subagent';
           // Remember the subagent type so subsequent tool_start events
@@ -219,6 +228,7 @@ export function useSessionEvents(sessionId: string) {
       setPlan,
       setStreaming,
       setPendingPermission,
+      setPendingQuestion,
       setTokenUsage,
       addSessionTokens,
       setConnectionError,

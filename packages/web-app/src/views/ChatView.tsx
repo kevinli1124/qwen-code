@@ -10,6 +10,7 @@ import { RightPanel } from '../components/layout/RightPanel';
 import { ConversationView } from '../components/conversation/ConversationView';
 import { InputBar } from '../components/conversation/InputBar';
 import { PermissionModal } from '../components/conversation/PermissionModal';
+import { QuestionModal } from '../components/conversation/QuestionModal';
 import { ErrorBanner } from '../components/shared/ErrorBanner';
 import { NewSessionModal } from '../components/session/NewSessionModal';
 import { SettingsModal } from '../components/shared/SettingsModal';
@@ -36,8 +37,10 @@ export const ChatView: FC = () => {
   const {
     isStreaming,
     pendingPermission,
+    pendingQuestion,
     connectionError,
     setPendingPermission,
+    setPendingQuestion,
     setConnectionError,
     setStreaming,
     appendMessage,
@@ -247,6 +250,34 @@ export const ChatView: FC = () => {
     setPendingPermission(null);
   };
 
+  const handleQuestionSubmit = async (answers: Record<string, string>) => {
+    if (!activeSessionId || !pendingQuestion) return;
+    try {
+      await sessionsApi.respondQuestion(
+        activeSessionId,
+        pendingQuestion.requestId,
+        { answers },
+      );
+    } catch {
+      // ignore
+    }
+    setPendingQuestion(null);
+  };
+
+  const handleQuestionCancel = async () => {
+    if (!activeSessionId || !pendingQuestion) return;
+    try {
+      await sessionsApi.respondQuestion(
+        activeSessionId,
+        pendingQuestion.requestId,
+        { cancelled: true },
+      );
+    } catch {
+      // ignore
+    }
+    setPendingQuestion(null);
+  };
+
   return (
     <>
       <AppLayout
@@ -373,6 +404,15 @@ export const ChatView: FC = () => {
         <PermissionModal
           request={pendingPermission}
           onRespond={handlePermissionRespond}
+        />
+      )}
+
+      {/* ask_user_question dialog */}
+      {pendingQuestion && (
+        <QuestionModal
+          questions={pendingQuestion.questions}
+          onSubmit={handleQuestionSubmit}
+          onCancel={handleQuestionCancel}
         />
       )}
 

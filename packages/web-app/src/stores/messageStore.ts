@@ -24,6 +24,17 @@ interface MessageStore {
   isStreaming: boolean;
   // Active permission request
   pendingPermission: PermissionRequest | null;
+  // Active ask_user_question dialog
+  pendingQuestion: {
+    requestId: string;
+    toolUseId: string;
+    questions: Array<{
+      question: string;
+      header: string;
+      options: Array<{ label: string; description: string }>;
+      multiSelect: boolean;
+    }>;
+  } | null;
   // Token usage for the most recent turn
   tokenUsage: TokenUsage | null;
   // Cumulative token usage for the current session (all turns summed)
@@ -43,6 +54,7 @@ interface MessageStore {
   clearSession: (sessionId: string) => void;
   setStreaming: (v: boolean) => void;
   setPendingPermission: (req: PermissionRequest | null) => void;
+  setPendingQuestion: (req: MessageStore['pendingQuestion']) => void;
   setTokenUsage: (usage: TokenUsage | null) => void;
   /** Add a turn's usage to the session cumulative total. */
   addSessionTokens: (u: TokenUsage) => void;
@@ -59,6 +71,7 @@ export const useMessageStore = create<MessageStore>((set) => ({
   terminalBySession: {},
   isStreaming: false,
   pendingPermission: null,
+  pendingQuestion: null,
   tokenUsage: null,
   sessionTokens: { inputTokens: 0, outputTokens: 0, turns: 0 },
   connectionError: null,
@@ -162,6 +175,7 @@ export const useMessageStore = create<MessageStore>((set) => ({
 
   setStreaming: (v) => set({ isStreaming: v }),
   setPendingPermission: (req) => set({ pendingPermission: req }),
+  setPendingQuestion: (req) => set({ pendingQuestion: req }),
   setTokenUsage: (usage) => set({ tokenUsage: usage }),
   addSessionTokens: (u) =>
     set((s) => ({
