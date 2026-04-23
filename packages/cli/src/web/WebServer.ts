@@ -468,6 +468,22 @@ async function handleApi(
     return;
   }
 
+  // POST /api/sessions/:id/revert/:callId — restore the file snapshot
+  // captured before the tool ran.
+  const revertMatch = pathname.match(
+    /^\/api\/sessions\/([^/]+)\/revert\/([^/]+)$/,
+  );
+  if (revertMatch && method === 'POST') {
+    const [, id, callId] = revertMatch;
+    const result = SessionManager.revertFile(id!, callId!);
+    if (result.ok) {
+      sendJson(res, 200, { ok: true });
+    } else {
+      sendJson(res, 400, { ok: false, reason: result.reason });
+    }
+    return;
+  }
+
   // POST /api/sessions/:id/permission/:reqId
   const permMatch = pathname.match(
     /^\/api\/sessions\/([^/]+)\/permission\/([^/]+)$/,

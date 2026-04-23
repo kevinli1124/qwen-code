@@ -21,6 +21,9 @@ export function useSessionEvents(sessionId: string) {
     setPendingPermission,
     setPendingQuestion,
     setModelLimits,
+    recordFileMod,
+    markFileReverted,
+    patchToolCallMessage,
     setTokenUsage,
     addSessionTokens,
     setConnectionError,
@@ -143,6 +146,51 @@ export function useSessionEvents(sessionId: string) {
             durationMs: event.durationMs,
           };
           upsertToolCall(sessionId, patch);
+          // Push the tool output (aggregated by backend) into the
+          // corresponding ChatMessage so the card's expanded view shows
+          // what the tool returned, not just that it ran.
+          const contentBlocks: Array<{
+            type: 'content' | 'diff';
+            content?: { type: string; text?: string };
+          }> = [];
+          if (typeof event.output === 'string' && event.output.length > 0) {
+            contentBlocks.push({
+              type: 'content',
+              content: { type: 'text', text: event.output },
+            });
+          }
+          patchToolCallMessage(sessionId, event.callId, {
+            status: event.success ? 'completed' : 'failed',
+            content: contentBlocks,
+          });
+          break;
+        }
+
+        case 'file_modified': {
+          recordFileMod(sessionId, {
+            callId: event.callId,
+            path: event.path,
+            before: event.before,
+            after: event.after,
+            toolName: event.toolName,
+          });
+          // Attach the diff to the tool card's content so the card's
+          // expanded view shows before/after without a separate panel.
+          patchToolCallMessage(sessionId, event.callId, {
+            content: [
+              {
+                type: 'diff',
+                path: event.path,
+                oldText: event.before,
+                newText: event.after ?? '',
+              },
+            ],
+          });
+          break;
+        }
+
+        case 'file_reverted': {
+          markFileReverted(sessionId, event.callId);
           break;
         }
 
@@ -243,6 +291,9 @@ export function useSessionEvents(sessionId: string) {
       setPendingPermission,
       setPendingQuestion,
       setModelLimits,
+      recordFileMod,
+      markFileReverted,
+      patchToolCallMessage,
       setTokenUsage,
       addSessionTokens,
       setConnectionError,

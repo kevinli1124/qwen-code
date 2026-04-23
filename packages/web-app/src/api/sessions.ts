@@ -37,4 +37,9 @@ export const sessionsApi = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+  revertFile: (id: string, callId: string) =>
+    apiFetch<{ ok: boolean; reason?: string }>(
+      `/api/sessions/${id}/revert/${callId}`,
+      { method: 'POST' },
+    ),
 };

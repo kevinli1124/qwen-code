@@ -7,6 +7,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { randomUUID } from 'node:crypto';
+import fs from 'node:fs';
 import type { ServerResponse } from 'node:http';
 import { tokenLimit } from '@qwen-code/qwen-code-core';
 import { PersistenceManager } from './PersistenceManager.js';
@@ -23,12 +24,26 @@ interface PendingPermission {
   input: unknown;
 }
 
+// Snapshot of a file taken BEFORE a destructive tool (write_file / edit)
+// runs, keyed by the tool's call id. Exists so the UI can offer a
+// "revert" button once the change is applied.
+interface FileSnapshot {
+  path: string;
+  /** Content before the change. null = file did not exist before. */
+  before: string | null;
+  toolName: string;
+  takenAt: number;
+  reverted?: boolean;
+}
+
 interface ActiveSession {
   id: string;
   cwd: string;
   child: ChildProcess;
   sseClients: Set<SseClient>;
   pendingPermissions: Map<string, PendingPermission>;
+  /** Aggregated tool output chunks keyed by callId, flushed on tool_complete. */
+  toolOutputs: Map<string, string[]>;
   // Track streaming state for tool call reconstruction
   activeToolUseBlocks: Map<
     number,
@@ -38,7 +53,41 @@ interface ActiveSession {
   textChunks: string[];
 }
 
+/**
+ * Read a file for snapshotting. Returns null if the file doesn't exist
+ * (e.g. write_file creating a new file) or can't be read for any reason.
+ */
+function snapshotFile(filePath: string): string | null {
+  try {
+    return fs.readFileSync(filePath, 'utf8');
+  } catch {
+    return null;
+  }
+}
+
+function extractFilePath(toolName: string, input: unknown): string | undefined {
+  if (!input || typeof input !== 'object') return undefined;
+  const rec = input as Record<string, unknown>;
+  if (
+    toolName === 'write_file' ||
+    toolName === 'edit' ||
+    toolName === 'replace'
+  ) {
+    return (
+      (rec['file_path'] as string | undefined) ??
+      (rec['path'] as string | undefined) ??
+      (rec['filePath'] as string | undefined)
+    );
+  }
+  return undefined;
+}
+
 const sessions = new Map<string, ActiveSession>();
+
+// File snapshots survive child re-spawns (the child process exits after
+// interrupt; snapshots must still be available so the user can revert).
+// Keyed by sessionId → Map<toolUseId, FileSnapshot>.
+const persistentSnapshots = new Map<string, Map<string, FileSnapshot>>();
 
 // SSE clients that connect BEFORE the session has been lazily created
 // (the common case: user clicks an old session in the sidebar → SSE
@@ -210,13 +259,30 @@ function translateAndBroadcast(session: ActiveSession, raw: unknown): void {
       if (req?.['subtype'] === 'can_use_tool') {
         const requestId = msg['request_id'] as string;
         const toolName = req['tool_name'] as string;
+        const toolUseId = req['tool_use_id'] as string;
         const perm: PendingPermission = {
           requestId,
           toolName,
-          toolUseId: req['tool_use_id'] as string,
+          toolUseId,
           input: req['input'],
         };
         session.pendingPermissions.set(requestId, perm);
+
+        // Snapshot the target file BEFORE asking the user — whether they
+        // approve manually or via an auto-allow rule, we want the old
+        // content captured so "Revert" works later. Stored in
+        // persistentSnapshots so it survives a child re-spawn (e.g. from
+        // an interrupt).
+        const filePath = extractFilePath(toolName, req['input']);
+        const snapshots = persistentSnapshots.get(session.id);
+        if (filePath && snapshots && !snapshots.has(toolUseId)) {
+          snapshots.set(toolUseId, {
+            path: filePath,
+            before: snapshotFile(filePath),
+            toolName,
+            takenAt: Date.now(),
+          });
+        }
 
         // ask_user_question piggybacks on the can_use_tool channel but
         // carries a structured questions[] payload that deserves its own
@@ -318,22 +384,59 @@ function translateAndBroadcast(session: ActiveSession, raw: unknown): void {
     }
 
     case 'tool_complete': {
+      const callId = (msg['call_id'] as string) ?? '';
+      const toolName = (msg['tool_name'] as string) ?? '';
+      const success = (msg['success'] as boolean) ?? true;
+
+      // Flush accumulated output chunks so the frontend can render them
+      // inside the tool-call card when expanded.
+      const outputChunks = session.toolOutputs.get(callId) ?? [];
+      const output = outputChunks.join('');
+      session.toolOutputs.delete(callId);
+
       broadcast(session, 'message', {
         type: 'tool_complete',
-        callId: (msg['call_id'] as string) ?? '',
-        toolName: (msg['tool_name'] as string) ?? '',
-        success: (msg['success'] as boolean) ?? true,
+        callId,
+        toolName,
+        success,
         durationMs: (msg['duration_ms'] as number) ?? 0,
+        output: output.length > 0 ? output : undefined,
         ...(msg['error'] ? { error: msg['error'] as string } : {}),
       });
+
+      // For file-modifying tools: on successful completion, emit a
+      // dedicated file_modified event carrying the before/after text
+      // plus the callId so the UI can surface a "Revert" button. The
+      // tool uses call_id equal to the tool_use_id from the permission
+      // request, so snapshots keyed by tool_use_id are reachable here.
+      const snapshots = persistentSnapshots.get(session.id);
+      const snapshot = snapshots?.get(callId);
+      if (success && snapshot && !snapshot.reverted) {
+        const afterContent = snapshotFile(snapshot.path);
+        broadcast(session, 'message', {
+          type: 'file_modified',
+          callId,
+          path: snapshot.path,
+          before: snapshot.before,
+          after: afterContent,
+          toolName: snapshot.toolName,
+        });
+      }
       break;
     }
 
     case 'tool_output_chunk': {
+      const callId = (msg['call_id'] as string) ?? '';
+      const chunk = msg['chunk'];
+      if (callId && typeof chunk === 'string') {
+        const arr = session.toolOutputs.get(callId) ?? [];
+        arr.push(chunk);
+        session.toolOutputs.set(callId, arr);
+      }
       broadcast(session, 'message', {
         type: 'tool_output_chunk',
-        callId: (msg['call_id'] as string) ?? '',
-        chunk: msg['chunk'],
+        callId,
+        chunk,
       });
       break;
     }
@@ -380,10 +483,12 @@ export const SessionManager = {
       child,
       sseClients: new Set(),
       pendingPermissions: new Map(),
+      toolOutputs: new Map(),
       activeToolUseBlocks: new Map(),
       streamingUuid: null,
       textChunks: [],
     };
+    if (!persistentSnapshots.has(id)) persistentSnapshots.set(id, new Map());
 
     sessions.set(id, session);
 
@@ -507,6 +612,45 @@ export const SessionManager = {
     };
     session.child.stdin.write(`${JSON.stringify(response)}\n`);
     return true;
+  },
+
+  /**
+   * Restore a file from the snapshot captured at permission time. Writes
+   * the `before` content back to disk. Returns whether the revert
+   * succeeded; broadcasts a `file_reverted` SSE event so the UI can
+   * gray-out the Revert button.
+   */
+  revertFile(
+    id: string,
+    callId: string,
+  ): { ok: true } | { ok: false; reason: string } {
+    const snapshots = persistentSnapshots.get(id);
+    const snap = snapshots?.get(callId);
+    if (!snap) return { ok: false, reason: 'No snapshot for this call' };
+    if (snap.reverted) return { ok: false, reason: 'Already reverted' };
+    try {
+      if (snap.before === null) {
+        // File didn't exist before → revert means deleting.
+        if (fs.existsSync(snap.path)) fs.unlinkSync(snap.path);
+      } else {
+        fs.writeFileSync(snap.path, snap.before, 'utf8');
+      }
+      snap.reverted = true;
+      const session = sessions.get(id);
+      if (session) {
+        broadcast(session, 'message', {
+          type: 'file_reverted',
+          callId,
+          path: snap.path,
+        });
+      }
+      return { ok: true };
+    } catch (e) {
+      return {
+        ok: false,
+        reason: e instanceof Error ? e.message : String(e),
+      };
+    }
   },
 
   interrupt(id: string): boolean {

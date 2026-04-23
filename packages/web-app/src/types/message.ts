@@ -68,8 +68,19 @@ export type StreamEvent =
       success: boolean;
       durationMs: number;
       error?: string;
+      /** Aggregated tool output, if the tool streamed any. */
+      output?: string;
     }
   | { type: 'tool_output_chunk'; callId: string; chunk: unknown }
+  | {
+      type: 'file_modified';
+      callId: string;
+      path: string;
+      before: string | null;
+      after: string | null;
+      toolName: string;
+    }
+  | { type: 'file_reverted'; callId: string; path: string }
   | {
       type: 'agent_spawn';
       subagentId: string;

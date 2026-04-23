@@ -42,6 +42,22 @@ interface MessageStore {
   // Active model's context window (input/output token limits). Populated
   // from system_init so the UI can render a "context used" %
   modelLimits: { input?: number; output?: number; model?: string } | null;
+  // File modifications by the current session, keyed by callId so a
+  // tool-call card can reveal the diff + offer Revert.
+  fileModsBySession: Record<
+    string,
+    Record<
+      string,
+      {
+        callId: string;
+        path: string;
+        before: string | null;
+        after: string | null;
+        toolName: string;
+        reverted?: boolean;
+      }
+    >
+  >;
   // Connection error
   connectionError: string | null;
 
@@ -65,6 +81,33 @@ interface MessageStore {
   setModelLimits: (
     limits: { input?: number; output?: number; model?: string } | null,
   ) => void;
+  recordFileMod: (
+    sessionId: string,
+    mod: {
+      callId: string;
+      path: string;
+      before: string | null;
+      after: string | null;
+      toolName: string;
+    },
+  ) => void;
+  markFileReverted: (sessionId: string, callId: string) => void;
+  /** Merge fields into the tool_call ChatMessageData with uuid `tool-<callId>`. */
+  patchToolCallMessage: (
+    sessionId: string,
+    callId: string,
+    patch: Partial<{
+      status: 'pending' | 'in_progress' | 'completed' | 'failed';
+      durationMs: number;
+      content: Array<{
+        type: 'content' | 'diff';
+        content?: { type: string; text?: string };
+        path?: string;
+        oldText?: string | null;
+        newText?: string;
+      }>;
+    }>,
+  ) => void;
   setConnectionError: (err: string | null) => void;
 }
 
@@ -81,6 +124,7 @@ export const useMessageStore = create<MessageStore>((set) => ({
   tokenUsage: null,
   sessionTokens: { inputTokens: 0, outputTokens: 0, turns: 0 },
   modelLimits: null,
+  fileModsBySession: {},
   connectionError: null,
 
   setMessages: (sessionId, messages) =>
@@ -195,5 +239,56 @@ export const useMessageStore = create<MessageStore>((set) => ({
   resetSessionTokens: () =>
     set({ sessionTokens: { inputTokens: 0, outputTokens: 0, turns: 0 } }),
   setModelLimits: (limits) => set({ modelLimits: limits }),
+  recordFileMod: (sessionId, mod) =>
+    set((s) => ({
+      fileModsBySession: {
+        ...s.fileModsBySession,
+        [sessionId]: {
+          ...(s.fileModsBySession[sessionId] ?? {}),
+          [mod.callId]: mod,
+        },
+      },
+    })),
+  markFileReverted: (sessionId, callId) =>
+    set((s) => {
+      const sessionMods = s.fileModsBySession[sessionId];
+      const current = sessionMods?.[callId];
+      if (!current) return s;
+      return {
+        fileModsBySession: {
+          ...s.fileModsBySession,
+          [sessionId]: {
+            ...sessionMods,
+            [callId]: { ...current, reverted: true },
+          },
+        },
+      };
+    }),
+  patchToolCallMessage: (sessionId, callId, patch) =>
+    set((s) => {
+      const existing = s.messagesBySession[sessionId];
+      if (!existing) return s;
+      const uuid = `tool-${callId}`;
+      let changed = false;
+      const next = existing.map((m) => {
+        if (m.uuid !== uuid || m.type !== 'tool_call' || !m.toolCall) return m;
+        changed = true;
+        return {
+          ...m,
+          toolCall: {
+            ...m.toolCall,
+            ...(patch.status ? { status: patch.status } : {}),
+            ...(patch.content ? { content: patch.content } : {}),
+          },
+        };
+      });
+      if (!changed) return s;
+      return {
+        messagesBySession: {
+          ...s.messagesBySession,
+          [sessionId]: next,
+        },
+      };
+    }),
   setConnectionError: (err) => set({ connectionError: err }),
 }));
