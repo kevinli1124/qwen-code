@@ -135,9 +135,13 @@ export const PermissionCard: FC<PermissionCardProps> = ({
 }) => {
   const input = (request.input ?? {}) as Record<string, unknown>;
   const projectScope = projectCwd ?? 'this project';
+  // Matches QuestionModal's outer wrapper so the two dialogs feel like
+  // the same product. Dim backdrop keeps focus on the prompt; card
+  // stays centered so the draft text in InputBar (still mounted) sits
+  // visually behind it instead of being replaced.
   return (
-    <div className="border-t border-[#2e2e2e] bg-[#1a1a1a] px-4 py-3">
-      <div className="flex flex-col gap-3 bg-[#242424] border border-[#2e2e2e] rounded-lg px-4 py-3">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="w-[640px] max-w-[90vw] max-h-[85vh] overflow-y-auto flex flex-col gap-3 bg-[#242424] border border-[#2e2e2e] rounded-lg px-4 py-3 shadow-2xl">
         {/* Header */}
         <div className="flex items-start gap-2">
           <div className="flex-shrink-0 w-5 h-5 rounded-full bg-yellow-500/20 text-yellow-400 flex items-center justify-center text-[11px] font-bold">

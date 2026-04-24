@@ -535,24 +535,16 @@ export const ChatView: FC = () => {
               )}
             </div>
 
-            {/* Loading indicator — rotating witty phrase + pulsing dots
-                while the agent is producing output. Sits above the
-                input bar so it remains visible even when conversation
-                scrolls. Hidden while a permission prompt is active. */}
-            {activeSessionId && !pendingPermission && (
-              <LoadingIndicator visible={isStreaming} />
-            )}
+            {/* LoadingIndicator stays above the input bar so it's visible
+                during streaming. We no longer hide it while a permission
+                prompt is active — the prompt overlays on top instead. */}
+            {activeSessionId && <LoadingIndicator visible={isStreaming} />}
 
-            {/* Input area — swaps to PermissionCard when the agent is
-                awaiting approval so the user can review before reply. */}
-            {activeSessionId && pendingPermission && (
-              <PermissionCard
-                request={pendingPermission}
-                projectCwd={activeSession?.cwd}
-                onDecide={handlePermissionDecision}
-              />
-            )}
-            {activeSessionId && !pendingPermission && (
+            {/* InputBar is always mounted while a session is active so
+                the user's in-flight draft text survives
+                permission / question / plan prompts (they now overlay
+                instead of replacing the input area). */}
+            {activeSessionId && (
               <InputBar onSend={handleSend} onStop={handleStop} />
             )}
           </div>
@@ -560,8 +552,17 @@ export const ChatView: FC = () => {
         rightPanel={<RightPanel />}
       />
 
-      {/* Permission UI is now rendered inline in the InputBar slot
-          above; no overlay modal is used. */}
+      {/* Permission prompt — overlay (was inline replacement of
+          InputBar). Same modal pattern as QuestionModal for visual
+          consistency; InputBar stays mounted underneath so draft text
+          isn't lost when a permission_request arrives mid-typing. */}
+      {pendingPermission && (
+        <PermissionCard
+          request={pendingPermission}
+          projectCwd={activeSession?.cwd}
+          onDecide={handlePermissionDecision}
+        />
+      )}
 
       {/* ask_user_question dialog */}
       {pendingQuestion && (
