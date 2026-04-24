@@ -31,7 +31,13 @@ export const ContextUsage: FC = () => {
   const modelLimits = useMessageStore((s) => s.modelLimits);
 
   const inputLimit = modelLimits?.input;
-  const used = tokenUsage?.inputTokens ?? 0;
+  const totalPromptTokens = tokenUsage?.inputTokens ?? 0;
+  const cachedTokens = tokenUsage?.cacheReadInputTokens ?? 0;
+  // "Fresh" = what the model actually has to re-process this turn.
+  // Cached prefixes (system prompt + replayed conversation) are served
+  // from the provider's cache, so they don't consume the effective
+  // context the same way — subtract them out.
+  const used = Math.max(0, totalPromptTokens - cachedTokens);
 
   if (!inputLimit || inputLimit <= 0) return null;
   if (used <= 0) {
@@ -64,9 +70,14 @@ export const ContextUsage: FC = () => {
     textColor = 'text-yellow-400';
   }
 
+  const cacheNote =
+    cachedTokens > 0
+      ? ` · ${cachedTokens.toLocaleString()} tokens served from cache (not counted)`
+      : '';
   const title =
-    `${used.toLocaleString()} / ${inputLimit.toLocaleString()} tokens (${pct.toFixed(1)}%)` +
+    `${used.toLocaleString()} fresh / ${inputLimit.toLocaleString()} tokens (${pct.toFixed(1)}%)` +
     (modelLimits?.model ? ` · model: ${modelLimits.model}` : '') +
+    cacheNote +
     hint;
 
   return (

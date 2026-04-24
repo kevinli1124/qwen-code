@@ -309,6 +309,11 @@ function translateAndBroadcast(session: ActiveSession, raw: unknown): void {
           ? {
               inputTokens: (usage['input_tokens'] as number) ?? 0,
               outputTokens: (usage['output_tokens'] as number) ?? 0,
+              // Pass through the cached-prefix count so the UI can show
+              // "fresh context" rather than including cached tokens that
+              // the model doesn't have to re-attend to.
+              cacheReadInputTokens:
+                (usage['cache_read_input_tokens'] as number) ?? 0,
               durationMs,
             }
           : undefined,

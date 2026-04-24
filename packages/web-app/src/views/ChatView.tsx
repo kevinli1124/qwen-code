@@ -235,7 +235,15 @@ export const ChatView: FC = () => {
     const usage = tokenUsageBySession[activeSessionId];
     const limit = modelLimits?.input;
     if (!usage || !limit || limit <= 0) return;
-    const pct = usage.inputTokens / limit;
+    // Compare *fresh* tokens (total minus cached) to the limit — cached
+    // prefixes are served from the provider's cache and don't fill the
+    // effective context, so counting them would trigger /compress
+    // prematurely once a long stable conversation starts hitting cache.
+    const fresh = Math.max(
+      0,
+      usage.inputTokens - (usage.cacheReadInputTokens ?? 0),
+    );
+    const pct = fresh / limit;
     if (pct < AUTO_COMPRESS_THRESHOLD) {
       autoCompressSentRef.current = false;
       return;

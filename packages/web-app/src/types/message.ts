@@ -38,6 +38,14 @@ export interface PermissionRequest {
 export interface TokenUsage {
   inputTokens: number;
   outputTokens: number;
+  /**
+   * Portion of inputTokens that the provider served from its prompt
+   * cache. Subtracting this from inputTokens yields the "fresh" context
+   * the model had to actually re-read — which is what matters for
+   * tracking how close the conversation is to the real context window.
+   * Optional because not every provider reports it.
+   */
+  cacheReadInputTokens?: number;
   durationMs: number;
 }
 
