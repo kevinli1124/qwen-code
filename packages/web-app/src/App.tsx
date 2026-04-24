@@ -4,12 +4,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { useEffect } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { ChatView } from './views/ChatView';
 import { useSessionStore } from './stores/sessionStore';
 import { sessionsApi } from './api/sessions';
 
 export default function App() {
-  const { setSessions } = useSessionStore();
+  const { setSessions } = useSessionStore(
+    useShallow((s) => ({
+      setSessions: s.setSessions,
+    })),
+  );
 
   // Load real sessions from server on mount
   useEffect(() => {

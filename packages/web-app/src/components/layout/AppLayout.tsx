@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import type { FC, ReactNode } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { usePanelStore } from '../../stores/panelStore';
 import { useResizable } from '../../hooks/useResizable';
@@ -20,7 +21,17 @@ export const AppLayout: FC<AppLayoutProps> = ({
   rightPanel,
 }) => {
   const sidebarCollapsed = useSettingsStore((s) => s.sidebarCollapsed);
-  const { width, collapsed: panelCollapsed, setWidth } = usePanelStore();
+  const {
+    width,
+    collapsed: panelCollapsed,
+    setWidth,
+  } = usePanelStore(
+    useShallow((s) => ({
+      width: s.width,
+      collapsed: s.collapsed,
+      setWidth: s.setWidth,
+    })),
+  );
   const { onMouseDown } = useResizable((delta) => setWidth(width + delta));
 
   return (

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { useState, useEffect, useCallback, useRef, type FC } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { AppLayout } from '../components/layout/AppLayout';
 import { Sidebar } from '../components/layout/Sidebar';
 import { RightPanel } from '../components/layout/RightPanel';
@@ -44,7 +45,14 @@ import {
 export const ChatView: FC = () => {
   const [showNewSession, setShowNewSession] = useState(false);
   const { activeSessionId, addSession, setActiveSessionId, sessions } =
-    useSessionStore();
+    useSessionStore(
+      useShallow((s) => ({
+        activeSessionId: s.activeSessionId,
+        addSession: s.addSession,
+        setActiveSessionId: s.setActiveSessionId,
+        sessions: s.sessions,
+      })),
+    );
   const {
     isStreaming,
     pendingPermission,
@@ -64,7 +72,28 @@ export const ChatView: FC = () => {
     sessionTokensBySession,
     resetSessionTokens,
     modelLimits,
-  } = useMessageStore();
+  } = useMessageStore(
+    useShallow((s) => ({
+      isStreaming: s.isStreaming,
+      pendingPermission: s.pendingPermission,
+      pendingQuestion: s.pendingQuestion,
+      pendingPlan: s.pendingPlan,
+      connectionError: s.connectionError,
+      setPendingPermission: s.setPendingPermission,
+      setPendingQuestion: s.setPendingQuestion,
+      setPendingPlan: s.setPendingPlan,
+      setConnectionError: s.setConnectionError,
+      setStreaming: s.setStreaming,
+      appendMessage: s.appendMessage,
+      setMessages: s.setMessages,
+      messagesBySession: s.messagesBySession,
+      clearSession: s.clearSession,
+      tokenUsageBySession: s.tokenUsageBySession,
+      sessionTokensBySession: s.sessionTokensBySession,
+      resetSessionTokens: s.resetSessionTokens,
+      modelLimits: s.modelLimits,
+    })),
+  );
 
   // Auto-compress at 90%: fire exactly once per high-water turn, reset
   // once the usage drops back below the threshold (i.e. compression
@@ -155,9 +184,22 @@ export const ChatView: FC = () => {
     setShowSettingsModal,
     setServerSettings,
     serverSettings,
-  } = useSettingsStore();
+  } = useSettingsStore(
+    useShallow((s) => ({
+      toggleSidebar: s.toggleSidebar,
+      showSettingsModal: s.showSettingsModal,
+      setShowSettingsModal: s.setShowSettingsModal,
+      setServerSettings: s.setServerSettings,
+      serverSettings: s.serverSettings,
+    })),
+  );
   const { collapsed: panelCollapsed, toggleCollapsed: togglePanel } =
-    usePanelStore();
+    usePanelStore(
+      useShallow((s) => ({
+        collapsed: s.collapsed,
+        toggleCollapsed: s.toggleCollapsed,
+      })),
+    );
   const allowForUser = usePermissionRulesStore((s) => s.allowForUser);
   const allowForProject = usePermissionRulesStore((s) => s.allowForProject);
   const isAllowed = usePermissionRulesStore((s) => s.isAllowed);

@@ -4,11 +4,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { useState, type FC } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useSessionStore } from '../../stores/sessionStore';
 import { SessionItem } from './SessionItem';
 
 export const SessionList: FC = () => {
-  const { sessions, activeSessionId } = useSessionStore();
+  const { sessions, activeSessionId } = useSessionStore(
+    useShallow((s) => ({
+      sessions: s.sessions,
+      activeSessionId: s.activeSessionId,
+    })),
+  );
   const [search, setSearch] = useState('');
 
   const filtered = sessions.filter((s) =>

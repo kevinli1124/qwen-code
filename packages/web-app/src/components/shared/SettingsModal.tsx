@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { useState, useEffect, type FC } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { settingsApi, type AppSettings } from '../../api/settings';
 import { useSettingsStore } from '../../stores/settingsStore';
 
@@ -93,7 +94,13 @@ interface Props {
 
 export const SettingsModal: FC<Props> = ({ onClose, isFirstRun = false }) => {
   const [tab, setTab] = useState<'llm' | 'general'>('llm');
-  const { serverSettings, setServerSettings, setModel } = useSettingsStore();
+  const { serverSettings, setServerSettings, setModel } = useSettingsStore(
+    useShallow((s) => ({
+      serverSettings: s.serverSettings,
+      setServerSettings: s.setServerSettings,
+      setModel: s.setModel,
+    })),
+  );
 
   const initAuth = serverSettings?.security.auth;
   const initGeneral = serverSettings?.general;

@@ -1,4 +1,5 @@
 import { useCallback, useRef } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import type { ChatMessageData } from '@qwen-code/webui';
 import { useMessageStore } from '../stores/messageStore';
 import { useSessionStore } from '../stores/sessionStore';
@@ -29,8 +30,34 @@ export function useSessionEvents(sessionId: string) {
     setTokenUsage,
     addSessionTokens,
     setConnectionError,
-  } = useMessageStore();
-  const { updateSession } = useSessionStore();
+  } = useMessageStore(
+    useShallow((s) => ({
+      appendMessage: s.appendMessage,
+      updateStreamingText: s.updateStreamingText,
+      finalizeStreamingText: s.finalizeStreamingText,
+      upsertToolCall: s.upsertToolCall,
+      appendTerminal: s.appendTerminal,
+      addFileOp: s.addFileOp,
+      setPlan: s.setPlan,
+      setStreaming: s.setStreaming,
+      setPendingPermission: s.setPendingPermission,
+      setPendingQuestion: s.setPendingQuestion,
+      setPendingPlan: s.setPendingPlan,
+      setModelLimits: s.setModelLimits,
+      recordFileMod: s.recordFileMod,
+      markFileReverted: s.markFileReverted,
+      patchToolCallMessage: s.patchToolCallMessage,
+      setApprovalMode: s.setApprovalMode,
+      setTokenUsage: s.setTokenUsage,
+      addSessionTokens: s.addSessionTokens,
+      setConnectionError: s.setConnectionError,
+    })),
+  );
+  const { updateSession } = useSessionStore(
+    useShallow((s) => ({
+      updateSession: s.updateSession,
+    })),
+  );
 
   const handleEvent = useCallback(
     (event: StreamEvent) => {

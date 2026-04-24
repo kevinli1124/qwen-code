@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import type { FC } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useSessionStore } from '../../stores/sessionStore';
 import { sessionsApi } from '../../api/sessions';
 import type { SessionSummary, SessionStatus } from '../../types/session';
@@ -36,7 +37,12 @@ function getRelativeTime(isoDate: string): string {
 }
 
 export const SessionItem: FC<SessionItemProps> = ({ session, isActive }) => {
-  const { setActiveSessionId, removeSession } = useSessionStore();
+  const { setActiveSessionId, removeSession } = useSessionStore(
+    useShallow((s) => ({
+      setActiveSessionId: s.setActiveSessionId,
+      removeSession: s.removeSession,
+    })),
+  );
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();

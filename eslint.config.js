@@ -123,6 +123,7 @@ export default tseslint.config(
             'memfs/lib/volume.js',
             'yargs/**',
             'msw/node',
+            'zustand/react/shallow',
             '**/generated/**',
             './styles/tailwind.css',
             './styles/App.css',

@@ -4,11 +4,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import type { FC } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { usePanelStore } from '../../stores/panelStore';
 import { PanelContainer } from '../panel/PanelContainer';
 
 export const RightPanel: FC = () => {
-  const { activeTab, setActiveTab, toggleCollapsed } = usePanelStore();
+  const { activeTab, setActiveTab, toggleCollapsed } = usePanelStore(
+    useShallow((s) => ({
+      activeTab: s.activeTab,
+      setActiveTab: s.setActiveTab,
+      toggleCollapsed: s.toggleCollapsed,
+    })),
+  );
 
   const tabs = [
     { id: 'terminal' as const, label: 'Terminal' },
