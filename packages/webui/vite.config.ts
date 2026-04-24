@@ -25,7 +25,12 @@ export default defineConfig({
     dts({
       include: ['src'],
       outDir: 'dist',
-      rollupTypes: true,
+      // rollupTypes: true drops everything to `export {}` when api-extractor
+      // hits any sub-module's side-effect CSS import — even with *.css
+      // declared as an ambient module, api-extractor's analysis is stricter
+      // than plain tsc. Emit per-file declarations instead; consumers
+      // resolve types via the individual files pointed at by exports map.
+      rollupTypes: false,
       insertTypesEntry: true,
     }),
   ],
