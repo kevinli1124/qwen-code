@@ -9,7 +9,8 @@ import { createInterface } from 'node:readline';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import type { ServerResponse } from 'node:http';
-import { tokenLimit } from '@qwen-code/qwen-code-core';
+import path from 'node:path';
+import { tokenLimit, Storage } from '@qwen-code/qwen-code-core';
 import { PersistenceManager } from './PersistenceManager.js';
 
 export interface SseClient {
@@ -552,11 +553,38 @@ export const SessionManager = {
     // edit, run_shell_command) never surface a permission prompt to the
     // web UI. Default approval mode lets the permissionController send
     // can_use_tool requests back to us, which we render as PermissionModal.
+    // Pass the web session id through to the child so core's
+    // chatRecordingService writes to `<project>/chats/<id>.jsonl`
+    // under the SAME id the web UI tracks. Without this the child
+    // would randomUUID() its own id and the resulting jsonl would
+    // never be linked back to a session the web UI knows about —
+    // the primary reason web-sessions/ had to keep a redundant copy
+    // of the conversation.
+    //
+    // Core rejects `--session-id <id>` when the chats file already
+    // exists (that case is reserved for `--resume <id>`), so detect
+    // which path applies: new session → --session-id; lazy re-spawn
+    // of a session that already has history on disk → --resume.
+    //
+    // Phase 1 (this commit): align file names only. Web still
+    // dual-writes to web-sessions/ and hydrates via the old prefix
+    // path on fresh spawns. Phase 2 will switch the web read path
+    // to SessionService and drop the prefix altogether.
+    const chatFilePath = path.join(
+      new Storage(cwd).getProjectDir(),
+      'chats',
+      `${id}.jsonl`,
+    );
+    const childHasHistory = fs.existsSync(chatFilePath);
+    const sessionFlags = childHasHistory
+      ? ['--resume', id]
+      : ['--session-id', id];
     const streamJsonFlags = [
       '--input-format',
       'stream-json',
       '--output-format',
       'stream-json',
+      ...sessionFlags,
     ];
     const spawnArgs = isSea ? streamJsonFlags : [cliScript, ...streamJsonFlags];
 

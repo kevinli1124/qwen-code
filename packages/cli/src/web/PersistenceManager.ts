@@ -37,6 +37,16 @@ function sessionPath(id: string): string {
 }
 
 export const PersistenceManager = {
+  /**
+   * True if a persisted session file already exists for this id. Used
+   * by SessionManager to decide whether a child re-spawn should pass
+   * `--resume <id>` (session has prior history) vs `--session-id <id>`
+   * (fresh session, no history yet).
+   */
+  exists(id: string): boolean {
+    return fs.existsSync(sessionPath(id));
+  },
+
   saveSession(session: SessionRecord): void {
     ensureDir();
     fs.writeFileSync(
