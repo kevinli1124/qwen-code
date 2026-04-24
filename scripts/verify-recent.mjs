@@ -156,6 +156,56 @@ function checkStaticBundle() {
     }
   }
 
+  // Mid-turn injection queue wired up end-to-end.
+  const sessionTs = path.join(
+    ROOT,
+    'packages',
+    'cli',
+    'src',
+    'nonInteractive',
+    'session.ts',
+  );
+  if (fs.existsSync(sessionTs)) {
+    const src = fs.readFileSync(sessionTs, 'utf8');
+    const hasQueue = src.includes('pendingInjections: string[] = []');
+    const hasDrain = src.includes('drainPendingInjections');
+    const routedOnBusy = src.includes('if (this.processingPromise)');
+    if (hasQueue && hasDrain && routedOnBusy) {
+      pass('Session: pendingInjections queue + drainer + busy-path routing');
+    } else {
+      fail(
+        'Session: pendingInjections queue + drainer + busy-path routing',
+        `hasQueue=${hasQueue} hasDrain=${hasDrain} routedOnBusy=${routedOnBusy}`,
+      );
+    }
+  }
+  const nonInteractive = path.join(
+    ROOT,
+    'packages',
+    'cli',
+    'src',
+    'nonInteractiveCli.ts',
+  );
+  if (fs.existsSync(nonInteractive)) {
+    const src = fs.readFileSync(nonInteractive, 'utf8');
+    const hasOpt = src.includes('getPendingInjection?:');
+    // Two call-sites: one after tool-result, one before the "no more
+    // tool calls" break.
+    const peekSites = (src.match(/options\.getPendingInjection\(\)/g) || [])
+      .length;
+    if (hasOpt && peekSites >= 2) {
+      pass(
+        'runNonInteractive peeks injection queue at both turn boundaries',
+        `${peekSites} peek call-sites`,
+      );
+    } else {
+      fail(
+        'runNonInteractive peeks injection queue at both turn boundaries',
+        `hasOpt=${hasOpt}, peekSites=${peekSites}`,
+      );
+    }
+  }
+
   // Permission outcome plumbed through.
   const permCtl = path.join(
     ROOT,

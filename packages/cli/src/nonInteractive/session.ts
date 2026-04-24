@@ -38,6 +38,22 @@ const debugLogger = createDebugLogger('NON_INTERACTIVE_SESSION');
 
 class Session {
   private userMessageQueue: CLIUserMessage[] = [];
+  /**
+   * Messages received via stdin *while a turn is already executing*.
+   * They are NOT handed straight to runNonInteractive — that would stack
+   * up a separate turn after the current one finishes and the user would
+   * wait the full duration before the model saw their interjection.
+   *
+   * Instead, runNonInteractive receives a `getPendingInjection` callback
+   * (see RunNonInteractiveOptions) and peeks this queue at each turn
+   * boundary. Any text found is wrapped in a [USER_INTERJECTION] block
+   * and merged into the next user message, so the model can adjust its
+   * plan mid-flight without being interrupted during a tool call.
+   *
+   * Anything left over when the outer turn exits is promoted to
+   * userMessageQueue so the next turn picks it up normally.
+   */
+  private pendingInjections: string[] = [];
   private abortController: AbortController;
   private config: Config;
   private sessionId: string;
@@ -339,10 +355,24 @@ class Session {
           abortController: this.abortController,
           adapter: this.outputAdapter,
           controlService: this.controlService ?? undefined,
+          getPendingInjection: () => this.drainPendingInjections(),
         },
       );
     } catch (error) {
       debugLogger.error('[Session] Query execution error:', error);
+    }
+
+    // If injections arrived so late runNonInteractive's final peek
+    // missed them, promote them to a full follow-up turn so they
+    // aren't silently dropped. Normal case: pendingInjections is
+    // already empty here because the peek inside runNonInteractive
+    // consumed them mid-flight.
+    if (this.pendingInjections.length > 0) {
+      const leftover = this.pendingInjections;
+      this.pendingInjections = [];
+      for (const text of leftover) {
+        this.userMessageQueue.push(makeUserTextMessage(text));
+      }
     }
   }
 
@@ -367,8 +397,41 @@ class Session {
   }
 
   private enqueueUserMessage(userMessage: CLIUserMessage): void {
+    // If a turn is already in flight, route the message into the
+    // injection queue so runNonInteractive can pick it up at the next
+    // turn boundary. Otherwise the existing idle path handles it —
+    // processingPromise will start a fresh turn for the message.
+    if (this.processingPromise) {
+      const text = extractUserMessageText(userMessage);
+      if (text) {
+        this.pendingInjections.push(text);
+        debugLogger.debug(
+          `[Session] Queued mid-turn injection (${this.pendingInjections.length} pending)`,
+        );
+      }
+      return;
+    }
     this.userMessageQueue.push(userMessage);
     this.ensureProcessingStarted();
+  }
+
+  /**
+   * Drain any pending mid-turn injections and return them formatted
+   * ready to be appended to the LLM's next prompt. Returns null when
+   * there's nothing queued so callers can cheaply short-circuit.
+   */
+  private drainPendingInjections(): string | null {
+    if (this.pendingInjections.length === 0) return null;
+    const items = this.pendingInjections;
+    this.pendingInjections = [];
+    const timestamp = new Date().toISOString();
+    const body = items.map((t) => `> ${t.split('\n').join('\n> ')}`).join('\n');
+    return (
+      `\n\n[USER_INTERJECTION at ${timestamp}]\n` +
+      `The user sent new messages while the current task was running. ` +
+      `Consider whether to adjust your plan, acknowledge, or defer until ` +
+      `the current step completes.\n\n${body}\n[/USER_INTERJECTION]`
+    );
   }
 
   private ensureProcessingStarted(): void {
@@ -576,6 +639,20 @@ class Session {
       this.cleanupSignalHandlers();
     }
   }
+}
+
+/**
+ * Build a minimal CLIUserMessage from a plain text string. Used when
+ * the Session needs to promote leftover mid-turn injections into a
+ * fresh user turn — we lose the original envelope (parent_tool_use_id
+ * etc.) but since these never had one to begin with that's fine.
+ */
+function makeUserTextMessage(text: string): CLIUserMessage {
+  return {
+    type: 'user',
+    message: { role: 'user', content: text },
+    parent_tool_use_id: null,
+  } as unknown as CLIUserMessage;
 }
 
 function extractUserMessageText(message: CLIUserMessage): string | null {

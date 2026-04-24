@@ -417,7 +417,7 @@ export const InputBar: FC<InputBarProps> = ({ onSend, onStop }) => {
               onInput={handleInput}
               placeholder={
                 isStreaming
-                  ? 'Type a follow-up… (will queue after current turn)'
+                  ? 'Add instructions — injected at the next turn boundary'
                   : 'Ask anything... ("/" for commands, "@" for files)'
               }
               rows={1}

@@ -119,6 +119,15 @@ export interface RunNonInteractiveOptions {
   adapter?: JsonOutputAdapterInterface;
   userMessage?: CLIUserMessage;
   controlService?: ControlService;
+  /**
+   * Peek-then-drain callback the runner calls at each turn boundary
+   * (after tool results, and before the "model is done" break).
+   * Returns formatted text to splice into the next prompt, or null
+   * when nothing is queued. Used by the web server's Session to
+   * forward mid-turn stdin messages into the LLM context without
+   * waiting for the outer turn to finish.
+   */
+  getPendingInjection?: () => string | null;
 }
 
 /**
@@ -522,8 +531,39 @@ export async function runNonInteractive(
               modelOverride = toolResponse.modelOverride;
             }
           }
+          // Mid-turn injection peek: if web session queued new user
+          // messages while we were executing tool calls, splice them
+          // into this turn's user reply so the model sees them before
+          // it plans the next step — the whole point of Phase 1 of
+          // the input-queue feature. Format already includes
+          // [USER_INTERJECTION]..[/USER_INTERJECTION] framing.
+          if (options.getPendingInjection) {
+            const injection = options.getPendingInjection();
+            if (injection) {
+              toolResponseParts.push({ text: injection });
+            }
+          }
           currentMessages = [{ role: 'user', parts: toolResponseParts }];
         } else {
+          // No more tool calls — but before letting the outer loop
+          // break, peek the injection queue one more time. If the
+          // user sent a follow-up while we were finishing this turn,
+          // treat it as a continuation so we don't drop it on the
+          // floor (Session would still promote it, but that re-enters
+          // at the processUserMessage level and the UX shows a
+          // noticeable gap).
+          if (options.getPendingInjection) {
+            const injection = options.getPendingInjection();
+            if (injection) {
+              currentMessages = [
+                {
+                  role: 'user',
+                  parts: [{ text: injection.trimStart() }],
+                },
+              ];
+              continue;
+            }
+          }
           // No more tool calls — check if cron jobs are keeping us alive
           const scheduler = !config.isCronEnabled()
             ? null
