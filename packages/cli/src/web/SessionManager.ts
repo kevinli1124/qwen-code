@@ -696,6 +696,17 @@ export const SessionManager = {
     requestId: string,
     allowed: boolean,
     extra?: Record<string, unknown>,
+    /**
+     * Scope hint for persistence. `ProceedOnce` (default) approves this
+     * call only. `ProceedAlwaysProject` writes the pattern to
+     * `.qwen/settings.json` so future calls skip the prompt; `ProceedAlwaysUser`
+     * writes to `~/.qwen/settings.json`. Only meaningful when `allowed=true`.
+     */
+    outcome?:
+      | 'ProceedOnce'
+      | 'ProceedAlways'
+      | 'ProceedAlwaysProject'
+      | 'ProceedAlwaysUser',
   ): boolean {
     const session = sessions.get(id);
     if (!session?.child?.stdin) return false;
@@ -707,6 +718,11 @@ export const SessionManager = {
     // silently produced an undefined behavior → every tool interpreted
     // as denied. We merge any extra payload (e.g. answers from the
     // ask_user_question dialog) so the core can forward it to onConfirm.
+    //
+    // We also thread through the outcome hint so the controller can pick
+    // the right ToolConfirmationOutcome — without it every "Always allow"
+    // click would silently degrade to ProceedOnce and the rule would
+    // never persist to settings.json.
     const response = {
       type: 'control_response',
       response: {
@@ -714,6 +730,7 @@ export const SessionManager = {
         request_id: requestId,
         response: {
           behavior: allowed ? 'allow' : 'deny',
+          outcome: allowed ? (outcome ?? 'ProceedOnce') : undefined,
           ...(extra ?? {}),
         },
       },

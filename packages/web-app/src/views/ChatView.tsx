@@ -22,7 +22,6 @@ import {
   PlanConfirmationModal,
   type PlanAction,
 } from '../components/conversation/PlanConfirmationModal';
-import { usePermissionRulesStore } from '../stores/permissionRulesStore';
 import { ErrorBanner } from '../components/shared/ErrorBanner';
 import { NewSessionModal } from '../components/session/NewSessionModal';
 import { SettingsModal } from '../components/shared/SettingsModal';
@@ -200,10 +199,6 @@ export const ChatView: FC = () => {
         toggleCollapsed: s.toggleCollapsed,
       })),
     );
-  const allowForUser = usePermissionRulesStore((s) => s.allowForUser);
-  const allowForProject = usePermissionRulesStore((s) => s.allowForProject);
-  const isAllowed = usePermissionRulesStore((s) => s.isAllowed);
-
   // Load settings on mount; auto-open modal if no API key configured
   useEffect(() => {
     settingsApi
@@ -348,45 +343,40 @@ export const ChatView: FC = () => {
     }
   };
 
-  const handlePermissionRespond = async (allowed: boolean) => {
+  const handlePermissionDecision = async (decision: PermissionDecision) => {
     if (!activeSessionId || !pendingPermission) return;
+    // Map the card's decision to core's ToolConfirmationOutcome. Core then
+    // runs persistPermissionOutcome, which writes the matching rule to
+    // `.qwen/settings.json` (project) or `~/.qwen/settings.json` (user)
+    // and updates the in-memory PermissionManager so the *next* identical
+    // tool call is auto-approved at the L4 pipeline stage — the backend
+    // never emits a permission_request, so there is no UI flash.
+    const outcome = (() => {
+      switch (decision) {
+        case 'allow_once':
+          return 'ProceedOnce' as const;
+        case 'allow_project':
+          return 'ProceedAlwaysProject' as const;
+        case 'allow_user':
+          return 'ProceedAlwaysUser' as const;
+        case 'deny':
+        default:
+          return undefined;
+      }
+    })();
+    const allowed = decision !== 'deny';
     try {
       await sessionsApi.respondPermission(
         activeSessionId,
         pendingPermission.requestId,
         allowed,
+        outcome,
       );
     } catch {
       // ignore
     }
     setPendingPermission(null);
   };
-
-  const handlePermissionDecision = async (decision: PermissionDecision) => {
-    if (!activeSessionId || !pendingPermission) return;
-    const toolName = pendingPermission.toolName;
-    const cwd = activeSession?.cwd;
-    if (decision === 'allow_project' && cwd) {
-      allowForProject(toolName, cwd);
-    } else if (decision === 'allow_user') {
-      allowForUser(toolName);
-    }
-    const allowed = decision !== 'deny';
-    await handlePermissionRespond(allowed);
-  };
-
-  // Auto-approve when the user has previously chosen "always allow" for
-  // this tool (globally or for this project). The check runs whenever a
-  // permission_request arrives via SSE — the modal just flashes through.
-  useEffect(() => {
-    if (!pendingPermission || !activeSessionId) return;
-    if (isAllowed(pendingPermission.toolName, activeSession?.cwd)) {
-      void handlePermissionRespond(true);
-    }
-    // handlePermissionRespond is stable enough — we only want the
-    // effect tied to incoming permission requests.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingPermission?.requestId]);
 
   const handleQuestionSubmit = async (answers: Record<string, string>) => {
     if (!activeSessionId || !pendingQuestion) return;

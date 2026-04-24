@@ -540,14 +540,27 @@ async function handleApi(
   if (permMatch && method === 'POST') {
     const [, id, reqId] = permMatch;
     const body = await readBody(req);
-    let parsed: { allowed?: boolean } = {};
+    let parsed: {
+      allowed?: boolean;
+      outcome?:
+        | 'ProceedOnce'
+        | 'ProceedAlways'
+        | 'ProceedAlwaysProject'
+        | 'ProceedAlwaysUser';
+    } = {};
     try {
       parsed = JSON.parse(body) as typeof parsed;
     } catch {
       /* empty */
     }
 
-    SessionManager.respondPermission(id!, reqId!, parsed.allowed ?? false);
+    SessionManager.respondPermission(
+      id!,
+      reqId!,
+      parsed.allowed ?? false,
+      undefined,
+      parsed.outcome,
+    );
     sendJson(res, 200, { ok: true });
     return;
   }

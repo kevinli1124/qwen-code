@@ -454,10 +454,24 @@ export class PermissionController extends BaseController {
           answers && typeof answers === 'object'
             ? { answers: answers as Record<string, string> }
             : undefined;
-        await toolCall.confirmationDetails.onConfirm(
-          ToolConfirmationOutcome.ProceedOnce,
-          confirmPayload,
-        );
+        // Map the web UI's chosen scope to the right ToolConfirmationOutcome
+        // so core's persistPermissionOutcome writes the rule to the right
+        // settings.json (project = `.qwen/settings.json`, user =
+        // `~/.qwen/settings.json`). Without this mapping every "Always allow"
+        // click would silently degrade to ProceedOnce — the rule would
+        // approve this call but never persist.
+        const outcomeHint = String(payload['outcome'] || '').toLowerCase();
+        let outcome: ToolConfirmationOutcome;
+        if (outcomeHint === 'proceedalwaysproject') {
+          outcome = ToolConfirmationOutcome.ProceedAlwaysProject;
+        } else if (outcomeHint === 'proceedalwaysuser') {
+          outcome = ToolConfirmationOutcome.ProceedAlwaysUser;
+        } else if (outcomeHint === 'proceedalways') {
+          outcome = ToolConfirmationOutcome.ProceedAlways;
+        } else {
+          outcome = ToolConfirmationOutcome.ProceedOnce;
+        }
+        await toolCall.confirmationDetails.onConfirm(outcome, confirmPayload);
       } else {
         // Extract cancel message from response if available
         const cancelMessage =

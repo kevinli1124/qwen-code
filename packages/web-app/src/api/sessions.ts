@@ -23,10 +23,26 @@ export const sessionsApi = {
     }),
   interrupt: (id: string) =>
     apiFetch<void>(`/api/sessions/${id}/interrupt`, { method: 'POST' }),
-  respondPermission: (id: string, requestId: string, allowed: boolean) =>
+  respondPermission: (
+    id: string,
+    requestId: string,
+    allowed: boolean,
+    /**
+     * Persistence scope for "allow" clicks. Passed through to core's
+     * persistPermissionOutcome — ProceedAlwaysProject writes the rule to
+     * `.qwen/settings.json`, ProceedAlwaysUser writes to
+     * `~/.qwen/settings.json`, ProceedOnce doesn't persist. Ignored when
+     * `allowed=false`.
+     */
+    outcome?:
+      | 'ProceedOnce'
+      | 'ProceedAlways'
+      | 'ProceedAlwaysProject'
+      | 'ProceedAlwaysUser',
+  ) =>
     apiFetch<void>(`/api/sessions/${id}/permission/${requestId}`, {
       method: 'POST',
-      body: JSON.stringify({ allowed }),
+      body: JSON.stringify({ allowed, outcome }),
     }),
   respondQuestion: (
     id: string,
