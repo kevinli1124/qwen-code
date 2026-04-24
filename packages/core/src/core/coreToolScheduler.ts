@@ -89,15 +89,95 @@ const YOLO_DENY_PATTERNS: RegExp[] = [
   />\s*\/dev\//,
   /\bgit\s+push\s+.*--force\b/,
   /\bgit\s+reset\s+--hard\b/,
+  // Privilege escalation & account mutation — benign in a pinch but
+  // YOLO shouldn't auto-approve them.
+  /\bsudo\b/,
+  /\bdoas\b/,
+  /\b(useradd|userdel|passwd)\b/,
+  // Windows: filesystem wipes + forced shutdowns when run via pwsh / cmd.
+  /\b(Remove-Item|rmdir|rd)\s+.*-[rR]ecurse\b/i,
+  /\bformat\s+[a-z]:/i,
+  /\bshutdown\s*\/[rs]/i,
 ];
 
-function isYoloDenied(
+/**
+ * Paths we NEVER auto-approve writes/edits to, regardless of tool, even
+ * in YOLO mode. These are:
+ * - Secret / credential stores: .env, .env.*, .ssh/, .aws/, .config/gh/
+ * - Identity / version control: .git/config, .gitmodules, .npmrc, .netrc
+ * - System directories: /etc/, /usr/, /boot/, C:\Windows, C:\Program Files
+ * - Third-party code: node_modules/, vendor/, .venv/, site-packages/
+ *
+ * If the LLM wants to touch these it falls through to the normal
+ * confirmation prompt (even under YOLO) — the user sees exactly which
+ * sensitive path is being modified and can allow-once or reject.
+ */
+const SENSITIVE_PATH_PATTERNS: RegExp[] = [
+  // Dotfile secrets at any depth.
+  /(^|[\\/])\.env(\.[^\\/]+)?$/i,
+  /(^|[\\/])\.ssh[\\/]/i,
+  /(^|[\\/])\.aws[\\/]/i,
+  /(^|[\\/])\.config[\\/]gh[\\/]/i,
+  /(^|[\\/])\.gnupg[\\/]/i,
+  // VCS / package manager config that controls trust.
+  /(^|[\\/])\.git[\\/]config$/i,
+  /(^|[\\/])\.gitmodules$/i,
+  /(^|[\\/])\.npmrc$/i,
+  /(^|[\\/])\.netrc$/i,
+  /(^|[\\/])\.pypirc$/i,
+  // Shell rc files — classic persistence vector.
+  /(^|[\\/])\.(bashrc|zshrc|profile|bash_profile|zprofile|zshenv)$/i,
+  // System directories — Unix.
+  /^\/etc\//i,
+  /^\/usr\//i,
+  /^\/boot\//i,
+  /^\/root\//i,
+  // System directories — Windows.
+  /^[a-z]:[\\/]+windows[\\/]/i,
+  /^[a-z]:[\\/]+program\s*files/i,
+  /^[a-z]:[\\/]+programdata[\\/]/i,
+  // Third-party managed trees.
+  /(^|[\\/])node_modules[\\/]/i,
+  /(^|[\\/])vendor[\\/]/i,
+  /(^|[\\/])\.venv[\\/]/i,
+  /(^|[\\/])site-packages[\\/]/i,
+];
+
+function isSensitivePath(p: unknown): boolean {
+  if (typeof p !== 'string' || p.length === 0) return false;
+  return SENSITIVE_PATH_PATTERNS.some((pattern) => pattern.test(p));
+}
+
+const WRITE_TOOL_NAMES = new Set([
+  'write_file',
+  'edit',
+  'replace',
+  'multi_edit',
+]);
+
+/**
+ * Exported for unit tests. Not part of the public API — callers outside
+ * the scheduler should rely on the scheduler's confirmation flow, not
+ * probe this predicate directly.
+ */
+export function isYoloDenied(
   toolName: string,
   args: Record<string, unknown>,
 ): boolean {
-  if (toolName !== 'run_shell_command' && toolName !== 'Bash') return false;
-  const command = (args['command'] ?? args['input'] ?? '') as string;
-  return YOLO_DENY_PATTERNS.some((pattern) => pattern.test(command));
+  // Shell-class tools: deny recognised destructive commands.
+  if (toolName === 'run_shell_command' || toolName === 'Bash') {
+    const command = (args['command'] ?? args['input'] ?? '') as string;
+    return YOLO_DENY_PATTERNS.some((pattern) => pattern.test(command));
+  }
+  // Write-class tools: deny writes to sensitive paths so YOLO can't
+  // silently clobber .env, .ssh/*, .git/config, /etc/*, etc. Falls
+  // back to normal prompt flow (still user-approvable once if they
+  // actually meant it).
+  if (WRITE_TOOL_NAMES.has(toolName)) {
+    const path = args['file_path'] ?? args['path'] ?? args['filePath'];
+    return isSensitivePath(path);
+  }
+  return false;
 }
 
 const TRUNCATION_EDIT_REJECTION =
