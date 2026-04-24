@@ -3,7 +3,7 @@
  * Copyright 2025 Qwen team
  * SPDX-License-Identifier: Apache-2.0
  */
-import { useState, useEffect, useCallback, useRef, type FC } from 'react';
+import { useState, useEffect, useCallback, type FC } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { AppLayout } from '../components/layout/AppLayout';
 import { Sidebar } from '../components/layout/Sidebar';
@@ -70,7 +70,6 @@ export const ChatView: FC = () => {
     tokenUsageBySession,
     sessionTokensBySession,
     resetSessionTokens,
-    modelLimits,
   } = useMessageStore(
     useShallow((s) => ({
       isStreaming: s.isStreaming,
@@ -90,16 +89,8 @@ export const ChatView: FC = () => {
       tokenUsageBySession: s.tokenUsageBySession,
       sessionTokensBySession: s.sessionTokensBySession,
       resetSessionTokens: s.resetSessionTokens,
-      modelLimits: s.modelLimits,
     })),
   );
-
-  // Auto-compress at 90%: fire exactly once per high-water turn, reset
-  // once the usage drops back below the threshold (i.e. compression
-  // worked) so we don't spam /compress in a loop if the model keeps the
-  // context high.
-  const autoCompressSentRef = useRef(false);
-  const AUTO_COMPRESS_THRESHOLD = 0.9;
 
   const [commandList, setCommandList] = useState<CommandMetadata[]>([]);
   const [skillList, setSkillList] = useState<SkillMetadata[]>([]);
@@ -221,45 +212,16 @@ export const ChatView: FC = () => {
 
   const activeSession = sessions.find((s) => s.id === activeSessionId);
 
-  // Watch token usage for the active session; when it crosses the
-  // AUTO_COMPRESS_THRESHOLD fire /compress once. Flag resets when
-  // usage drops back under, so repeated high-usage turns after a
-  // compress that didn't help won't spam.
-  useEffect(() => {
-    if (!activeSessionId) return;
-    const usage = tokenUsageBySession[activeSessionId];
-    const limit = modelLimits?.input;
-    if (!usage || !limit || limit <= 0) return;
-    // Compare *fresh* tokens (total minus cached) to the limit — cached
-    // prefixes are served from the provider's cache and don't fill the
-    // effective context, so counting them would trigger /compress
-    // prematurely once a long stable conversation starts hitting cache.
-    const fresh = Math.max(
-      0,
-      usage.inputTokens - (usage.cacheReadInputTokens ?? 0),
-    );
-    const pct = fresh / limit;
-    if (pct < AUTO_COMPRESS_THRESHOLD) {
-      autoCompressSentRef.current = false;
-      return;
-    }
-    if (autoCompressSentRef.current) return;
-    autoCompressSentRef.current = true;
-    // Fire as a user message so it flows through the same channel as a
-    // manual /compress click.
-    appendMessage(activeSessionId, {
-      uuid: `auto-compress-${Date.now()}`,
-      type: 'assistant',
-      timestamp: new Date().toISOString(),
-      message: {
-        role: 'assistant',
-        content: `ℹ️ Context is at ${(pct * 100).toFixed(0)}% — auto-running /compress.`,
-      },
-    });
-    void sessionsApi.sendQuery(activeSessionId, '/compress').catch(() => {
-      autoCompressSentRef.current = false;
-    });
-  }, [activeSessionId, tokenUsageBySession, modelLimits, appendMessage]);
+  // Auto-compression is handled by core's chatCompressionService at its
+  // own COMPRESSION_TOKEN_THRESHOLD (70% by default, configurable via
+  // `chatCompression.contextPercentageThreshold` in settings.json) —
+  // transparently, inside sendMessageStream, before the prompt leaves
+  // the machine. The web UI used to fire a redundant `/compress` at
+  // 90% on top of that, which (a) doubled the work, (b) showed up as
+  // a visible chat message, and (c) used the wrong threshold. Removed
+  // so there's one source of truth for context management.
+  //
+  // Users who want to compact manually can still type `/compress`.
 
   const handleSend = async (text: string) => {
     if (!activeSessionId) return;
