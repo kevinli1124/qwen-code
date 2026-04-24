@@ -25,6 +25,15 @@ interface InputBarProps {
   onStop: () => void;
 }
 
+// Stable fallback so Zustand v5's useSyncExternalStore snapshot check
+// doesn't see a fresh object every render (which triggers React #185 —
+// Maximum update depth exceeded).
+const EMPTY_SESSION_TOKENS = Object.freeze({
+  inputTokens: 0,
+  outputTokens: 0,
+  turns: 0,
+});
+
 type MenuMode = 'slash' | 'at' | null;
 
 interface ActiveTrigger {
@@ -89,12 +98,12 @@ export const InputBar: FC<InputBarProps> = ({ onSend, onStop }) => {
       ? s.tokenUsageBySession[activeSessionIdForTokens]
       : null,
   );
-  const sessionTokens = useMessageStore(
-    (s) =>
-      (activeSessionIdForTokens
-        ? s.sessionTokensBySession[activeSessionIdForTokens]
-        : null) ?? { inputTokens: 0, outputTokens: 0, turns: 0 },
+  const sessionTokensRaw = useMessageStore((s) =>
+    activeSessionIdForTokens
+      ? s.sessionTokensBySession[activeSessionIdForTokens]
+      : null,
   );
+  const sessionTokens = sessionTokensRaw ?? EMPTY_SESSION_TOKENS;
   const activeSession = useSessionStore((s) =>
     s.sessions.find((sess) => sess.id === s.activeSessionId),
   );
