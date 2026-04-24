@@ -6,6 +6,7 @@
 import {
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   type FC,
   type ComponentType,
@@ -52,29 +53,48 @@ export const ConversationView: FC<ConversationViewProps> = ({
   const prevScrollHeightRef = useRef<number | null>(null);
   const loadingTriggeredRef = useRef(false);
 
-  // Merge streaming messages into the list for live display
-  const messages = messagesBySession[sessionId] ?? [];
-  const displayMessages: ChatMessageData[] = messages.map((msg) => {
-    if (msg.type === 'assistant' && msg.uuid && streamingText[msg.uuid]) {
-      return {
-        ...msg,
-        message: { ...msg.message, content: streamingText[msg.uuid] },
-      };
-    }
-    return msg;
-  });
+  // Stable PlatformProvider value — a literal object here would change
+  // identity every render, invalidating every usePlatform() subscriber
+  // downstream and (via ChatViewer's internal effects) contributing to
+  // the React #185 re-render loop.
+  const platformValue = useMemo(
+    () => ({
+      platform: 'web' as const,
+      postMessage: () => {},
+      onMessage: () => () => {},
+    }),
+    [],
+  );
 
-  // Add any streaming messages not yet in the list
-  Object.entries(streamingText).forEach(([uuid, text]) => {
-    if (!displayMessages.find((m) => m.uuid === uuid)) {
-      displayMessages.push({
-        uuid,
-        type: 'assistant',
-        timestamp: new Date().toISOString(),
-        message: { role: 'assistant', content: text },
-      });
+  // Merge streaming messages into the list for live display. Memoized so
+  // the array reference is stable between renders where neither the stored
+  // messages nor the streaming buffer changed — otherwise we hand a new
+  // array to ChatViewer every render and its internal effects (and the
+  // scroll layout effect below that depends on length) fire in a loop.
+  const messages = messagesBySession[sessionId];
+  const displayMessages: ChatMessageData[] = useMemo(() => {
+    const base = messages ?? [];
+    const merged: ChatMessageData[] = base.map((msg) => {
+      if (msg.type === 'assistant' && msg.uuid && streamingText[msg.uuid]) {
+        return {
+          ...msg,
+          message: { ...msg.message, content: streamingText[msg.uuid] },
+        };
+      }
+      return msg;
+    });
+    for (const [uuid, text] of Object.entries(streamingText)) {
+      if (!merged.some((m) => m.uuid === uuid)) {
+        merged.push({
+          uuid,
+          type: 'assistant',
+          timestamp: new Date().toISOString(),
+          message: { role: 'assistant', content: text },
+        });
+      }
     }
-  });
+    return merged;
+  }, [messages, streamingText]);
 
   // Scroll listener: trigger loadMore when user approaches the top.
   // Capture the current scrollHeight so we can restore scroll position
@@ -134,13 +154,7 @@ export const ConversationView: FC<ConversationViewProps> = ({
   }
 
   return (
-    <PlatformProvider
-      value={{
-        platform: 'web',
-        postMessage: () => {},
-        onMessage: () => () => {},
-      }}
-    >
+    <PlatformProvider value={platformValue}>
       <div className="relative h-full">
         {isLoadingMore && (
           <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 px-3 py-1 rounded-full bg-[#2e2e2e] text-xs text-[#8a8a8a] shadow">
