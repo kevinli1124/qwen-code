@@ -12,6 +12,14 @@
  *
  * Descriptions are intentionally short — the frontend shows them in a
  * narrow dropdown.
+ *
+ * MAINTENANCE: when adding a slash command to CLI (under
+ * `packages/cli/src/ui/commands/`), add a matching entry here with
+ * `runner: 'cli'` (sends through to the child) or `runner: 'local'`
+ * (handled by packages/web-app/src/utils/localCommands.ts). Commands
+ * missing from this list simply won't appear in the web UI's
+ * autocomplete — they still work if typed manually, but users won't
+ * discover them.
  */
 
 export interface CommandMetadata {

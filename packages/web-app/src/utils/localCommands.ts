@@ -193,18 +193,21 @@ export async function handleLocalCommand(
     }
 
     case 'tools': {
-      // Show the tools advertised at session init — read from sessionStore
-      // isn't available here; fall back to a static-ish hint.
+      // The exact tool list depends on the active model, enabled
+      // extensions, MCP servers, skills, and ApprovalMode — all of
+      // which the child CLI reports in the system_init event at the
+      // start of the session. Hardcoding a sample list here
+      // invariably drifts (e.g. new tools from upstream, disabled
+      // tools from permissions.deny). Point the user at the
+      // authoritative source instead.
       deps.appendMessage(
         deps.sessionId,
         makeAssistantMessage(
-          'Tools available depend on the model and enabled extensions. In a typical run you will see:\n' +
-            '- File: `read_file`, `write_file`, `edit`, `list_directory`, `glob`\n' +
-            '- Search: `grep_search`, `web_fetch`\n' +
-            '- Run: `run_shell_command`\n' +
-            '- Agents / skills: `agent`, `skill`, `todo_write`\n' +
-            '- Memory: `save_memory`, `memory_write`, `memory_remove`\n\n' +
-            'Check the sidebar system-init event for the exact list from this session.',
+          'The exact tool list for this session is reported in the ' +
+            '**system_init** event at the top of the conversation ' +
+            '(sidebar → tool inventory). It varies by model, ' +
+            'extensions, MCP servers, and your `permissions.{allow,deny}` ' +
+            'rules in `~/.qwen/settings.json` / `.qwen/settings.json`.',
         ),
       );
       return { handled: true };
