@@ -4,6 +4,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/* eslint-disable vitest/no-conditional-expect -- pre-existing call-sites
+   in this file assert inside conditional branches; refactoring them is
+   out of scope for the 2026-04-24 MCP SDK upgrade. */
+
 import {
   describe,
   it,
@@ -148,10 +152,15 @@ vi.mock('../ide/ideContext.js');
 vi.mock('../telemetry/uiTelemetry.js', () => ({
   uiTelemetryService: mockUiTelemetryService,
 }));
-vi.mock('../telemetry/loggers.js', () => ({
-  logChatCompression: vi.fn(),
-  logNextSpeakerCheck: vi.fn(),
-}));
+vi.mock('../telemetry/loggers.js', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../telemetry/loggers.js')>();
+  return {
+    ...actual,
+    logChatCompression: vi.fn(),
+    logNextSpeakerCheck: vi.fn(),
+  };
+});
 
 // Mock RequestTokenizer to use simple character-based estimation
 vi.mock('../utils/request-tokenizer/requestTokenizer.js', () => ({
@@ -1516,9 +1525,8 @@ Other open files:
 
     it('should stop infinite loop after MAX_TURNS when nextSpeaker always returns model', async () => {
       // Get the mocked checkNextSpeaker function and configure it to trigger infinite loop
-      const { checkNextSpeaker } = await import(
-        '../utils/nextSpeakerChecker.js'
-      );
+      const { checkNextSpeaker } =
+        await import('../utils/nextSpeakerChecker.js');
       const mockCheckNextSpeaker = vi.mocked(checkNextSpeaker);
       mockCheckNextSpeaker.mockResolvedValue({
         next_speaker: 'model',
@@ -1663,9 +1671,8 @@ Other open files:
       // someone tries to bypass it by calling with a very large turns value
 
       // Get the mocked checkNextSpeaker function and configure it to trigger infinite loop
-      const { checkNextSpeaker } = await import(
-        '../utils/nextSpeakerChecker.js'
-      );
+      const { checkNextSpeaker } =
+        await import('../utils/nextSpeakerChecker.js');
       const mockCheckNextSpeaker = vi.mocked(checkNextSpeaker);
       mockCheckNextSpeaker.mockResolvedValue({
         next_speaker: 'model',
@@ -2341,9 +2348,8 @@ Other open files:
 
     it('should not call checkNextSpeaker when turn.run() yields an error', async () => {
       // Arrange
-      const { checkNextSpeaker } = await import(
-        '../utils/nextSpeakerChecker.js'
-      );
+      const { checkNextSpeaker } =
+        await import('../utils/nextSpeakerChecker.js');
       const mockCheckNextSpeaker = vi.mocked(checkNextSpeaker);
 
       const mockStream = (async function* () {
@@ -2378,9 +2384,8 @@ Other open files:
 
     it('should not call checkNextSpeaker when turn.run() yields a value then an error', async () => {
       // Arrange
-      const { checkNextSpeaker } = await import(
-        '../utils/nextSpeakerChecker.js'
-      );
+      const { checkNextSpeaker } =
+        await import('../utils/nextSpeakerChecker.js');
       const mockCheckNextSpeaker = vi.mocked(checkNextSpeaker);
 
       const mockStream = (async function* () {

@@ -20,14 +20,18 @@ import type { Part } from '@google/genai';
 
 vi.mock('node:path');
 vi.mock('node:child_process');
-vi.mock('node:crypto', () => ({
-  randomUUID: vi.fn(),
-  createHash: vi.fn(() => ({
-    update: vi.fn(() => ({
-      digest: vi.fn(() => 'mocked-hash'),
+vi.mock('node:crypto', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:crypto')>();
+  return {
+    ...actual,
+    randomUUID: vi.fn(),
+    createHash: vi.fn(() => ({
+      update: vi.fn(() => ({
+        digest: vi.fn(() => 'mocked-hash'),
+      })),
     })),
-  })),
-}));
+  };
+});
 vi.mock('../utils/jsonl-utils.js');
 
 describe('ChatRecordingService', () => {
