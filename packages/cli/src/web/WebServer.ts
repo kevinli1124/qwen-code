@@ -302,17 +302,91 @@ function listSkills(): SkillMeta[] {
   return out.sort((a, b) => a.name.localeCompare(b.name));
 }
 
+// Build the strict allowlists for Host and Origin headers. Both must include
+// the bound port — the localhost address can be reached as 127.0.0.1, ::1, or
+// the bare name "localhost" depending on browser DNS resolution.
+function expectedHosts(port: number): string[] {
+  return [`127.0.0.1:${port}`, `localhost:${port}`, `[::1]:${port}`];
+}
+function expectedOrigins(port: number): string[] {
+  return [
+    `http://127.0.0.1:${port}`,
+    `http://localhost:${port}`,
+    `http://[::1]:${port}`,
+  ];
+}
+
+// Verify the request is genuinely same-origin to the SPA we serve.
+//
+// Defense layers:
+//   1. Host header must match the bound port (rejects DNS rebinding — the
+//      attacker domain is still in Host even after rebind).
+//   2. If Origin is present, it must equal one of expectedOrigins (rejects
+//      cross-origin pages and cross-port localhost CSRF — e.g. another local
+//      dev server on a different port cannot drive this API).
+//   3. State-changing methods (POST/PUT/PATCH/DELETE) must carry Origin —
+//      blocks curl-style requests from local processes that omit Origin.
+//   4. Simple GETs without Origin must carry `Sec-Fetch-Site: same-origin`
+//      or `none` (direct navigation). This blocks `<img src="...">` /
+//      `<link>` CSRF from external pages on browsers that omit Origin on
+//      simple GETs but always set Sec-Fetch-Site.
+function verifySameOrigin(
+  req: http.IncomingMessage,
+  port: number,
+): { ok: true } | { ok: false; reason: string } {
+  const host = req.headers.host;
+  const origin = req.headers.origin;
+  const fetchSite = req.headers['sec-fetch-site'];
+  const method = (req.method ?? 'GET').toUpperCase();
+
+  if (!host || !expectedHosts(port).includes(host.toLowerCase())) {
+    return { ok: false, reason: 'invalid host' };
+  }
+
+  if (origin) {
+    if (!expectedOrigins(port).includes(origin)) {
+      return { ok: false, reason: 'origin mismatch' };
+    }
+    return { ok: true };
+  }
+
+  const stateChanging =
+    method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS';
+  if (stateChanging) {
+    return { ok: false, reason: 'origin required for state-changing requests' };
+  }
+
+  // GET / HEAD without Origin → require browser-set Sec-Fetch-Site proof
+  if (fetchSite === 'same-origin' || fetchSite === 'none') {
+    return { ok: true };
+  }
+  return { ok: false, reason: 'request lacks same-origin proof' };
+}
+
 async function handleApi(
   req: http.IncomingMessage,
   res: http.ServerResponse,
   pathname: string,
   search: URLSearchParams,
+  port: number,
 ): Promise<void> {
   const method = req.method?.toUpperCase() ?? 'GET';
+  const origin = req.headers.origin;
 
-  // CORS for dev
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,DELETE,OPTIONS');
+  const verdict = verifySameOrigin(req, port);
+  if (!verdict.ok) {
+    sendError(res, 403, verdict.reason);
+    return;
+  }
+
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  }
+  res.setHeader(
+    'Access-Control-Allow-Methods',
+    'GET,POST,DELETE,PATCH,OPTIONS',
+  );
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (method === 'OPTIONS') {
     res.writeHead(204);
@@ -375,8 +449,21 @@ async function handleApi(
       sendError(res, 400, 'cwd required');
       return;
     }
+    if (!path.isAbsolute(parsed.cwd)) {
+      sendError(res, 400, 'cwd must be an absolute path');
+      return;
+    }
+    try {
+      if (!fs.statSync(parsed.cwd).isDirectory()) {
+        sendError(res, 400, 'cwd must be a directory');
+        return;
+      }
+    } catch {
+      sendError(res, 400, 'cwd does not exist');
+      return;
+    }
 
-    const cwd = parsed.cwd;
+    const cwd = path.resolve(parsed.cwd);
     const title = parsed.title ?? path.basename(cwd);
     const sessionId = randomUUID();
 
@@ -626,7 +713,6 @@ async function handleApi(
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       Connection: 'keep-alive',
-      'Access-Control-Allow-Origin': '*',
     });
 
     // Keep-alive ping every 20 s
@@ -772,7 +858,10 @@ function tryListen(
         reject(err);
       }
     });
-    server.listen(port, '127.0.0.1', () => resolve(port));
+    server.listen(port, '127.0.0.1', () => {
+      const addr = server.address();
+      resolve(typeof addr === 'object' && addr ? addr.port : port);
+    });
   });
 }
 
@@ -782,12 +871,13 @@ export async function createServer(
 ): Promise<{ server: http.Server; port: number }> {
   const staticDir = resolveStaticDir();
 
+  let boundPort = preferredPort;
   const server = http.createServer(async (req, res) => {
     const { pathname, search } = parsePathname(req);
 
     if (pathname.startsWith('/api/')) {
       try {
-        await handleApi(req, res, pathname, search);
+        await handleApi(req, res, pathname, search, boundPort);
       } catch (err) {
         sendError(res, 500, String(err));
       }
@@ -798,6 +888,7 @@ export async function createServer(
   });
 
   const port = await tryListen(server, preferredPort);
+  boundPort = port;
   return { server, port };
 }
 
