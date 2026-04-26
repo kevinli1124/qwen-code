@@ -5,7 +5,7 @@ import { useMessageStore } from '../stores/messageStore';
 import { useSessionStore } from '../stores/sessionStore';
 import type { StreamEvent, ToolCallEntry } from '../types/message';
 
-export function useSessionEvents(sessionId: string) {
+export function useSessionEvents(sessionId: string | null) {
   // Track subagent metadata so tool calls emitted with a non-'main'
   // agentId can be labelled with the subagent's type (e.g. "code-reviewer").
   // Keyed by subagentId.
@@ -61,6 +61,7 @@ export function useSessionEvents(sessionId: string) {
 
   const handleEvent = useCallback(
     (event: StreamEvent) => {
+      if (!sessionId) return;
       switch (event.type) {
         case 'system_init': {
           // Enriched by SessionManager with tokenLimits from core.

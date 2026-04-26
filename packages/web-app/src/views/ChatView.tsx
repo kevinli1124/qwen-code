@@ -205,7 +205,7 @@ export const ChatView: FC = () => {
       });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const { handleEvent } = useSessionEvents(activeSessionId ?? '');
+  const { handleEvent } = useSessionEvents(activeSessionId ?? null);
 
   // Connect SSE for active session
   useSSE(activeSessionId, handleEvent, (err) => setConnectionError(err));
