@@ -751,7 +751,8 @@ async function handleApi(
         .sort();
       sendJson(res, 200, { path: dirPath, dirs, files });
     } catch (err) {
-      sendError(res, 400, String(err));
+      process.stderr.write(`[web] browse error: ${String(err)}\n`);
+      sendError(res, 400, 'cannot read directory');
     }
     return;
   }
@@ -767,7 +768,8 @@ async function handleApi(
       const content = fs.readFileSync(filePath, 'utf8');
       sendJson(res, 200, { content, size: Buffer.byteLength(content, 'utf8') });
     } catch (err) {
-      sendError(res, 400, String(err));
+      process.stderr.write(`[web] read-file error: ${String(err)}\n`);
+      sendError(res, 400, 'cannot read file');
     }
     return;
   }
@@ -892,7 +894,8 @@ export async function createServer(
       try {
         await handleApi(req, res, pathname, search, boundPort);
       } catch (err) {
-        sendError(res, 500, String(err));
+        process.stderr.write(`[web] internal error: ${String(err)}\n`);
+        sendError(res, 500, 'internal server error');
       }
       return;
     }

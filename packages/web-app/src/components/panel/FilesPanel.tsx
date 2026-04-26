@@ -185,8 +185,8 @@ export const FilesPanel: FC<FilesPanelProps> = ({ sessionId }) => {
   const mods: FileMod[] = modsMap
     ? Object.values(modsMap).sort(
         (a, b) =>
-          (ops.findIndex((o) => o.callId === b.callId) || 0) -
-          (ops.findIndex((o) => o.callId === a.callId) || 0),
+          (ops.findIndex((o) => o.callId === b.callId) ?? -1) -
+          (ops.findIndex((o) => o.callId === a.callId) ?? -1),
       )
     : [];
 

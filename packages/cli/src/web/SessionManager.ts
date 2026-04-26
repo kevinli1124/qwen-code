@@ -458,11 +458,6 @@ function translateAndBroadcast(session: ActiveSession, raw: unknown): void {
     case 'tool_start': {
       const callId = (msg['call_id'] as string) ?? '';
       const toolName = (msg['tool_name'] as string) ?? '';
-      session.activeToolUseBlocks.set(callId.length, {
-        id: callId,
-        name: toolName,
-        started: Date.now(),
-      });
       broadcast(session, 'message', {
         type: 'tool_start',
         callId,

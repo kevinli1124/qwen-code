@@ -32,7 +32,15 @@ function ensureDir(): void {
   }
 }
 
+// Session IDs are random UUIDs generated server-side; reject anything that
+// doesn't look like an alphanumeric slug so path.join can't be used to
+// traverse outside SESSIONS_DIR via ids like `../../etc/passwd`.
+const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
+
 function sessionPath(id: string): string {
+  if (!SESSION_ID_RE.test(id)) {
+    throw new Error(`Invalid session id: ${JSON.stringify(id)}`);
+  }
   return path.join(SESSIONS_DIR, `${id}.json`);
 }
 
