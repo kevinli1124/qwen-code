@@ -799,7 +799,16 @@ async function handleApi(
     return;
   }
 
-  // PATCH /api/settings
+  // PATCH /api/settings — only keys that the web UI legitimately manages
+  // are allowed through. Unknown top-level keys are silently dropped so that
+  // a future UI extension or bug cannot pollute the settings file.
+  const SETTINGS_ALLOWED_KEYS = new Set([
+    'security',
+    'model',
+    'general',
+    'tools',
+    'env',
+  ]);
   if (pathname === '/api/settings' && method === 'PATCH') {
     const body = await readBody(req);
     let patch: Record<string, unknown> = {};
@@ -808,7 +817,10 @@ async function handleApi(
     } catch {
       /* empty */
     }
-    const merged = deepMerge(readSettings(), patch);
+    const filtered = Object.fromEntries(
+      Object.entries(patch).filter(([k]) => SETTINGS_ALLOWED_KEYS.has(k)),
+    );
+    const merged = deepMerge(readSettings(), filtered);
     writeSettings(merged);
     sendJson(res, 200, { ok: true });
     return;
