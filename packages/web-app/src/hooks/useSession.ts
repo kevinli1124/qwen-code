@@ -14,6 +14,7 @@ export function useSessionEvents(sessionId: string | null) {
     appendMessage,
     updateStreamingText,
     finalizeStreamingText,
+    clearStreamingText,
     upsertToolCall,
     appendTerminal,
     addFileOp,
@@ -35,6 +36,7 @@ export function useSessionEvents(sessionId: string | null) {
       appendMessage: s.appendMessage,
       updateStreamingText: s.updateStreamingText,
       finalizeStreamingText: s.finalizeStreamingText,
+      clearStreamingText: s.clearStreamingText,
       upsertToolCall: s.upsertToolCall,
       appendTerminal: s.appendTerminal,
       addFileOp: s.addFileOp,
@@ -100,6 +102,10 @@ export function useSessionEvents(sessionId: string | null) {
             message: { role: 'thinking', content: event.content },
           };
           appendMessage(sessionId, msg);
+          // thinking-delta stream_text events use uuid=`thinking-${blockUuid}`.
+          // They are finalized by this event (not by an assistant event), so
+          // clean up the streamingText entry manually.
+          clearStreamingText(event.uuid);
           break;
         }
 
@@ -331,6 +337,7 @@ export function useSessionEvents(sessionId: string | null) {
       appendMessage,
       updateStreamingText,
       finalizeStreamingText,
+      clearStreamingText,
       upsertToolCall,
       appendTerminal,
       addFileOp,

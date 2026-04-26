@@ -509,6 +509,7 @@ async function handleApi(
   // DELETE /api/sessions/:id
   if (sessionDetailMatch && method === 'DELETE') {
     const id = sessionDetailMatch[1]!;
+    SessionManager.disposeSession(id);
     PersistenceManager.deleteSession(id);
     res.writeHead(204);
     res.end();
@@ -934,15 +935,15 @@ export async function startWebServer(
       });
   }
 
-  // Keep alive until SIGTERM / SIGINT
+  // Keep alive until SIGTERM / SIGINT. Kill all spawned CLI children first
+  // so they don't become orphans when the parent Node process exits.
   await new Promise<void>((resolve) => {
-    process.on('SIGINT', () => {
+    const shutdown = () => {
+      SessionManager.killAll();
       server.close();
       resolve();
-    });
-    process.on('SIGTERM', () => {
-      server.close();
-      resolve();
-    });
+    };
+    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', shutdown);
   });
 }

@@ -125,6 +125,7 @@ interface MessageStore {
       }>;
     }>,
   ) => void;
+  clearStreamingText: (uuid: string) => void;
   setConnectionError: (err: string | null) => void;
 }
 
@@ -220,12 +221,18 @@ export const useMessageStore = create<MessageStore>((set) => ({
     })),
 
   appendTerminal: (sessionId, text) =>
-    set((s) => ({
-      terminalBySession: {
-        ...s.terminalBySession,
-        [sessionId]: (s.terminalBySession[sessionId] ?? '') + text,
-      },
-    })),
+    set((s) => {
+      const TERMINAL_CAP = 200 * 1024; // 200 KB — prevents unbounded growth on long shell runs
+      const current = s.terminalBySession[sessionId] ?? '';
+      const appended = current + text;
+      const trimmed =
+        appended.length > TERMINAL_CAP
+          ? appended.slice(appended.length - TERMINAL_CAP)
+          : appended;
+      return {
+        terminalBySession: { ...s.terminalBySession, [sessionId]: trimmed },
+      };
+    }),
 
   clearSession: (sessionId) =>
     set((s) => {
@@ -342,5 +349,11 @@ export const useMessageStore = create<MessageStore>((set) => ({
         },
       };
     }),
+  clearStreamingText: (uuid) =>
+    set((s) => {
+      const { [uuid]: _removed, ...rest } = s.streamingText;
+      return { streamingText: rest };
+    }),
+
   setConnectionError: (err) => set({ connectionError: err }),
 }));

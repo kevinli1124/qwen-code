@@ -13,6 +13,7 @@ export function useSSE(
   const esRef = useRef<EventSource | null>(null);
   const retriesRef = useRef(0);
   const unmountedRef = useRef(false);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     unmountedRef.current = false;
@@ -38,7 +39,7 @@ export function useSSE(
         if (unmountedRef.current) return;
         if (retriesRef.current < MAX_RETRIES) {
           retriesRef.current++;
-          setTimeout(connect, RETRY_DELAY_MS);
+          retryTimerRef.current = setTimeout(connect, RETRY_DELAY_MS);
         } else {
           onError?.('Connection lost. Please reload the page.');
         }
@@ -49,6 +50,10 @@ export function useSSE(
     return () => {
       unmountedRef.current = true;
       esRef.current?.close();
+      if (retryTimerRef.current !== null) {
+        clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
     };
   }, [sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 }

@@ -675,7 +675,11 @@ export const SessionManager = {
           message: `CLI process exited with code ${code}`,
         });
       }
+      // Clean up all resources so module-level Maps don't grow unboundedly
+      // across the server lifetime.
       sessions.delete(id);
+      persistentSnapshots.delete(id);
+      pendingSseClients.delete(id);
     });
   },
 
@@ -919,5 +923,27 @@ export const SessionManager = {
 
   isActive(id: string): boolean {
     return sessions.has(id);
+  },
+
+  /** Kill the child process (if running) and release all Maps for a session. */
+  disposeSession(id: string): void {
+    const session = sessions.get(id);
+    if (session?.child) {
+      try {
+        session.child.kill('SIGTERM');
+      } catch {
+        // already exited
+      }
+    }
+    sessions.delete(id);
+    persistentSnapshots.delete(id);
+    pendingSseClients.delete(id);
+  },
+
+  /** Kill every active child process — called on server shutdown. */
+  killAll(): void {
+    for (const [id] of sessions) {
+      SessionManager.disposeSession(id);
+    }
   },
 };
