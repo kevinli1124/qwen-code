@@ -169,6 +169,11 @@
           "description": "Whether the initial setup wizard has been completed.",
           "type": "boolean",
           "default": false
+        },
+        "promptProfile": {
+          "description": "Which system-prompt profile to use. 'fork' enables this fork's additions (soul.md injection, MEMORY.md index, memory-discipline text, onboarding hints). 'qwen-native' disables all of them so you get the upstream Qwen-Code prompt surface — recommended when testing Qwen models that were trained against the original prompt.",
+          "type": "string",
+          "default": "fork"
         }
       }
     },
