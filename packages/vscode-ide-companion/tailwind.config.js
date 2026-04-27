@@ -17,7 +17,7 @@ export default {
     // Include webui components to prevent Tailwind JIT from tree-shaking their classes
     // Use relative path for pnpm workspace - node_modules symlinks are in root
     '../webui/src/**/*.{js,jsx,ts,tsx}',
-    '../webui/dist/**/*.js',
+    '../webui/dist/*.{js,cjs}',
   ],
   theme: {
     extend: {
