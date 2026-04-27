@@ -9,6 +9,7 @@ import { createInterface } from 'node:readline';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import type { ServerResponse } from 'node:http';
+import os from 'node:os';
 import path from 'node:path';
 import { tokenLimit, Storage } from '@qwen-code/qwen-code-core';
 import { PersistenceManager } from './PersistenceManager.js';
@@ -414,9 +415,30 @@ function translateAndBroadcast(session: ActiveSession, raw: unknown): void {
       // model→limit table that already lives in core/tokenLimits.
       if (msg['subtype'] === 'init') {
         const modelName = (msg['model'] as string) ?? '';
-        const inputLimit = modelName
-          ? tokenLimit(modelName, 'input')
-          : undefined;
+        // Prefer user-configured contextWindowSize from settings.json
+        // (model.generationConfig.contextWindowSize) over the static pattern match.
+        const rawSettings = (() => {
+          try {
+            const p = path.join(os.homedir(), '.qwen', 'settings.json');
+            return JSON.parse(fs.readFileSync(p, 'utf8')) as Record<
+              string,
+              unknown
+            >;
+          } catch {
+            return {};
+          }
+        })();
+        const storedModel =
+          (rawSettings['model'] as Record<string, unknown>) ?? {};
+        const storedGenCfg =
+          (storedModel['generationConfig'] as Record<string, unknown>) ?? {};
+        const storedCtx = storedGenCfg['contextWindowSize'];
+        const inputLimit =
+          typeof storedCtx === 'number'
+            ? storedCtx
+            : modelName
+              ? tokenLimit(modelName, 'input')
+              : undefined;
         const outputLimit = modelName
           ? tokenLimit(modelName, 'output')
           : undefined;

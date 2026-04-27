@@ -5,7 +5,11 @@
  */
 import { useState, useEffect, type FC } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { settingsApi, type AppSettings } from '../../api/settings';
+import {
+  settingsApi,
+  type AppSettings,
+  type DetectContextResult,
+} from '../../api/settings';
 import { useSettingsStore } from '../../stores/settingsStore';
 
 interface Provider {
@@ -122,6 +126,18 @@ export const SettingsModal: FC<Props> = ({ onClose, isFirstRun = false }) => {
   const [approvalMode, setApprovalMode] = useState(
     initTools?.approvalMode ?? 'default',
   );
+  // contextWindowSize: empty string = auto (let core decide), number string = override
+  const [contextWindowSize, setContextWindowSize] = useState<string>(
+    serverSettings?.model.contextWindowSize != null
+      ? String(serverSettings.model.contextWindowSize)
+      : '',
+  );
+  const [detectStatus, setDetectStatus] = useState<
+    'idle' | 'detecting' | 'done' | 'fail'
+  >('idle');
+  const [detectResult, setDetectResult] = useState<DetectContextResult | null>(
+    null,
+  );
 
   const [testStatus, setTestStatus] = useState<
     'idle' | 'testing' | 'ok' | 'fail'
@@ -159,9 +175,27 @@ export const SettingsModal: FC<Props> = ({ onClose, isFirstRun = false }) => {
     }
   };
 
+  const handleDetect = async () => {
+    setDetectStatus('detecting');
+    setDetectResult(null);
+    try {
+      const result = await settingsApi.detectContext(apiKey, baseUrl, model);
+      setDetectResult(result);
+      setDetectStatus('done');
+      if (result.detected !== null) {
+        setContextWindowSize(String(result.detected));
+      }
+    } catch {
+      setDetectStatus('fail');
+    }
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
+      const parsedCtx = contextWindowSize.trim()
+        ? Number(contextWindowSize.trim())
+        : null;
       const patch: Partial<AppSettings> = {
         security: {
           auth: {
@@ -170,7 +204,10 @@ export const SettingsModal: FC<Props> = ({ onClose, isFirstRun = false }) => {
             baseUrl,
           },
         },
-        model: { name: model },
+        model: {
+          name: model,
+          contextWindowSize: parsedCtx && parsedCtx > 0 ? parsedCtx : null,
+        },
         general: {
           agentName,
           language,
@@ -311,6 +348,64 @@ export const SettingsModal: FC<Props> = ({ onClose, isFirstRun = false }) => {
                   placeholder={provider.defaultModel || 'model name'}
                   className="w-full bg-[#242424] border border-[#2e2e2e] rounded px-3 py-2 text-sm text-[#e8e6e3] font-mono placeholder-[#555] focus:outline-none focus:border-accent"
                 />
+              </div>
+
+              {/* Context Window */}
+              <div>
+                <label className="block text-xs text-[#8a8a8a] mb-1.5">
+                  Context Window (tokens)
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    value={contextWindowSize}
+                    onChange={(e) => {
+                      setContextWindowSize(e.target.value);
+                      setDetectResult(null);
+                      setDetectStatus('idle');
+                    }}
+                    placeholder="Auto-detect"
+                    min={1024}
+                    className="flex-1 bg-[#242424] border border-[#2e2e2e] rounded px-3 py-2 text-sm text-[#e8e6e3] font-mono placeholder-[#555] focus:outline-none focus:border-accent"
+                  />
+                  <button
+                    onClick={handleDetect}
+                    disabled={
+                      !apiKey ||
+                      !baseUrl ||
+                      !model ||
+                      detectStatus === 'detecting'
+                    }
+                    className="px-3 py-2 text-xs rounded border border-[#2e2e2e] text-[#8a8a8a] hover:text-[#e8e6e3] hover:border-[#555] disabled:opacity-40 transition-colors whitespace-nowrap"
+                  >
+                    {detectStatus === 'detecting'
+                      ? 'Detecting…'
+                      : 'Auto-detect'}
+                  </button>
+                </div>
+                {detectStatus === 'done' && detectResult && (
+                  <p className="mt-1 text-xs">
+                    {detectResult.detected !== null ? (
+                      <span className="text-green-400">
+                        ✓ API reported {detectResult.detected.toLocaleString()}{' '}
+                        tokens
+                      </span>
+                    ) : (
+                      <span className="text-[#8a8a8a]">
+                        API did not return context size — using pattern
+                        estimate: {detectResult.patternValue.toLocaleString()}
+                      </span>
+                    )}
+                  </p>
+                )}
+                {detectStatus === 'fail' && (
+                  <p className="mt-1 text-xs text-red-400">Detection failed</p>
+                )}
+                {!contextWindowSize && (
+                  <p className="mt-1 text-xs text-[#555]">
+                    Leave blank to use auto-estimate from model name
+                  </p>
+                )}
               </div>
 
               {/* Test connection */}

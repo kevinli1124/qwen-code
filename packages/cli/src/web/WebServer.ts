@@ -16,6 +16,7 @@ import { SessionManager } from './SessionManager.js';
 import { PersistenceManager } from './PersistenceManager.js';
 import { staticFiles } from './staticFiles.js';
 import { getLocalizedCommandMetadata } from './commandMetadata.js';
+import { tokenLimit } from '@qwen-code/qwen-code-core';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -107,6 +108,48 @@ function httpGet(
       req.destroy(new Error('Request timeout'));
     });
   });
+}
+
+/**
+ * Query the OpenAI-compatible /models endpoint and return the context window
+ * size for the given model, or null if the provider doesn't expose it.
+ *
+ * Field detection order (covers vLLM, LM Studio, OpenRouter, llama.cpp):
+ *   max_model_len  → vLLM
+ *   context_length → LM Studio, OpenRouter
+ *   context_window → some custom providers
+ */
+async function detectContextWindow(
+  baseUrl: string,
+  apiKey: string,
+  modelName: string,
+): Promise<number | null> {
+  if (!baseUrl || !modelName) return null;
+  try {
+    const base = baseUrl.replace(/\/$/, '');
+    const { status, body } = await httpGet(`${base}/models`, {
+      Authorization: `Bearer ${apiKey}`,
+    });
+    if (status !== 200) return null;
+
+    const parsed = JSON.parse(body) as {
+      data?: Array<Record<string, unknown>>;
+    };
+    const models = parsed.data ?? [];
+    const lowerTarget = modelName.toLowerCase();
+    const entry = models.find(
+      (m) => String(m['id'] ?? '').toLowerCase() === lowerTarget,
+    );
+    if (!entry) return null;
+
+    for (const field of ['max_model_len', 'context_length', 'context_window']) {
+      const val = entry[field];
+      if (typeof val === 'number' && val > 0) return val;
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 async function testConnection(
@@ -782,6 +825,8 @@ async function handleApi(
     const model = (raw['model'] as Record<string, unknown>) ?? {};
     const general = (raw['general'] as Record<string, unknown>) ?? {};
     const tools = (raw['tools'] as Record<string, unknown>) ?? {};
+    const genCfg = (model['generationConfig'] as Record<string, unknown>) ?? {};
+    const storedCtx = genCfg['contextWindowSize'];
     sendJson(res, 200, {
       security: {
         auth: {
@@ -790,7 +835,10 @@ async function handleApi(
           baseUrl: auth['baseUrl'] ?? '',
         },
       },
-      model: { name: model['name'] ?? '' },
+      model: {
+        name: model['name'] ?? '',
+        contextWindowSize: typeof storedCtx === 'number' ? storedCtx : null,
+      },
       general: {
         agentName: general['agentName'] ?? '',
         language: general['language'] ?? 'auto',
@@ -823,6 +871,38 @@ async function handleApi(
     const filtered = Object.fromEntries(
       Object.entries(patch).filter(([k]) => SETTINGS_ALLOWED_KEYS.has(k)),
     );
+    // Translate model.contextWindowSize (flat API shape) →
+    // model.generationConfig.contextWindowSize (settings.json shape expected by core config).
+    if (
+      filtered['model'] !== undefined &&
+      typeof filtered['model'] === 'object' &&
+      filtered['model'] !== null
+    ) {
+      const m = filtered['model'] as Record<string, unknown>;
+      if ('contextWindowSize' in m) {
+        const ctxVal = m['contextWindowSize'];
+        const { contextWindowSize: _drop, ...rest } = m;
+        filtered['model'] = {
+          ...rest,
+          ...(ctxVal !== null && ctxVal !== undefined
+            ? { generationConfig: { contextWindowSize: ctxVal } }
+            : {}),
+        };
+        // If null, remove any existing stored value by explicitly setting to undefined
+        if (ctxVal === null) {
+          const current = readSettings();
+          const currentModel =
+            (current['model'] as Record<string, unknown>) ?? {};
+          const currentGenCfg =
+            (currentModel['generationConfig'] as Record<string, unknown>) ?? {};
+          const { contextWindowSize: _removed, ...restGenCfg } = currentGenCfg;
+          filtered['model'] = {
+            ...(filtered['model'] as Record<string, unknown>),
+            generationConfig: restGenCfg,
+          };
+        }
+      }
+    }
     const merged = deepMerge(readSettings(), filtered);
     writeSettings(merged);
     sendJson(res, 200, { ok: true });
@@ -848,6 +928,28 @@ async function handleApi(
       config.baseUrl ?? '',
     );
     sendJson(res, 200, result);
+    return;
+  }
+
+  // POST /api/settings/detect-context — query the /models endpoint on the
+  // configured base URL and return the model's declared context window size.
+  // Returns { detected: number|null, source: 'api'|'pattern', patternValue: number }.
+  if (pathname === '/api/settings/detect-context' && method === 'POST') {
+    const body = await readBody(req);
+    let config: { apiKey?: string; baseUrl?: string; modelName?: string } = {};
+    try {
+      config = JSON.parse(body) as typeof config;
+    } catch {
+      /* empty */
+    }
+    const { apiKey: dk = '', baseUrl: db = '', modelName: dm = '' } = config;
+    const detected = await detectContextWindow(db, dk, dm);
+    const patternValue = dm ? tokenLimit(dm, 'input') : 131_072;
+    sendJson(res, 200, {
+      detected,
+      source: detected !== null ? 'api' : 'pattern',
+      patternValue,
+    });
     return;
   }
 

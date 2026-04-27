@@ -13,7 +13,11 @@ export interface AppSettings {
       baseUrl: string;
     };
   };
-  model: { name: string };
+  model: {
+    name: string;
+    /** Manually configured or API-detected context window override (tokens). null = auto. */
+    contextWindowSize?: number | null;
+  };
   general: {
     agentName: string;
     language: string;
@@ -26,6 +30,12 @@ export interface AppSettings {
 export interface TestResult {
   ok: boolean;
   error?: string;
+}
+
+export interface DetectContextResult {
+  detected: number | null;
+  source: 'api' | 'pattern';
+  patternValue: number;
 }
 
 export const settingsApi = {
@@ -41,5 +51,11 @@ export const settingsApi = {
     apiFetch<TestResult>('/api/settings/test', {
       method: 'POST',
       body: JSON.stringify({ apiKey, authType, baseUrl }),
+    }),
+
+  detectContext: (apiKey: string, baseUrl: string, modelName: string) =>
+    apiFetch<DetectContextResult>('/api/settings/detect-context', {
+      method: 'POST',
+      body: JSON.stringify({ apiKey, baseUrl, modelName }),
     }),
 };
