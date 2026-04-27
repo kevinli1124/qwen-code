@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { useEffect, useMemo, useState, type FC } from 'react';
+import { useMessageStore } from '../../stores/messageStore';
 
 // A curated subset of the CLI's WITTY_LOADING_PHRASES. The full list
 // has ~140 entries per locale; for the web footer a handful rotated
@@ -95,6 +96,7 @@ interface LoadingIndicatorProps {
 }
 
 export const LoadingIndicator: FC<LoadingIndicatorProps> = ({ visible }) => {
+  const currentToolName = useMessageStore((s) => s.currentToolName);
   const phrases = useMemo(() => PHRASES[resolveLocale(navigator.language)], []);
   const [phrase, setPhrase] = useState(
     () => phrases[Math.floor(Math.random() * phrases.length)] ?? '',
@@ -143,7 +145,13 @@ export const LoadingIndicator: FC<LoadingIndicatorProps> = ({ visible }) => {
           style={{ animationDelay: '300ms' }}
         />
       </div>
-      <span className="italic">{phrase}</span>
+      {currentToolName ? (
+        <span className="italic">
+          Currently: <span className="text-[#b8b6b3]">{currentToolName}</span>
+        </span>
+      ) : (
+        <span className="italic">{phrase}</span>
+      )}
       <span className="font-mono text-[#6e6e6e]">
         ({formatElapsed(elapsed)})
       </span>

@@ -33,6 +33,8 @@ export function useSessionEvents(sessionId: string | null) {
     setTokenUsage,
     addSessionTokens,
     setConnectionError,
+    setCurrentToolName,
+    incrementTurnCount,
   } = useMessageStore(
     useShallow((s) => ({
       appendMessage: s.appendMessage,
@@ -55,6 +57,8 @@ export function useSessionEvents(sessionId: string | null) {
       setTokenUsage: s.setTokenUsage,
       addSessionTokens: s.addSessionTokens,
       setConnectionError: s.setConnectionError,
+      setCurrentToolName: s.setCurrentToolName,
+      incrementTurnCount: s.incrementTurnCount,
     })),
   );
   const { updateSession } = useSessionStore(
@@ -112,6 +116,7 @@ export function useSessionEvents(sessionId: string | null) {
         }
 
         case 'tool_start': {
+          setCurrentToolName(formatToolTitle(event.toolName, event.args));
           const kind = mapToolNameToKind(event.toolName);
           const baseTitle = formatToolTitle(event.toolName, event.args);
           // If this call came from a subagent, tag the title so the user
@@ -183,6 +188,7 @@ export function useSessionEvents(sessionId: string | null) {
         }
 
         case 'tool_complete': {
+          setCurrentToolName(null);
           const patch: ToolCallEntry = {
             callId: event.callId,
             toolName: event.toolName,
@@ -342,6 +348,8 @@ export function useSessionEvents(sessionId: string | null) {
 
         case 'result': {
           setStreaming(false);
+          setCurrentToolName(null);
+          incrementTurnCount(sessionId);
           if (event.usage) {
             setTokenUsage(sessionId, event.usage);
             addSessionTokens(sessionId, event.usage);
@@ -384,6 +392,8 @@ export function useSessionEvents(sessionId: string | null) {
       setTokenUsage,
       addSessionTokens,
       setConnectionError,
+      setCurrentToolName,
+      incrementTurnCount,
       updateSession,
     ],
   );

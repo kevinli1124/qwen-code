@@ -3,7 +3,7 @@
  * Copyright 2025 Qwen team
  * SPDX-License-Identifier: Apache-2.0
  */
-import type { FC } from 'react';
+import { useEffect, type FC } from 'react';
 import type { PermissionRequest } from '../../types/message';
 
 export type PermissionDecision =
@@ -135,13 +135,56 @@ export const PermissionCard: FC<PermissionCardProps> = ({
 }) => {
   const input = (request.input ?? {}) as Record<string, unknown>;
   const projectScope = projectCwd ?? 'this project';
+
+  // Keyboard shortcuts: Enter/Space → allow once, Escape → deny
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        onDecide('allow_once');
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        onDecide('deny');
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onDecide]);
+
+  // Shell command snippet for the context line
+  const isShellTool =
+    request.toolName === 'bash' || request.toolName === 'run_shell_command';
+  const shellCommand = isShellTool
+    ? String(input?.command ?? '').slice(0, 80) || null
+    : null;
+
   // Matches QuestionModal's outer wrapper so the two dialogs feel like
   // the same product. Dim backdrop keeps focus on the prompt; card
   // stays centered so the draft text in InputBar (still mounted) sits
   // visually behind it instead of being replaced.
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="w-[640px] max-w-[90vw] max-h-[85vh] overflow-y-auto flex flex-col gap-3 bg-[#242424] border border-[#2e2e2e] rounded-lg px-4 py-3 shadow-2xl">
+      <div className="w-[640px] max-w-[90vw] max-h-[85vh] overflow-y-auto flex flex-col gap-3 bg-[#242424] border border-[#2e2e2e] rounded-lg px-4 py-3 shadow-2xl animate-fade-up">
+        {/* Context line — subtle identifier above the main header */}
+        <div className="text-xs text-[#8a8a8a]">
+          Agent is requesting permission to use{' '}
+          <span className="font-semibold text-[#b0b0b0]">
+            {request.toolName}
+          </span>
+          {shellCommand && (
+            <>
+              {' '}
+              —{' '}
+              <span className="font-mono text-[#8a8a8a]">
+                {shellCommand}
+                {((input?.command as string | undefined)?.length ?? 0 > 80)
+                  ? '…'
+                  : ''}
+              </span>
+            </>
+          )}
+        </div>
+
         {/* Header */}
         <div className="flex items-start gap-2">
           <div className="flex-shrink-0 w-5 h-5 rounded-full bg-yellow-500/20 text-yellow-400 flex items-center justify-center text-[11px] font-bold">
@@ -197,15 +240,20 @@ export const PermissionCard: FC<PermissionCardProps> = ({
           </button>
         </div>
 
-        <div className="text-[10px] text-[#8a8a8a]">
-          {projectCwd ? (
-            <>
-              Project:{' '}
-              <span className="font-mono text-[#a0a0a0]">
-                {shortenPath(projectCwd, 60)}
-              </span>
-            </>
-          ) : null}
+        <div className="flex items-center justify-between text-[10px] text-[#8a8a8a]">
+          <div>
+            {projectCwd ? (
+              <>
+                Project:{' '}
+                <span className="font-mono text-[#a0a0a0]">
+                  {shortenPath(projectCwd, 60)}
+                </span>
+              </>
+            ) : null}
+          </div>
+          <div className="text-[#5a5a5a]">
+            Press Enter to allow · Esc to deny
+          </div>
         </div>
       </div>
     </div>

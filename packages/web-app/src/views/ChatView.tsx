@@ -3,7 +3,8 @@
  * Copyright 2025 Qwen team
  * SPDX-License-Identifier: Apache-2.0
  */
-import { useState, useEffect, useCallback, type FC } from 'react';
+import { useState, useEffect, useCallback, useRef, type FC } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useShallow } from 'zustand/react/shallow';
 import { AppLayout } from '../components/layout/AppLayout';
 import { Sidebar } from '../components/layout/Sidebar';
@@ -70,6 +71,7 @@ export const ChatView: FC = () => {
     tokenUsageBySession,
     sessionTokensBySession,
     resetSessionTokens,
+    turnCountBySession,
   } = useMessageStore(
     useShallow((s) => ({
       isStreaming: s.isStreaming,
@@ -89,8 +91,40 @@ export const ChatView: FC = () => {
       tokenUsageBySession: s.tokenUsageBySession,
       sessionTokensBySession: s.sessionTokensBySession,
       resetSessionTokens: s.resetSessionTokens,
+      turnCountBySession: s.turnCountBySession,
     })),
   );
+
+  // ── URL ↔ session sync ───────────────────────────────────────────────
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Push/replace URL whenever the active session changes.
+  useEffect(() => {
+    if (activeSessionId) {
+      setSearchParams({ session: activeSessionId }, { replace: true });
+    } else {
+      setSearchParams({}, { replace: true });
+    }
+  }, [activeSessionId, setSearchParams]);
+
+  // Auto-select from URL on initial sessions load.
+  // We only want to fire once (when sessions first becomes non-empty after
+  // page load), so we track whether we've already attempted the restore.
+  const urlRestoreAttempted = useRef(false);
+  useEffect(() => {
+    if (urlRestoreAttempted.current) return;
+    if (sessions.length === 0) return;
+    urlRestoreAttempted.current = true;
+    const sessionParam = searchParams.get('session');
+    if (
+      sessionParam &&
+      sessions.some((s) => s.id === sessionParam) &&
+      !activeSessionId
+    ) {
+      setActiveSessionId(sessionParam);
+    }
+  }, [sessions, searchParams, activeSessionId, setActiveSessionId]);
+  // ── end URL sync ─────────────────────────────────────────────────────
 
   const [commandList, setCommandList] = useState<CommandMetadata[]>([]);
   const [skillList, setSkillList] = useState<SkillMetadata[]>([]);
@@ -425,6 +459,12 @@ export const ChatView: FC = () => {
                   <span>Running</span>
                 </div>
               )}
+              {activeSessionId &&
+                (turnCountBySession[activeSessionId] ?? 0) > 0 && (
+                  <div className="text-xs text-[#555] font-mono">
+                    Turn {turnCountBySession[activeSessionId]}
+                  </div>
+                )}
               <ContextUsage />
               <ApprovalModeToggle sessionId={activeSessionId} />
               {/* Right panel toggle — useful for Terminal / Files / Plan

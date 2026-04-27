@@ -3,7 +3,7 @@
  * Copyright 2025 Qwen team
  * SPDX-License-Identifier: Apache-2.0
  */
-import { useState, type FC } from 'react';
+import { useState, useEffect, type FC } from 'react';
 
 export type PlanAction = 'accept-ask' | 'accept-auto' | 'reject';
 
@@ -32,9 +32,28 @@ export const PlanConfirmationModal: FC<PlanConfirmationModalProps> = ({
     onDecide(action, feedback.trim() || undefined);
   };
 
+  // Keyboard shortcuts: Enter → accept-auto (primary approve), Escape → reject
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't intercept keys when the textarea is focused
+      if (e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        decide('accept-auto');
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        decide('reject');
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+    // decide is stable within the render; busy/feedback are captured via closure
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busy, feedback]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4">
-      <div className="w-full max-w-[760px] max-h-[85vh] flex flex-col bg-[#1a1a1a] border border-[#2e2e2e] rounded-lg shadow-2xl">
+      <div className="w-full max-w-[760px] max-h-[85vh] flex flex-col bg-[#1a1a1a] border border-[#2e2e2e] rounded-lg shadow-2xl animate-fade-up">
         {/* Header */}
         <div className="flex items-start gap-3 px-5 py-4 border-b border-[#2e2e2e]">
           <div className="flex-shrink-0 w-7 h-7 rounded-full bg-sky-500/20 text-sky-400 flex items-center justify-center text-sm font-bold">
@@ -73,7 +92,7 @@ export const PlanConfirmationModal: FC<PlanConfirmationModalProps> = ({
         </div>
 
         {/* Buttons */}
-        <div className="flex flex-wrap gap-2 px-5 py-3 border-t border-[#2e2e2e]">
+        <div className="flex flex-wrap gap-2 px-5 pt-3 pb-2 border-t border-[#2e2e2e]">
           <button
             onClick={() => decide('accept-ask')}
             disabled={busy !== null}
@@ -99,6 +118,11 @@ export const PlanConfirmationModal: FC<PlanConfirmationModalProps> = ({
           >
             {busy === 'reject' ? 'Working…' : 'Reject'}
           </button>
+        </div>
+
+        {/* Keyboard hint */}
+        <div className="px-5 pb-3 text-[10px] text-[#5a5a5a] text-right">
+          Press Enter to approve (auto-edit) · Esc to reject
         </div>
       </div>
     </div>

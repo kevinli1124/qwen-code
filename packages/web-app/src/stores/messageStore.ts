@@ -73,6 +73,10 @@ interface MessageStore {
   >;
   // Connection error
   connectionError: string | null;
+  // Currently active tool name (for live status display in LoadingIndicator)
+  currentToolName: string | null;
+  // Turn counter per session (incremented on each 'result' event)
+  turnCountBySession: Record<string, number>;
 
   // Actions
   setMessages: (sessionId: string, messages: ChatMessageData[]) => void;
@@ -127,6 +131,8 @@ interface MessageStore {
   ) => void;
   clearStreamingText: (uuid: string) => void;
   setConnectionError: (err: string | null) => void;
+  setCurrentToolName: (name: string | null) => void;
+  incrementTurnCount: (sessionId: string) => void;
 }
 
 export const useMessageStore = create<MessageStore>((set) => ({
@@ -146,6 +152,8 @@ export const useMessageStore = create<MessageStore>((set) => ({
   approvalMode: null,
   fileModsBySession: {},
   connectionError: null,
+  currentToolName: null,
+  turnCountBySession: {},
 
   setMessages: (sessionId, messages) =>
     set((s) => ({
@@ -359,4 +367,12 @@ export const useMessageStore = create<MessageStore>((set) => ({
     }),
 
   setConnectionError: (err) => set({ connectionError: err }),
+  setCurrentToolName: (name) => set({ currentToolName: name }),
+  incrementTurnCount: (sessionId) =>
+    set((s) => ({
+      turnCountBySession: {
+        ...s.turnCountBySession,
+        [sessionId]: (s.turnCountBySession[sessionId] ?? 0) + 1,
+      },
+    })),
 }));

@@ -6,7 +6,7 @@
  * Generic tool call component - handles all tool call types as fallback
  */
 
-import type { FC } from 'react';
+import type { FC, ReactNode } from 'react';
 import {
   ToolCallContainer,
   ToolCallCard,
@@ -32,12 +32,19 @@ export const GenericToolCall: FC<BaseToolCallProps> = ({
   const operationText = safeTitle(title);
   const displayLabel = getToolDisplayLabel({ kind, title });
 
+  // Detect subagent tool calls: title starts with '[<type>]' pattern.
+  // These are tagged in useSession.ts as `[subagentType] baseTitle`.
+  const isSubagent = typeof title === 'string' && title.startsWith('[');
+
   // Group content by type
   const { textOutputs, errors } = groupContent(content);
 
+  // Derive the inner content first, then optionally wrap for subagent indent.
+  let inner: ReactNode = null;
+
   // Error case: show operation + error in card layout
   if (errors.length > 0) {
-    return (
+    inner = (
       <ToolCallCard icon="🔧">
         <ToolCallRow label={displayLabel}>
           <div>{operationText}</div>
@@ -47,10 +54,8 @@ export const GenericToolCall: FC<BaseToolCallProps> = ({
         </ToolCallRow>
       </ToolCallCard>
     );
-  }
-
-  // Success with output: use card for long output, compact for short
-  if (textOutputs.length > 0) {
+  } else if (textOutputs.length > 0) {
+    // Success with output: use card for long output, compact for short
     const output = textOutputs.join('\n');
     const isLong = output.length > 150;
 
@@ -58,7 +63,7 @@ export const GenericToolCall: FC<BaseToolCallProps> = ({
       const truncatedOutput =
         output.length > 300 ? output.substring(0, 300) + '...' : output;
 
-      return (
+      inner = (
         <ToolCallCard icon="🔧">
           <ToolCallRow label={displayLabel}>
             <div>{operationText}</div>
@@ -70,47 +75,50 @@ export const GenericToolCall: FC<BaseToolCallProps> = ({
           </ToolCallRow>
         </ToolCallCard>
       );
+    } else {
+      // Short output - compact format
+      const statusFlag:
+        | 'success'
+        | 'error'
+        | 'warning'
+        | 'loading'
+        | 'default' =
+        toolCall.status === 'in_progress' || toolCall.status === 'pending'
+          ? 'loading'
+          : 'success';
+      const hasArgs =
+        toolCall.rawInput != null &&
+        typeof toolCall.rawInput === 'object' &&
+        Object.keys(toolCall.rawInput).length > 0;
+      inner = (
+        <ToolCallContainer
+          label={displayLabel}
+          status={statusFlag}
+          toolCallId={toolCallId}
+          isFirst={isFirst}
+          isLast={isLast}
+          collapsible
+          durationMs={durationMs}
+        >
+          {operationText || output}
+          {hasArgs && (
+            <div className="mt-2">
+              <div className="text-xs text-[#555] mb-1">Arguments</div>
+              <pre className="text-xs text-[#8a8a8a] bg-[#111] rounded p-2 overflow-x-auto whitespace-pre-wrap break-words max-h-48 overflow-y-auto">
+                {JSON.stringify(toolCall.rawInput, null, 2)}
+              </pre>
+            </div>
+          )}
+        </ToolCallContainer>
+      );
     }
-
-    // Short output - compact format
+  } else if (locations && locations.length > 0) {
+    // Success with files: show operation + file list in compact format
     const statusFlag: 'success' | 'error' | 'warning' | 'loading' | 'default' =
       toolCall.status === 'in_progress' || toolCall.status === 'pending'
         ? 'loading'
         : 'success';
-    const hasArgs =
-      toolCall.rawInput != null &&
-      typeof toolCall.rawInput === 'object' &&
-      Object.keys(toolCall.rawInput).length > 0;
-    return (
-      <ToolCallContainer
-        label={displayLabel}
-        status={statusFlag}
-        toolCallId={toolCallId}
-        isFirst={isFirst}
-        isLast={isLast}
-        collapsible
-        durationMs={durationMs}
-      >
-        {operationText || output}
-        {hasArgs && (
-          <div className="mt-2">
-            <div className="text-xs text-[#555] mb-1">Arguments</div>
-            <pre className="text-xs text-[#8a8a8a] bg-[#111] rounded p-2 overflow-x-auto whitespace-pre-wrap break-words max-h-48 overflow-y-auto">
-              {JSON.stringify(toolCall.rawInput, null, 2)}
-            </pre>
-          </div>
-        )}
-      </ToolCallContainer>
-    );
-  }
-
-  // Success with files: show operation + file list in compact format
-  if (locations && locations.length > 0) {
-    const statusFlag: 'success' | 'error' | 'warning' | 'loading' | 'default' =
-      toolCall.status === 'in_progress' || toolCall.status === 'pending'
-        ? 'loading'
-        : 'success';
-    return (
+    inner = (
       <ToolCallContainer
         label={displayLabel}
         status={statusFlag}
@@ -123,10 +131,8 @@ export const GenericToolCall: FC<BaseToolCallProps> = ({
         <LocationsList locations={locations} />
       </ToolCallContainer>
     );
-  }
-
-  // No output - show just the operation
-  if (operationText) {
+  } else if (operationText) {
+    // No output - show just the operation
     const statusFlag: 'success' | 'error' | 'warning' | 'loading' | 'default' =
       toolCall.status === 'in_progress' || toolCall.status === 'pending'
         ? 'loading'
@@ -135,7 +141,7 @@ export const GenericToolCall: FC<BaseToolCallProps> = ({
       toolCall.rawInput != null &&
       typeof toolCall.rawInput === 'object' &&
       Object.keys(toolCall.rawInput).length > 0;
-    return (
+    inner = (
       <ToolCallContainer
         label={displayLabel}
         status={statusFlag}
@@ -162,5 +168,12 @@ export const GenericToolCall: FC<BaseToolCallProps> = ({
     );
   }
 
-  return null;
+  if (inner === null) return null;
+
+  // Subagent tool calls get a left border + slight indent to indicate nesting.
+  if (isSubagent) {
+    return <div className="pl-3 border-l-2 border-[#3a3a5c]">{inner}</div>;
+  }
+
+  return <>{inner}</>;
 };
