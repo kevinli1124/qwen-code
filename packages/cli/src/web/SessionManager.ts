@@ -957,6 +957,22 @@ export const SessionManager = {
     return sessions.has(id);
   },
 
+  /**
+   * Broadcast a synthetic result event to all SSE clients of a session so the
+   * frontend can transition out of streaming=true. Call this before
+   * disposeSession when you need to explicitly unlock the UI (e.g. /clear).
+   */
+  broadcastResult(id: string): void {
+    const session = sessions.get(id);
+    if (!session) return;
+    broadcast(session, 'message', {
+      type: 'result',
+      success: true,
+      usage: undefined,
+    });
+    session.resultReceived = true;
+  },
+
   /** Kill the child process (if running) and release all Maps for a session. */
   disposeSession(id: string): void {
     const session = sessions.get(id);

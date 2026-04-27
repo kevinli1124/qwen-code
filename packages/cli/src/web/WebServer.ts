@@ -560,13 +560,14 @@ async function handleApi(
   }
 
   // DELETE /api/sessions/:id/messages — clear the conversation but keep
-  // the session record. Wipes persisted messages on disk + interrupts
-  // the running child so its in-memory history is dropped. Next /query
-  // lazy-respawns a fresh child with no context.
+  // the session record. Wipes both the web-sessions JSON and the core
+  // chatRecordingService JSONL so that the next spawn gets a blank slate.
   const clearMsgMatch = pathname.match(/^\/api\/sessions\/([^/]+)\/messages$/);
   if (clearMsgMatch && method === 'DELETE') {
     const id = clearMsgMatch[1]!;
     const existing = PersistenceManager.loadSession(id);
+
+    // 1. Clear the web-sessions persistence record.
     if (existing) {
       PersistenceManager.saveSession({
         ...existing,
@@ -574,8 +575,32 @@ async function handleApi(
         status: 'idle',
         updatedAt: new Date().toISOString(),
       });
+
+      // 2. Delete the core chatRecordingService JSONL so --resume won't
+      //    replay old history on the next spawn. Bug: /clear left this file
+      //    intact, causing the child to load all prior turns via --resume.
+      try {
+        const { Storage } = await import('@qwen-code/qwen-code-core');
+        const jsonlPath = path.join(
+          new Storage(existing.cwd).getProjectDir(),
+          'chats',
+          `${id}.jsonl`,
+        );
+        if (fs.existsSync(jsonlPath)) fs.unlinkSync(jsonlPath);
+      } catch {
+        // Non-fatal: worst case the child still resumes, but the user
+        // gets a fresh web UI at least.
+      }
     }
-    SessionManager.interrupt(id);
+
+    // 3. Dispose the active child (kills it, clears internal maps).
+    //    disposeSession is synchronous so by the time we respond the child
+    //    is gone and the next /query will always hit the fresh-spawn path.
+    //    Bug: interrupt() only sent a signal and didn't clear maps, leaving
+    //    the frontend stuck in streaming=true if the child exited cleanly.
+    SessionManager.broadcastResult(id);
+    SessionManager.disposeSession(id);
+
     sendJson(res, 200, { ok: true });
     return;
   }
