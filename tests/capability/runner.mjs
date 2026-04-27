@@ -306,7 +306,7 @@ B. 每次請求要寫完整 audit log 到遠端 MSSQL（資安）
     toolBudget: 3,
     prompt: `我要告訴你一個長期偏好，請你記下來，之後 session 也要遵守：
 我不喜歡在 production 程式裡用 print 做 debug，請一律用 logger。這個偏好適用於 Python / Node.js 任何語言。`,
-    assert(events, finalText) {
+    assert(events, _finalText) {
       const wroteMemory = hasToolUse(
         events,
         (u) => u.name === 'memory_write' || u.name === 'save_memory',

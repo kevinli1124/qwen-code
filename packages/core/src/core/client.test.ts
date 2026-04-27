@@ -4,10 +4,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-/* eslint-disable vitest/no-conditional-expect -- pre-existing call-sites
-   in this file assert inside conditional branches; refactoring them is
-   out of scope for the 2026-04-24 MCP SDK upgrade. */
-
 import {
   describe,
   it,

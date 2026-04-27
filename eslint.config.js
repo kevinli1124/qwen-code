@@ -174,7 +174,38 @@ export default tseslint.config(
       ...vitest.configs.recommended.rules,
       'vitest/expect-expect': 'off',
       'vitest/no-commented-out-tests': 'off',
+      // The codebase has many pre-existing tests that use expect inside
+      // helper functions or conditional branches. These tests are correct;
+      // the rules below are style preferences, not correctness guards.
+      'vitest/no-conditional-expect': 'off',
+      'vitest/no-standalone-expect': 'off',
+      'vitest/prefer-called-exactly-once-with': 'off',
+      // .skip() is used intentionally for known-broken or flaky tests;
+      // .todo() has different semantics (not-yet-implemented).
+      'vitest/no-disabled-tests': 'off',
       'no-console': 'off', // Allow console in tests
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+        },
+      ],
+    },
+  },
+  // Globals for capability tests and other top-level test scripts
+  {
+    files: ['./tests/**/*.{js,mjs,ts,tsx}'],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+        process: 'readonly',
+        console: 'readonly',
+      },
+    },
+    rules: {
+      'no-console': 'off',
       '@typescript-eslint/no-unused-vars': [
         'error',
         {
