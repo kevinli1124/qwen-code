@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { FC } from 'react';
+import type { FC, ReactNode } from 'react';
 import { MessageContent } from '../MessageContent.js';
 import './AssistantMessage.css';
 
@@ -26,6 +26,8 @@ export interface AssistantMessageProps {
   isFirst?: boolean;
   /** Whether this is the last item in an AI response sequence (for timeline) */
   isLast?: boolean;
+  /** Optional slot rendered below the message content (e.g. feedback buttons) */
+  feedbackSlot?: ReactNode;
 }
 
 /**
@@ -40,6 +42,7 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
   hideStatusIcon = false,
   isFirst = false,
   isLast = false,
+  feedbackSlot,
 }) => {
   // Empty content not rendered directly
   if (!content || content.trim().length === 0) {
@@ -66,7 +69,7 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
 
   return (
     <div
-      className={`qwen-message message-item assistant-message-container ${getStatusClass()}`}
+      className={`group qwen-message message-item assistant-message-container ${getStatusClass()}`}
       data-first={isFirst}
       data-last={isLast}
       style={{
@@ -93,6 +96,7 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
             enableFileLinks={false}
           />
         </div>
+        {feedbackSlot}
       </span>
     </div>
   );

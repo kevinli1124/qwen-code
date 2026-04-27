@@ -10,6 +10,7 @@ import {
   useImperativeHandle,
   useMemo,
   useRef,
+  type ReactNode,
 } from 'react';
 import { UserMessage } from '../messages/UserMessage.js';
 import { AssistantMessage } from '../messages/Assistant/AssistantMessage.js';
@@ -106,6 +107,8 @@ export interface ChatViewerProps {
   theme?: 'dark' | 'light' | 'auto';
   /** Show empty state icon (default: true) */
   showEmptyIcon?: boolean;
+  /** Optional renderer for per-assistant-message feedback UI, called with the message uuid */
+  renderAssistantFeedback?: (uuid: string) => ReactNode;
 }
 
 /**
@@ -231,6 +234,7 @@ export const ChatViewer = forwardRef<ChatViewerHandle, ChatViewerProps>(
       autoScroll = true,
       theme = 'auto',
       showEmptyIcon = true,
+      renderAssistantFeedback,
     },
     ref,
   ) => {
@@ -373,6 +377,7 @@ export const ChatViewer = forwardRef<ChatViewerHandle, ChatViewerProps>(
               onFileClick={onFileClick}
               isFirst={isFirst}
               isLast={isLast}
+              feedbackSlot={renderAssistantFeedback?.(msg.uuid)}
             />
           );
 

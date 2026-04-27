@@ -8,6 +8,7 @@ import type { PanelTab } from '../../types/panel';
 import { TerminalPanel } from './TerminalPanel';
 import { FilesPanel } from './FilesPanel';
 import { PlanPanel } from './PlanPanel';
+import { ContextAuditPanel } from './ContextAuditPanel';
 import { useSessionStore } from '../../stores/sessionStore';
 
 interface PanelContainerProps {
@@ -27,6 +28,9 @@ export const PanelContainer: FC<PanelContainerProps> = ({ activeTab }) => {
       </div>
       <div className={activeTab === 'plan' ? 'h-full' : 'hidden'}>
         <PlanPanel sessionId={activeSessionId} />
+      </div>
+      <div className={activeTab === 'context' ? 'h-full' : 'hidden'}>
+        <ContextAuditPanel sessionId={activeSessionId} />
       </div>
     </div>
   );

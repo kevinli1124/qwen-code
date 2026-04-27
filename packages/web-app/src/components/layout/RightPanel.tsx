@@ -21,6 +21,7 @@ export const RightPanel: FC = () => {
     { id: 'terminal' as const, label: 'Terminal' },
     { id: 'files' as const, label: 'Files' },
     { id: 'plan' as const, label: 'Plan' },
+    { id: 'context' as const, label: 'Context' },
   ];
 
   return (

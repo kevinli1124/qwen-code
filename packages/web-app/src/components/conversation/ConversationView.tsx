@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -11,11 +12,13 @@ import {
   type FC,
   type ComponentType,
   type ForwardedRef,
+  type ReactNode,
 } from 'react';
 import { ChatViewer, PlatformProvider } from '@qwen-code/webui';
 import '@qwen-code/webui/styles.css';
 import { useMessageStore } from '../../stores/messageStore';
 import { useSessionStore } from '../../stores/sessionStore';
+import { MessageFeedback } from './MessageFeedback';
 import type {
   ChatMessageData,
   ChatViewerProps,
@@ -25,7 +28,10 @@ import type {
 // Workaround for React 18/19 @types version mismatch between webui and web-app.
 // We also need to preserve the ref type so useRef<ChatViewerHandle> works.
 const ChatViewerComp = ChatViewer as unknown as ComponentType<
-  ChatViewerProps & { ref?: ForwardedRef<ChatViewerHandle> }
+  ChatViewerProps & {
+    ref?: ForwardedRef<ChatViewerHandle>;
+    renderAssistantFeedback?: (uuid: string) => ReactNode;
+  }
 >;
 
 interface ConversationViewProps {
@@ -52,6 +58,11 @@ export const ConversationView: FC<ConversationViewProps> = ({
   const chatRef = useRef<ChatViewerHandle>(null);
   const prevScrollHeightRef = useRef<number | null>(null);
   const loadingTriggeredRef = useRef(false);
+
+  const renderAssistantFeedback = useCallback(
+    (uuid: string): ReactNode => <MessageFeedback uuid={uuid} />,
+    [],
+  );
 
   // Stable PlatformProvider value — a literal object here would change
   // identity every render, invalidating every usePlatform() subscriber
@@ -167,6 +178,7 @@ export const ConversationView: FC<ConversationViewProps> = ({
           theme="dark"
           autoScroll={true}
           className="h-full"
+          renderAssistantFeedback={renderAssistantFeedback}
         />
       </div>
     </PlatformProvider>

@@ -24,6 +24,8 @@ export interface SessionRecord {
   messages: StoredMessage[];
 }
 
+type SessionMeta = Omit<SessionRecord, 'messages'>;
+
 const SESSIONS_DIR = path.join(os.homedir(), '.qwen', 'web-sessions');
 
 function ensureDir(): void {
@@ -37,11 +39,36 @@ function ensureDir(): void {
 // traverse outside SESSIONS_DIR via ids like `../../etc/passwd`.
 const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
 
-function sessionPath(id: string): string {
+function metaPath(id: string): string {
   if (!SESSION_ID_RE.test(id)) {
     throw new Error(`Invalid session id: ${JSON.stringify(id)}`);
   }
   return path.join(SESSIONS_DIR, `${id}.json`);
+}
+
+function msgsPath(id: string): string {
+  if (!SESSION_ID_RE.test(id)) {
+    throw new Error(`Invalid session id: ${JSON.stringify(id)}`);
+  }
+  return path.join(SESSIONS_DIR, `${id}.jsonl`);
+}
+
+function readMessages(id: string): StoredMessage[] {
+  const p = msgsPath(id);
+  if (!fs.existsSync(p)) return [];
+  const raw = fs.readFileSync(p, 'utf8');
+  const messages: StoredMessage[] = [];
+  for (const line of raw.split('\n')) {
+    const trimmed = line.trim();
+    if (trimmed) {
+      try {
+        messages.push(JSON.parse(trimmed) as StoredMessage);
+      } catch {
+        // skip corrupt lines
+      }
+    }
+  }
+  return messages;
 }
 
 export const PersistenceManager = {
@@ -52,23 +79,44 @@ export const PersistenceManager = {
    * (fresh session, no history yet).
    */
   exists(id: string): boolean {
-    return fs.existsSync(sessionPath(id));
+    return fs.existsSync(metaPath(id));
   },
 
   saveSession(session: SessionRecord): void {
     ensureDir();
+    const { messages, ...meta } = session;
     fs.writeFileSync(
-      sessionPath(session.id),
-      JSON.stringify(session, null, 2),
+      metaPath(session.id),
+      JSON.stringify(meta, null, 2),
       'utf8',
     );
+
+    const p = msgsPath(session.id);
+    if (messages.length > 0) {
+      fs.writeFileSync(
+        p,
+        messages.map((m) => JSON.stringify(m)).join('\n') + '\n',
+        'utf8',
+      );
+    } else {
+      if (fs.existsSync(p)) fs.writeFileSync(p, '', 'utf8');
+    }
   },
 
   loadSession(id: string): SessionRecord | null {
-    const p = sessionPath(id);
+    const p = metaPath(id);
     if (!fs.existsSync(p)) return null;
     try {
-      return JSON.parse(fs.readFileSync(p, 'utf8')) as SessionRecord;
+      const raw = JSON.parse(fs.readFileSync(p, 'utf8')) as SessionMeta & {
+        messages?: StoredMessage[];
+      };
+      const { messages: embeddedMessages, ...meta } = raw;
+
+      const messages = fs.existsSync(msgsPath(id))
+        ? readMessages(id)
+        : (embeddedMessages ?? []);
+
+      return { ...meta, messages };
     } catch {
       return null;
     }
@@ -82,8 +130,11 @@ export const PersistenceManager = {
     const sessions: SessionRecord[] = [];
     for (const f of files) {
       try {
-        const raw = fs.readFileSync(path.join(SESSIONS_DIR, f), 'utf8');
-        sessions.push(JSON.parse(raw) as SessionRecord);
+        const raw = JSON.parse(
+          fs.readFileSync(path.join(SESSIONS_DIR, f), 'utf8'),
+        ) as SessionMeta & { messages?: StoredMessage[] };
+        const { messages: _messages, ...meta } = raw;
+        sessions.push({ ...meta, messages: [] });
       } catch {
         // skip corrupt files
       }
@@ -95,23 +146,42 @@ export const PersistenceManager = {
   },
 
   deleteSession(id: string): void {
-    const p = sessionPath(id);
-    if (fs.existsSync(p)) fs.unlinkSync(p);
+    const mp = metaPath(id);
+    if (fs.existsSync(mp)) fs.unlinkSync(mp);
+    const lp = msgsPath(id);
+    if (fs.existsSync(lp)) fs.unlinkSync(lp);
   },
 
   appendMessage(id: string, msg: StoredMessage): void {
-    const session = PersistenceManager.loadSession(id);
-    if (!session) return;
-    session.messages.push(msg);
-    session.updatedAt = new Date().toISOString();
-    PersistenceManager.saveSession(session);
+    const mp = metaPath(id);
+    if (!fs.existsSync(mp)) return;
+    try {
+      const meta = JSON.parse(fs.readFileSync(mp, 'utf8')) as SessionMeta & {
+        messages?: StoredMessage[];
+      };
+      const { messages: _messages, ...rest } = meta;
+      rest.updatedAt = new Date().toISOString();
+      fs.writeFileSync(mp, JSON.stringify(rest, null, 2), 'utf8');
+    } catch {
+      return;
+    }
+    ensureDir();
+    fs.appendFileSync(msgsPath(id), JSON.stringify(msg) + '\n', 'utf8');
   },
 
   updateStatus(id: string, status: SessionRecord['status']): void {
-    const session = PersistenceManager.loadSession(id);
-    if (!session) return;
-    session.status = status;
-    session.updatedAt = new Date().toISOString();
-    PersistenceManager.saveSession(session);
+    const mp = metaPath(id);
+    if (!fs.existsSync(mp)) return;
+    try {
+      const meta = JSON.parse(fs.readFileSync(mp, 'utf8')) as SessionMeta & {
+        messages?: StoredMessage[];
+      };
+      const { messages: _messages, ...rest } = meta;
+      rest.status = status;
+      rest.updatedAt = new Date().toISOString();
+      fs.writeFileSync(mp, JSON.stringify(rest, null, 2), 'utf8');
+    } catch {
+      // ignore corrupt metadata
+    }
   },
 };

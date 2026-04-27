@@ -82,6 +82,8 @@ interface MessageStore {
   // LRU access order — session ids ordered oldest→newest (most recent at END).
   // When length exceeds MAX_SESSIONS_IN_MEMORY the first (LRU) entry is evicted.
   sessionAccessOrder: string[];
+  // Per-message thumbs feedback, keyed by message uuid
+  messageFeedback: Record<string, 'up' | 'down'>;
   // Connection error
   connectionError: string | null;
   // Currently active tool name (for live status display in LoadingIndicator)
@@ -141,6 +143,7 @@ interface MessageStore {
     }>,
   ) => void;
   clearStreamingText: (uuid: string) => void;
+  setMessageFeedback: (uuid: string, feedback: 'up' | 'down') => void;
   setConnectionError: (err: string | null) => void;
   /**
    * Mark a session as most-recently-used. Evicts the least-recently-used
@@ -171,6 +174,7 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
   approvalMode: null,
   fileModsBySession: {},
   sessionAccessOrder: [],
+  messageFeedback: {},
   connectionError: null,
   currentToolName: null,
   turnCountBySession: {},
@@ -389,6 +393,14 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
       return { streamingText: rest };
     }),
 
+  setMessageFeedback: (uuid, feedback) =>
+    set((s) => {
+      if (s.messageFeedback[uuid] === feedback) {
+        const { [uuid]: _removed, ...rest } = s.messageFeedback;
+        return { messageFeedback: rest };
+      }
+      return { messageFeedback: { ...s.messageFeedback, [uuid]: feedback } };
+    }),
   setConnectionError: (err) => set({ connectionError: err }),
   setCurrentToolName: (name) => set({ currentToolName: name }),
   incrementTurnCount: (sessionId) =>
