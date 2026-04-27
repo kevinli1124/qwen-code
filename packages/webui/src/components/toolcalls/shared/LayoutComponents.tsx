@@ -41,6 +41,8 @@ export interface ToolCallContainerProps {
    * collapsed (common UX: live progress visible, completed calls tucked).
    */
   collapsible?: boolean;
+  /** Duration of the tool call in milliseconds, shown after completion */
+  durationMs?: number;
 }
 
 /**
@@ -60,9 +62,17 @@ export const ToolCallContainer: FC<ToolCallContainerProps> = ({
   // tool calls. The chevron only shows when there is actual body content
   // (see showToggle below), so title-only cards stay unaffected.
   collapsible = true,
+  durationMs,
 }) => {
   const [expanded, setExpanded] = useState(status === 'loading');
   const showToggle = collapsible && !!children;
+  const showDuration =
+    durationMs != null && durationMs > 0 && status !== 'loading';
+  const durationLabel = showDuration
+    ? durationMs < 1000
+      ? `${durationMs}ms`
+      : `${(durationMs / 1000).toFixed(1)}s`
+    : null;
 
   return (
     <div
@@ -86,6 +96,11 @@ export const ToolCallContainer: FC<ToolCallContainerProps> = ({
               <span className="text-[11px] text-[var(--app-secondary-foreground)]">
                 {labelSuffix}
               </span>
+              {durationLabel && (
+                <span className="text-xs text-[#555] ml-1">
+                  {durationLabel}
+                </span>
+              )}
               <ChevronIcon
                 size={10}
                 direction={expanded ? 'up' : 'down'}
@@ -100,6 +115,11 @@ export const ToolCallContainer: FC<ToolCallContainerProps> = ({
               <span className="text-[11px] text-[var(--app-secondary-foreground)]">
                 {labelSuffix}
               </span>
+              {durationLabel && (
+                <span className="text-xs text-[#555] ml-1">
+                  {durationLabel}
+                </span>
+              )}
             </>
           )}
         </div>

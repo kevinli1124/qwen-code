@@ -49,6 +49,8 @@ export interface ToolCallData {
   content?: ToolCallContent[];
   locations?: ToolCallLocation[];
   timestamp?: number;
+  /** Duration of the tool call in milliseconds, available after completion */
+  durationMs?: number;
 }
 
 /**

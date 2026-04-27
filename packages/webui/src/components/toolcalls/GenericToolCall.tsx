@@ -28,7 +28,7 @@ export const GenericToolCall: FC<BaseToolCallProps> = ({
   isFirst,
   isLast,
 }) => {
-  const { kind, title, content, locations, toolCallId } = toolCall;
+  const { kind, title, content, locations, toolCallId, durationMs } = toolCall;
   const operationText = safeTitle(title);
   const displayLabel = getToolDisplayLabel({ kind, title });
 
@@ -77,6 +77,10 @@ export const GenericToolCall: FC<BaseToolCallProps> = ({
       toolCall.status === 'in_progress' || toolCall.status === 'pending'
         ? 'loading'
         : 'success';
+    const hasArgs =
+      toolCall.rawInput != null &&
+      typeof toolCall.rawInput === 'object' &&
+      Object.keys(toolCall.rawInput).length > 0;
     return (
       <ToolCallContainer
         label={displayLabel}
@@ -85,8 +89,17 @@ export const GenericToolCall: FC<BaseToolCallProps> = ({
         isFirst={isFirst}
         isLast={isLast}
         collapsible
+        durationMs={durationMs}
       >
         {operationText || output}
+        {hasArgs && (
+          <div className="mt-2">
+            <div className="text-xs text-[#555] mb-1">Arguments</div>
+            <pre className="text-xs text-[#8a8a8a] bg-[#111] rounded p-2 overflow-x-auto whitespace-pre-wrap break-words max-h-48 overflow-y-auto">
+              {JSON.stringify(toolCall.rawInput, null, 2)}
+            </pre>
+          </div>
+        )}
       </ToolCallContainer>
     );
   }
@@ -105,6 +118,7 @@ export const GenericToolCall: FC<BaseToolCallProps> = ({
         isFirst={isFirst}
         isLast={isLast}
         collapsible
+        durationMs={durationMs}
       >
         <LocationsList locations={locations} />
       </ToolCallContainer>
@@ -117,6 +131,10 @@ export const GenericToolCall: FC<BaseToolCallProps> = ({
       toolCall.status === 'in_progress' || toolCall.status === 'pending'
         ? 'loading'
         : 'success';
+    const hasArgs =
+      toolCall.rawInput != null &&
+      typeof toolCall.rawInput === 'object' &&
+      Object.keys(toolCall.rawInput).length > 0;
     return (
       <ToolCallContainer
         label={displayLabel}
@@ -125,8 +143,21 @@ export const GenericToolCall: FC<BaseToolCallProps> = ({
         isFirst={isFirst}
         isLast={isLast}
         collapsible
+        durationMs={durationMs}
       >
-        {operationText}
+        {hasArgs ? (
+          <div>
+            {operationText && <div>{operationText}</div>}
+            <div className="mt-2">
+              <div className="text-xs text-[#555] mb-1">Arguments</div>
+              <pre className="text-xs text-[#8a8a8a] bg-[#111] rounded p-2 overflow-x-auto whitespace-pre-wrap break-words max-h-48 overflow-y-auto">
+                {JSON.stringify(toolCall.rawInput, null, 2)}
+              </pre>
+            </div>
+          </div>
+        ) : (
+          operationText
+        )}
       </ToolCallContainer>
     );
   }

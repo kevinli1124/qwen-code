@@ -338,6 +338,9 @@ export const useMessageStore = create<MessageStore>((set) => ({
             ...m.toolCall,
             ...(patch.status ? { status: patch.status } : {}),
             ...(patch.content ? { content: patch.content } : {}),
+            ...(patch.durationMs != null
+              ? { durationMs: patch.durationMs }
+              : {}),
           },
         };
       });

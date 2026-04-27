@@ -103,7 +103,7 @@ const ShellToolCallImpl: FC<BaseToolCallProps & { variant: ShellVariant }> = ({
   isFirst,
   isLast,
 }) => {
-  const { title, content, rawInput, toolCallId } = toolCall;
+  const { title, content, rawInput, toolCallId, durationMs } = toolCall;
   const classPrefix = variant;
   const platform = usePlatform();
 
@@ -170,6 +170,7 @@ const ShellToolCallImpl: FC<BaseToolCallProps & { variant: ShellVariant }> = ({
         toolCallId={toolCallId}
         isFirst={isFirst}
         isLast={isLast}
+        durationMs={durationMs}
       >
         {/* Branch connector summary */}
         <div className="inline-flex text-[var(--app-secondary-foreground)] text-[0.85em] opacity-70 mt-[2px] mb-[2px] flex-row items-start w-full gap-1">
@@ -222,6 +223,7 @@ const ShellToolCallImpl: FC<BaseToolCallProps & { variant: ShellVariant }> = ({
         toolCallId={toolCallId}
         isFirst={isFirst}
         isLast={isLast}
+        durationMs={durationMs}
       >
         {/* Branch connector summary */}
         <div className="inline-flex text-[var(--app-secondary-foreground)] text-[0.85em] opacity-70 mt-[2px] mb-[2px] flex-row items-start w-full gap-1">
@@ -273,6 +275,7 @@ const ShellToolCallImpl: FC<BaseToolCallProps & { variant: ShellVariant }> = ({
       toolCallId={toolCallId}
       isFirst={isFirst}
       isLast={isLast}
+      durationMs={durationMs}
     >
       <div
         className="inline-flex text-[var(--app-secondary-foreground)] text-[0.85em] opacity-70 mt-[2px] mb-[2px] flex-row items-start w-full gap-1"

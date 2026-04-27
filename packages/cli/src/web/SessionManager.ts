@@ -52,6 +52,9 @@ interface ActiveSession {
    * (server restart, interrupt) so the next first send re-hydrates.
    */
   hydrated: boolean;
+  /** Set true once a `result` event is broadcast so the close handler can
+   *  detect a clean exit that happened before the result was flushed. */
+  resultReceived: boolean;
   // Track streaming state for tool call reconstruction
   activeToolUseBlocks: Map<
     number,
@@ -304,6 +307,7 @@ function translateAndBroadcast(session: ActiveSession, raw: unknown): void {
       // The child CLI emits snake_case (input_tokens / output_tokens); the
       // frontend TokenUsage type expects camelCase plus durationMs, so the
       // transform happens here. Without it the footer showed NaN.
+      session.resultReceived = true;
       broadcast(session, 'message', {
         type: 'result',
         success: !isError,
@@ -622,6 +626,7 @@ export const SessionManager = {
       streamingUuid: null,
       textChunks: [],
       hydrated: false,
+      resultReceived: false,
     };
     if (!persistentSnapshots.has(id)) persistentSnapshots.set(id, new Map());
 
@@ -690,6 +695,16 @@ export const SessionManager = {
         broadcast(session, 'message', {
           type: 'error',
           message: `CLI process exited with code ${code}`,
+        });
+      } else if (!session.resultReceived) {
+        // Child exited cleanly (code 0) but never sent a `result` JSON line
+        // (e.g. stdout-flush race on fast tasks, or process.exit(0) called
+        // before the adapter flushed). Synthesise a success result so the
+        // frontend calls setStreaming(false) and the spinner stops.
+        broadcast(session, 'message', {
+          type: 'result',
+          success: true,
+          usage: undefined,
         });
       }
       // Clean up all resources so module-level Maps don't grow unboundedly

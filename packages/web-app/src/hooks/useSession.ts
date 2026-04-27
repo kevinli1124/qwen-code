@@ -10,6 +10,8 @@ export function useSessionEvents(sessionId: string | null) {
   // agentId can be labelled with the subagent's type (e.g. "code-reviewer").
   // Keyed by subagentId.
   const subagentTypesRef = useRef<Map<string, string>>(new Map());
+  // Maps parentToolCallId → subagentId to close agent_spawn cards on tool_complete
+  const agentSpawnByParentCallIdRef = useRef<Map<string, string>>(new Map());
   const {
     appendMessage,
     updateStreamingText,
@@ -206,6 +208,28 @@ export function useSessionEvents(sessionId: string | null) {
             status: event.success ? 'completed' : 'failed',
             content: contentBlocks,
           });
+          // Close the agent_spawn card if this tool_complete corresponds to a subagent
+          const spawnedSubagentId = agentSpawnByParentCallIdRef.current.get(
+            event.callId,
+          );
+          if (spawnedSubagentId) {
+            const agentCallId = `agent-${spawnedSubagentId}`;
+            const spawnedType =
+              subagentTypesRef.current.get(spawnedSubagentId) ?? 'subagent';
+            upsertToolCall(sessionId, {
+              callId: agentCallId,
+              toolName: 'agent_spawn',
+              kind: 'agent_spawn',
+              title: `Subagent: ${spawnedType}`,
+              status: event.success ? 'completed' : 'failed',
+              durationMs: event.durationMs,
+            });
+            patchToolCallMessage(sessionId, agentCallId, {
+              status: event.success ? 'completed' : 'failed',
+              durationMs: event.durationMs,
+            });
+            agentSpawnByParentCallIdRef.current.delete(event.callId);
+          }
           break;
         }
 
@@ -277,6 +301,12 @@ export function useSessionEvents(sessionId: string | null) {
           // Remember the subagent type so subsequent tool_start events
           // with this subagentId can be labelled (see tool_start above).
           subagentTypesRef.current.set(event.subagentId, subagentType);
+          if (event.parentToolCallId) {
+            agentSpawnByParentCallIdRef.current.set(
+              event.parentToolCallId,
+              event.subagentId,
+            );
+          }
 
           const callId = `agent-${event.subagentId}`;
           const entry: ToolCallEntry = {
