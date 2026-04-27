@@ -8,6 +8,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import dts from 'vite-plugin-dts';
 import { resolve } from 'path';
+import { rmSync, existsSync } from 'node:fs';
 
 /**
  * Vite configuration for @qwen-code/webui library
@@ -21,6 +22,18 @@ import { resolve } from 'path';
  */
 export default defineConfig({
   plugins: [
+    // On Windows, Vite's built-in emptyOutDir uses rmdirSync which fails with
+    // ENOTEMPTY on non-empty directories. Clean the dist folder ourselves using
+    // fs.rmSync({ recursive, force }) which handles nested directories correctly.
+    {
+      name: 'clean-dist-windows',
+      buildStart() {
+        const distPath = resolve(__dirname, 'dist');
+        if (existsSync(distPath)) {
+          rmSync(distPath, { recursive: true, force: true });
+        }
+      },
+    },
     react(),
     dts({
       include: ['src'],
@@ -35,6 +48,8 @@ export default defineConfig({
     }),
   ],
   build: {
+    // emptyOutDir handled by the clean-dist-windows plugin above
+    emptyOutDir: false,
     lib: {
       entry: resolve(__dirname, 'src/index.ts'),
       name: 'QwenCodeWebUI',
