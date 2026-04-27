@@ -90,6 +90,7 @@ export const ChatView: FC = () => {
     resetSessionTokens,
     turnCountBySession,
     setTokenUsage,
+    setPendingTurn,
   } = useMessageStore(
     useShallow((s) => ({
       isStreaming: s.isStreaming,
@@ -112,6 +113,7 @@ export const ChatView: FC = () => {
       resetSessionTokens: s.resetSessionTokens,
       turnCountBySession: s.turnCountBySession,
       setTokenUsage: s.setTokenUsage,
+      setPendingTurn: s.setPendingTurn,
     })),
   );
 
@@ -398,12 +400,16 @@ export const ChatView: FC = () => {
     if (local.handled) return;
 
     setStreaming(true);
+    setPendingTurn(activeSessionId, 'sending');
     try {
       await sessionsApi.sendQuery(activeSessionId, text);
+      // Server acknowledged (202) — now waiting for first LLM token.
+      setPendingTurn(activeSessionId, 'thinking');
     } catch (_e) {
       setConnectionError(
         _e instanceof Error ? _e.message : 'Failed to send message',
       );
+      setPendingTurn(activeSessionId, null);
       setStreaming(false);
     }
   };

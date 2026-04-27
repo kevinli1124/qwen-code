@@ -19,6 +19,7 @@ import '@qwen-code/webui/styles.css';
 import { useMessageStore } from '../../stores/messageStore';
 import { useSessionStore } from '../../stores/sessionStore';
 import { MessageFeedback } from './MessageFeedback';
+import { ThinkingBubble } from './ThinkingBubble';
 import type {
   ChatMessageData,
   ChatViewerProps,
@@ -52,6 +53,9 @@ export const ConversationView: FC<ConversationViewProps> = ({
   const messagesBySession = useMessageStore((s) => s.messagesBySession);
   const streamingText = useMessageStore((s) => s.streamingText);
   const streamingToolOutput = useMessageStore((s) => s.streamingToolOutput);
+  const pendingTurn = useMessageStore(
+    (s) => s.pendingTurnBySession[sessionId] ?? null,
+  );
   const activeSession = useSessionStore((s) =>
     s.sessions.find((sess) => sess.id === sessionId),
   );
@@ -168,7 +172,7 @@ export const ConversationView: FC<ConversationViewProps> = ({
 
   if (displayMessages.length === 0) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center gap-3 text-[#8a8a8a]">
+      <div className="flex-1 flex flex-col items-center justify-center gap-3 text-[#8a8a8a] relative">
         <div className="w-12 h-12 rounded-full bg-[#2e2e2e] flex items-center justify-center">
           <span className="text-2xl">Q</span>
         </div>
@@ -184,13 +188,22 @@ export const ConversationView: FC<ConversationViewProps> = ({
           Ask me anything — I can read files, run commands, write code, and
           more.
         </div>
+        {/* Thinking bubble even when conversation is empty (first message) */}
+        {pendingTurn && (
+          <div className="absolute bottom-0 left-0 right-0">
+            <ThinkingBubble status={pendingTurn} />
+          </div>
+        )}
       </div>
     );
   }
 
   return (
     <PlatformProvider value={platformValue}>
-      <div className="relative h-full">
+      {/* Outer wrapper uses flex-col so ThinkingBubble can live BELOW the
+          ChatViewer scroll area — visually at the bottom of the conversation,
+          above the InputBar, without covering any message content. */}
+      <div className="relative h-full flex flex-col">
         {isLoadingMore && (
           <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 px-3 py-1 rounded-full bg-[#2e2e2e] text-xs text-[#8a8a8a] shadow">
             Loading older messages…
@@ -201,9 +214,12 @@ export const ConversationView: FC<ConversationViewProps> = ({
           messages={displayMessages}
           theme="dark"
           autoScroll={true}
-          className="h-full"
+          className="flex-1 min-h-0"
           renderAssistantFeedback={renderAssistantFeedback}
         />
+        {/* Inline thinking indicator — appears right after the last message,
+            before the InputBar, so users can see the LLM is processing. */}
+        {pendingTurn && <ThinkingBubble status={pendingTurn} />}
       </div>
     </PlatformProvider>
   );

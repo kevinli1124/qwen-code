@@ -94,6 +94,12 @@ interface MessageStore {
   // Populated from tool_output_chunk events and cleared on tool_complete so
   // ConversationView can merge it into the tool-call card in real-time.
   streamingToolOutput: Record<string, string>;
+  // Per-session pending turn status — tracks the gap between the user
+  // sending a message and the first LLM token/tool arriving.
+  //   'sending'  → POST sent, waiting for server 202
+  //   'thinking' → server acknowledged, waiting for first SSE content
+  //    null      → no pending turn (content has started or idle)
+  pendingTurnBySession: Record<string, 'sending' | 'thinking' | null>;
 
   // Actions
   setMessages: (sessionId: string, messages: ChatMessageData[]) => void;
@@ -163,6 +169,11 @@ interface MessageStore {
   appendToolOutputStream: (callId: string, chunk: string) => void;
   /** Clear the live streaming output for a tool call (called on tool_complete). */
   clearToolOutputStream: (callId: string) => void;
+  /** Set the pending-turn status for a session. */
+  setPendingTurn: (
+    sessionId: string,
+    status: 'sending' | 'thinking' | null,
+  ) => void;
 }
 
 export const useMessageStore = create<MessageStore>((set, get) => ({
@@ -187,6 +198,7 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
   currentToolName: null,
   turnCountBySession: {},
   streamingToolOutput: {},
+  pendingTurnBySession: {},
 
   setMessages: (sessionId, messages) =>
     set((s) => ({
@@ -450,4 +462,12 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
       const { [callId]: _removed, ...rest } = s.streamingToolOutput;
       return { streamingToolOutput: rest };
     }),
+
+  setPendingTurn: (sessionId, status) =>
+    set((s) => ({
+      pendingTurnBySession: {
+        ...s.pendingTurnBySession,
+        [sessionId]: status,
+      },
+    })),
 }));

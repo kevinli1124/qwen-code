@@ -37,6 +37,7 @@ export function useSessionEvents(sessionId: string | null) {
     incrementTurnCount,
     appendToolOutputStream,
     clearToolOutputStream,
+    setPendingTurn,
   } = useMessageStore(
     useShallow((s) => ({
       appendMessage: s.appendMessage,
@@ -63,6 +64,7 @@ export function useSessionEvents(sessionId: string | null) {
       incrementTurnCount: s.incrementTurnCount,
       appendToolOutputStream: s.appendToolOutputStream,
       clearToolOutputStream: s.clearToolOutputStream,
+      setPendingTurn: s.setPendingTurn,
     })),
   );
   const { updateSession } = useSessionStore(
@@ -95,16 +97,20 @@ export function useSessionEvents(sessionId: string | null) {
         }
 
         case 'stream_text': {
+          // First content event — clear the "thinking" pending indicator.
+          setPendingTurn(sessionId, null);
           updateStreamingText(event.uuid, event.delta);
           break;
         }
 
         case 'assistant': {
+          setPendingTurn(sessionId, null);
           finalizeStreamingText(sessionId, event.uuid);
           break;
         }
 
         case 'thinking': {
+          setPendingTurn(sessionId, null);
           const msg: ChatMessageData = {
             uuid: event.uuid,
             type: 'assistant',
@@ -120,6 +126,7 @@ export function useSessionEvents(sessionId: string | null) {
         }
 
         case 'tool_start': {
+          setPendingTurn(sessionId, null);
           setCurrentToolName(formatToolTitle(event.toolName, event.args));
           const kind = mapToolNameToKind(event.toolName);
           const baseTitle = formatToolTitle(event.toolName, event.args);
@@ -358,6 +365,7 @@ export function useSessionEvents(sessionId: string | null) {
         }
 
         case 'result': {
+          setPendingTurn(sessionId, null);
           setStreaming(false);
           setCurrentToolName(null);
           incrementTurnCount(sessionId);
@@ -372,6 +380,7 @@ export function useSessionEvents(sessionId: string | null) {
         }
 
         case 'error': {
+          setPendingTurn(sessionId, null);
           setStreaming(false);
           setConnectionError(event.message);
           break;
@@ -407,6 +416,7 @@ export function useSessionEvents(sessionId: string | null) {
       incrementTurnCount,
       appendToolOutputStream,
       clearToolOutputStream,
+      setPendingTurn,
       updateSession,
     ],
   );
