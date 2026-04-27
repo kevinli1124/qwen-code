@@ -159,12 +159,19 @@ export function extractUsageFromGeminiClient(
 
 /**
  * Computes Usage information from SessionMetrics using computeSessionStats.
- * Aggregates token usage across all models in the session.
  *
  * @param metrics - Session metrics from uiTelemetryService
- * @returns Usage object with token counts
+ * @param lastPromptTokenCount - Token count from the most recent API call
+ *   (UiTelemetryService.getLastPromptTokenCount()). When provided, used as
+ *   input_tokens so the web context-bar shows the CURRENT context window
+ *   occupancy instead of the accumulated session total.
+ * @param lastCachedTokenCount - Cached tokens from the most recent API call.
  */
-export function computeUsageFromMetrics(metrics: SessionMetrics): Usage {
+export function computeUsageFromMetrics(
+  metrics: SessionMetrics,
+  lastPromptTokenCount?: number,
+  lastCachedTokenCount?: number,
+): Usage {
   const stats = computeSessionStats(metrics);
   const { models } = metrics;
 
@@ -178,10 +185,22 @@ export function computeUsageFromMetrics(metrics: SessionMetrics): Usage {
     0,
   );
 
+  // input_tokens represents the context window occupancy at the END of this
+  // run (i.e. the last LLM call's prompt size). Using the accumulated
+  // session total would inflate the value across multi-turn sessions.
+  const inputTokens =
+    lastPromptTokenCount != null && lastPromptTokenCount > 0
+      ? lastPromptTokenCount
+      : stats.totalPromptTokens;
+  const cachedInputTokens =
+    lastCachedTokenCount != null
+      ? lastCachedTokenCount
+      : stats.totalCachedTokens;
+
   const usage: Usage = {
-    input_tokens: stats.totalPromptTokens,
+    input_tokens: inputTokens,
     output_tokens: totalOutputTokens,
-    cache_read_input_tokens: stats.totalCachedTokens,
+    cache_read_input_tokens: cachedInputTokens,
   };
 
   // Only include total_tokens if it's greater than 0

@@ -87,7 +87,11 @@ async function emitNonInteractiveFinalMessage(params: {
   adapter.finalizeAssistantMessage();
 
   const metrics = uiTelemetryService.getMetrics();
-  const usage = computeUsageFromMetrics(metrics);
+  const usage = computeUsageFromMetrics(
+    metrics,
+    uiTelemetryService.getLastPromptTokenCount(),
+    uiTelemetryService.getLastCachedContentTokenCount(),
+  );
   const outputFormat = config.getOutputFormat();
   const stats =
     outputFormat === OutputFormat.JSON
