@@ -33,11 +33,11 @@ export const ContextUsage: FC = () => {
   const inputLimit = modelLimits?.input;
   const totalPromptTokens = tokenUsage?.inputTokens ?? 0;
   const cachedTokens = tokenUsage?.cacheReadInputTokens ?? 0;
-  // "Fresh" = what the model actually has to re-process this turn.
-  // Cached prefixes (system prompt + replayed conversation) are served
-  // from the provider's cache, so they don't consume the effective
-  // context the same way — subtract them out.
-  const used = Math.max(0, totalPromptTokens - cachedTokens);
+  // Use the full prompt token count (input only, cache included) as the
+  // context-window occupancy indicator. Cached tokens still occupy window
+  // slots — a 200K prompt with 180K cached is still 200K/262K full.
+  // Cache info is surfaced in the tooltip for reference only.
+  const used = totalPromptTokens;
 
   if (!inputLimit || inputLimit <= 0) return null;
   if (used <= 0) {
