@@ -26,6 +26,9 @@ export const Sidebar: FC<SidebarProps> = ({ onNewSession }) => {
           <span className="text-sm font-semibold text-[#e8e6e3]">
             Qwen Code
           </span>
+          <span className="text-xs text-[#555] select-none">
+            v{__APP_VERSION__}
+          </span>
         </div>
         <button
           onClick={onNewSession}
