@@ -43,8 +43,8 @@ execSync('npm run generate', { stdio: 'inherit', cwd: root });
 // 7. web-app (depends on webui; produces dist/ served by the CLI's
 //    embedded web server and inspected by scripts/tests/web-server.test.js)
 // 8. sdk (no internal dependencies)
-// 9. vscode-ide-companion (depends on webui)
-const buildOrder = [
+// 9. vscode-ide-companion (depends on webui) — optional, non-fatal
+const coreWorkspaces = [
   'packages/core',
   'packages/web-templates',
   'packages/channels/base',
@@ -56,10 +56,12 @@ const buildOrder = [
   'packages/webui',
   'packages/web-app',
   'packages/sdk-typescript',
-  'packages/vscode-ide-companion',
 ];
 
-for (const workspace of buildOrder) {
+// Optional IDE extensions — failure here should not block the CLI bundle.
+const optionalWorkspaces = ['packages/vscode-ide-companion'];
+
+for (const workspace of coreWorkspaces) {
   execSync(`npm run build --workspace=${workspace}`, {
     stdio: 'inherit',
     cwd: root,
@@ -72,6 +74,19 @@ for (const workspace of buildOrder) {
       stdio: 'inherit',
       cwd: root,
     });
+  }
+}
+
+for (const workspace of optionalWorkspaces) {
+  try {
+    execSync(`npm run build --workspace=${workspace}`, {
+      stdio: 'inherit',
+      cwd: root,
+    });
+  } catch {
+    console.warn(
+      `[build] Warning: optional workspace ${workspace} failed — skipping.`,
+    );
   }
 }
 
