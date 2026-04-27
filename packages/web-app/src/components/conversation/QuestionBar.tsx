@@ -24,12 +24,20 @@ interface QuestionBarProps {
 }
 
 /**
- * Inline question bar — replaces the InputBar at the bottom of the chat.
+ * Inline question bar — sits where the InputBar normally lives and never
+ * obscures the conversation above.
  *
- * Design principle: never obscure the conversation. The bar sits exactly
- * where the InputBar normally lives; the conversation scrolls above it.
- * Options are compact chips in a single scrollable row so the bar stays
- * within a normal input-area height (~80-100 px).
+ * Layout (vertical list, industry standard agent UX):
+ *   ┌──────────────────────────────┐
+ *   │ Header · question text       │   ← compact title row
+ *   ├──────────────────────────────┤
+ *   │ ○  Option A                  │   ← vertical option list
+ *   │    description text          │
+ *   │ ○  Option B                  │
+ *   │ …                            │
+ *   ├──────────────────────────────┤
+ *   │ [Other input]   [Cancel]     │   ← action row
+ *   └──────────────────────────────┘
  */
 export const QuestionBar: FC<QuestionBarProps> = ({
   questions,
@@ -61,6 +69,12 @@ export const QuestionBar: FC<QuestionBarProps> = ({
     if (showCustom) customInputRef.current?.focus();
   }, [showCustom]);
 
+  // Reset custom input when question changes
+  useEffect(() => {
+    setCustomText('');
+    setShowCustom(false);
+  }, [questionIndex]);
+
   if (!question) return null;
 
   const buildResult = (
@@ -89,8 +103,6 @@ export const QuestionBar: FC<QuestionBarProps> = ({
         onSubmit(buildResult(questionIndex, label, next));
       } else {
         setQuestionIndex(questionIndex + 1);
-        setCustomText('');
-        setShowCustom(false);
       }
     }
   };
@@ -103,12 +115,12 @@ export const QuestionBar: FC<QuestionBarProps> = ({
       : { ...answers, [questionIndex]: [val] };
     setAnswers(next);
     setCustomText('');
+    setShowCustom(false);
     if (!question.multiSelect) {
       if (isLast) {
         onSubmit(buildResult(questionIndex, val, next));
       } else {
         setQuestionIndex(questionIndex + 1);
-        setShowCustom(false);
       }
     }
   };
@@ -130,32 +142,37 @@ export const QuestionBar: FC<QuestionBarProps> = ({
       onSubmit(result);
     } else {
       setQuestionIndex(questionIndex + 1);
-      setCustomText('');
-      setShowCustom(false);
     }
   };
 
   return (
-    <div className="border-t border-[#2e2e2e] bg-[#1a1a1a] px-4 py-2.5">
-      {/* ── Top row: question label + cancel ── */}
-      <div className="flex items-center justify-between mb-2">
+    <div className="border-t border-[#2e2e2e] bg-[#1a1a1a] flex flex-col max-h-[55vh]">
+      {/* ── Title row ── */}
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#2e2e2e] flex-shrink-0">
         <div className="flex items-center gap-2 min-w-0">
-          {/* accent dot */}
           <span className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-accent" />
-          {/* header + question on one compact line */}
-          <span className="text-[11px] font-medium text-accent truncate">
+          <span className="text-xs font-semibold text-[#e8e6e3] truncate">
             {question.header}
           </span>
-          <span className="text-[11px] text-[#8a8a8a] truncate hidden sm:block">
+          {questions.length > 1 && (
+            <div className="flex gap-1 ml-1">
+              {questions.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setQuestionIndex(i)}
+                  className={[
+                    'w-1.5 h-1.5 rounded-full transition-colors',
+                    i === questionIndex ? 'bg-accent' : 'bg-[#3e3e3e]',
+                  ].join(' ')}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-3 flex-shrink-0 ml-3">
+          <span className="text-[11px] text-[#8a8a8a] hidden sm:block truncate max-w-[240px]">
             {question.question}
           </span>
-        </div>
-        <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-          {questions.length > 1 && (
-            <span className="text-[10px] text-[#5a5a5a]">
-              {questionIndex + 1}/{questions.length}
-            </span>
-          )}
           <button
             onClick={onCancel}
             className="text-[11px] text-[#5a5a5a] hover:text-[#e8e6e3] transition-colors"
@@ -165,87 +182,136 @@ export const QuestionBar: FC<QuestionBarProps> = ({
         </div>
       </div>
 
-      {/* ── Options row: horizontally scrollable chips ── */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">
-        {question.options.map((opt) => {
-          const selected = currentSelections.includes(opt.label);
-          return (
-            <button
-              key={opt.label}
-              onClick={() => selectOption(opt.label)}
-              title={opt.description || undefined}
-              className={[
-                'flex-shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium border whitespace-nowrap transition-all',
-                selected
-                  ? 'bg-accent/15 border-accent/50 text-accent'
-                  : 'bg-[#242424] border-[#3e3e3e] text-[#c8c6c3] hover:border-accent/30 hover:text-[#e8e6e3]',
-              ].join(' ')}
-            >
-              {question.multiSelect && (
-                <span className="text-[9px] opacity-70">
-                  {selected ? '▪' : '▫'}
-                </span>
-              )}
-              {opt.label}
-            </button>
-          );
-        })}
+      {/* ── Vertical option list (scrollable) ── */}
+      <div className="flex-1 overflow-y-auto min-h-0">
+        {/* Question text shown inside list area on mobile */}
+        <div className="px-4 pt-2 pb-1 text-[11px] text-[#8a8a8a] sm:hidden">
+          {question.question}
+        </div>
 
-        {/* Other / custom input toggle */}
-        {!showCustom ? (
+        <div className="px-3 py-1.5 flex flex-col gap-0.5">
+          {question.options.map((opt) => {
+            const selected = currentSelections.includes(opt.label);
+            return (
+              <button
+                key={opt.label}
+                onClick={() => selectOption(opt.label)}
+                className={[
+                  'group w-full flex items-start gap-3 px-3 py-2.5 rounded-lg text-left transition-all',
+                  selected
+                    ? 'bg-accent/10 border border-accent/30'
+                    : 'hover:bg-[#242424] border border-transparent',
+                ].join(' ')}
+              >
+                {/* Selection indicator */}
+                <span
+                  className={[
+                    'flex-shrink-0 mt-0.5 w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center transition-colors',
+                    selected
+                      ? 'border-accent bg-accent'
+                      : 'border-[#4a4a4a] group-hover:border-accent/60',
+                    question.multiSelect ? 'rounded' : 'rounded-full',
+                  ].join(' ')}
+                >
+                  {selected && (
+                    <svg
+                      width="8"
+                      height="8"
+                      viewBox="0 0 8 8"
+                      fill="none"
+                      className="text-white"
+                    >
+                      {question.multiSelect ? (
+                        <path
+                          d="M1.5 4l2 2 3-3"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      ) : (
+                        <circle cx="4" cy="4" r="2.5" fill="currentColor" />
+                      )}
+                    </svg>
+                  )}
+                </span>
+
+                {/* Label + description */}
+                <div className="flex-1 min-w-0">
+                  <div
+                    className={[
+                      'text-sm font-medium leading-tight',
+                      selected ? 'text-accent' : 'text-[#e8e6e3]',
+                    ].join(' ')}
+                  >
+                    {opt.label}
+                  </div>
+                  {opt.description && (
+                    <div className="text-[11px] text-[#6a6a6a] mt-0.5 leading-snug">
+                      {opt.description}
+                    </div>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Action row: custom input + confirm/cancel ── */}
+      <div className="flex-shrink-0 px-3 py-2 border-t border-[#2e2e2e] flex items-center gap-2">
+        {showCustom ? (
+          <input
+            ref={customInputRef}
+            type="text"
+            value={customText}
+            onChange={(e) => setCustomText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                submitCustom();
+              }
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                setShowCustom(false);
+                setCustomText('');
+              }
+            }}
+            placeholder="Type your answer and press Enter…"
+            className="flex-1 bg-[#242424] border border-accent/40 rounded-lg px-3 py-1.5 text-sm text-[#e8e6e3] placeholder:text-[#5a5a5a] focus:outline-none focus:border-accent/60"
+          />
+        ) : (
           <button
             onClick={() => setShowCustom(true)}
-            className="flex-shrink-0 px-2.5 py-1 rounded-full text-[11px] border border-dashed border-[#3e3e3e] text-[#5a5a5a] hover:text-[#e8e6e3] hover:border-[#5a5a5a] whitespace-nowrap transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-dashed border-[#3e3e3e] text-xs text-[#5a5a5a] hover:text-[#e8e6e3] hover:border-[#5a5a5a] transition-colors"
           >
-            + Other
+            <span>+</span>
+            <span>Other…</span>
           </button>
-        ) : (
-          <div className="flex-shrink-0 flex items-center gap-1">
-            <input
-              ref={customInputRef}
-              type="text"
-              value={customText}
-              onChange={(e) => setCustomText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  submitCustom();
-                }
-                if (e.key === 'Escape') {
-                  e.preventDefault();
-                  setShowCustom(false);
-                  setCustomText('');
-                }
-              }}
-              placeholder="Type and press Enter…"
-              className="w-48 bg-[#242424] border border-accent/40 rounded-full px-2.5 py-1 text-[11px] text-[#e8e6e3] placeholder:text-[#5a5a5a] focus:outline-none"
-            />
-            {customText.trim() && (
-              <button
-                onClick={submitCustom}
-                className="flex-shrink-0 px-2 py-1 rounded-full bg-accent text-white text-[11px] font-medium hover:bg-accent-hover transition-colors"
-              >
-                ↵
-              </button>
-            )}
-          </div>
         )}
 
-        {/* Confirm button for multi-select */}
+        {customText.trim() && showCustom && (
+          <button
+            onClick={submitCustom}
+            className="flex-shrink-0 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent-hover transition-colors"
+          >
+            Submit
+          </button>
+        )}
+
         {question.multiSelect && (
           <button
             onClick={submitMulti}
             disabled={currentSelections.length === 0 && !customText.trim()}
-            className="flex-shrink-0 px-3 py-1 rounded-full bg-accent text-white text-[11px] font-medium disabled:opacity-40 hover:bg-accent-hover transition-colors ml-1"
+            className="flex-shrink-0 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-medium disabled:opacity-40 hover:bg-accent-hover transition-colors ml-auto"
           >
             {isLast ? 'Done' : 'Next →'}
           </button>
         )}
-      </div>
 
-      {/* Question text shown below on mobile (hidden on sm+) */}
-      <div className="text-[10px] text-[#5a5a5a] mt-1.5 sm:hidden truncate">
-        {question.question}
+        <span className="text-[10px] text-[#3e3e3e] ml-auto flex-shrink-0">
+          Esc to cancel
+        </span>
       </div>
     </div>
   );

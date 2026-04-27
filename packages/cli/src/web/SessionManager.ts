@@ -713,9 +713,13 @@ export const SessionManager = {
     }
 
     child.on('close', (code) => {
-      // code === null means the process was killed by a signal (SIGTERM from
-      // disposeSession). Treat that as intentional — don't broadcast an error.
-      if (!session.disposed && code !== 0 && code !== null) {
+      // code === null  → killed by SIGTERM (disposeSession) — intentional.
+      // code === 130   → SIGINT / user interrupt — intentional.
+      // code === 143   → SIGTERM via OS — treat as intentional.
+      // Only broadcast an error for unexpected non-zero exit codes.
+      const isIntentionalExit =
+        code === null || code === 0 || code === 130 || code === 143;
+      if (!session.disposed && !isIntentionalExit) {
         broadcast(session, 'message', {
           type: 'error',
           message: `CLI process exited with code ${code}`,
