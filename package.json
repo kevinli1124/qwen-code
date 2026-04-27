@@ -26,6 +26,7 @@
     "debug": "cross-env DEBUG=1 node --inspect-brk scripts/start.js",
     "generate": "node scripts/generate-git-commit-info.js",
     "verify:agents": "node scripts/verify-agents.mjs",
+    "validate:agents": "node scripts/validate-agents.mjs",
     "test:agents": "node scripts/test-agents.mjs",
     "test:memory-phases": "tsx scripts/test-memory-phases.mjs",
     "generate:settings-schema": "tsx scripts/generate-settings-schema.ts",
