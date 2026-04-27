@@ -3,7 +3,14 @@
  * Copyright 2025 Qwen team
  * SPDX-License-Identifier: Apache-2.0
  */
-import { useState, useEffect, useCallback, useRef, type FC } from 'react';
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  type FC,
+  useMemo,
+} from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useShallow } from 'zustand/react/shallow';
 import { AppLayout } from '../components/layout/AppLayout';
@@ -24,6 +31,7 @@ import {
   type PlanAction,
 } from '../components/conversation/PlanConfirmationModal';
 import { ErrorBanner } from '../components/shared/ErrorBanner';
+import { ErrorBoundary } from '../components/shared/ErrorBoundary';
 import { NewSessionModal } from '../components/session/NewSessionModal';
 import { SettingsModal } from '../components/shared/SettingsModal';
 import { useSessionStore } from '../stores/sessionStore';
@@ -44,6 +52,14 @@ import {
 
 export const ChatView: FC = () => {
   const [showNewSession, setShowNewSession] = useState(false);
+  // SSE reconnect countdown: { remaining: seconds, attempt: number } | null
+  const [reconnect, setReconnect] = useState<{
+    remaining: number;
+    attempt: number;
+  } | null>(null);
+  const reconnectIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
+    null,
+  );
   const { activeSessionId, addSession, setActiveSessionId, sessions } =
     useSessionStore(
       useShallow((s) => ({
@@ -68,6 +84,7 @@ export const ChatView: FC = () => {
     setMessages,
     messagesBySession,
     clearSession,
+    touchSession,
     tokenUsageBySession,
     sessionTokensBySession,
     resetSessionTokens,
@@ -88,6 +105,7 @@ export const ChatView: FC = () => {
       setMessages: s.setMessages,
       messagesBySession: s.messagesBySession,
       clearSession: s.clearSession,
+      touchSession: s.touchSession,
       tokenUsageBySession: s.tokenUsageBySession,
       sessionTokensBySession: s.sessionTokensBySession,
       resetSessionTokens: s.resetSessionTokens,
@@ -151,11 +169,17 @@ export const ChatView: FC = () => {
   // the most recent slice of persisted history. The backend returns
   // newest-N messages; older ones are paged in via loadMore when the
   // user scrolls to the top.
+  //
+  // touchSession is called here so the LRU eviction order is updated each
+  // time a session becomes active. The active session is moved to the END
+  // of sessionAccessOrder (most-recently-used), ensuring it is never the
+  // eviction candidate — only older, idle sessions are pruned.
   useEffect(() => {
     if (!activeSessionId) {
       setHistoryState({ oldest: null, hasMore: false, isLoading: false });
       return;
     }
+    touchSession(activeSessionId);
     clearSession(activeSessionId);
     sessionsApi
       .getHistory(activeSessionId, 50)
@@ -172,7 +196,7 @@ export const ChatView: FC = () => {
         // Mock mode / no server — leave whatever is in the store.
         setHistoryState({ oldest: null, hasMore: false, isLoading: false });
       });
-  }, [activeSessionId, setMessages, clearSession]);
+  }, [activeSessionId, setMessages, clearSession, touchSession]);
 
   const loadMore = useCallback(async () => {
     if (!activeSessionId) return;
@@ -241,8 +265,58 @@ export const ChatView: FC = () => {
 
   const { handleEvent } = useSessionEvents(activeSessionId ?? null);
 
+  // SSE reconnect countdown handler — fires before each retry attempt
+  const handleRetry = useCallback((delayMs: number, attempt: number) => {
+    // Clear any previous countdown interval
+    if (reconnectIntervalRef.current !== null) {
+      clearInterval(reconnectIntervalRef.current);
+      reconnectIntervalRef.current = null;
+    }
+    const seconds = Math.round(delayMs / 1000);
+    setReconnect({ remaining: seconds, attempt });
+    let remaining = seconds;
+    reconnectIntervalRef.current = setInterval(() => {
+      remaining -= 1;
+      if (remaining <= 0) {
+        if (reconnectIntervalRef.current !== null) {
+          clearInterval(reconnectIntervalRef.current);
+          reconnectIntervalRef.current = null;
+        }
+        setReconnect(null);
+      } else {
+        setReconnect({ remaining, attempt });
+      }
+    }, 1000);
+  }, []);
+
+  // Cleanup countdown on unmount
+  useEffect(() => () => {
+      if (reconnectIntervalRef.current !== null) {
+        clearInterval(reconnectIntervalRef.current);
+      }
+    }, []);
+
+  // Human-readable reconnect message shown in the banner
+  const reconnectMessage = useMemo(() => {
+    if (!reconnect) return null;
+    return `Connection lost. Reconnecting in ${reconnect.remaining}s… (attempt ${reconnect.attempt})`;
+  }, [reconnect]);
+
   // Connect SSE for active session
-  useSSE(activeSessionId, handleEvent, (err) => setConnectionError(err));
+  useSSE(
+    activeSessionId,
+    handleEvent,
+    (err) => {
+      // Fatal error — clear any active countdown first
+      if (reconnectIntervalRef.current !== null) {
+        clearInterval(reconnectIntervalRef.current);
+        reconnectIntervalRef.current = null;
+      }
+      setReconnect(null);
+      setConnectionError(err);
+    },
+    handleRetry,
+  );
 
   const activeSession = sessions.find((s) => s.id === activeSessionId);
 
@@ -497,6 +571,14 @@ export const ChatView: FC = () => {
               </button>
             </div>
 
+            {/* SSE reconnect countdown banner */}
+            {reconnectMessage && !connectionError && (
+              <div className="px-4 py-1.5 text-xs text-yellow-400 bg-yellow-400/10 border-b border-yellow-400/20 flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse flex-shrink-0" />
+                {reconnectMessage}
+              </div>
+            )}
+
             {/* Error banner */}
             {connectionError && (
               <ErrorBanner
@@ -506,36 +588,38 @@ export const ChatView: FC = () => {
             )}
 
             {/* Conversation */}
-            <div className="flex-1 min-h-0 overflow-hidden">
-              {activeSessionId ? (
-                <ConversationView
-                  sessionId={activeSessionId}
-                  hasMore={historyState.hasMore}
-                  isLoadingMore={historyState.isLoading}
-                  onLoadMore={loadMore}
-                />
-              ) : (
-                <div className="h-full flex flex-col items-center justify-center gap-4 text-[#8a8a8a]">
-                  <div className="w-16 h-16 rounded-full bg-[#2e2e2e] flex items-center justify-center">
-                    <span className="text-3xl font-bold text-accent">Q</span>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-base font-semibold text-[#e8e6e3]">
-                      Welcome to Qwen Code
+            <ErrorBoundary>
+              <div className="flex-1 min-h-0 overflow-hidden">
+                {activeSessionId ? (
+                  <ConversationView
+                    sessionId={activeSessionId}
+                    hasMore={historyState.hasMore}
+                    isLoadingMore={historyState.isLoading}
+                    onLoadMore={loadMore}
+                  />
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center gap-4 text-[#8a8a8a]">
+                    <div className="w-16 h-16 rounded-full bg-[#2e2e2e] flex items-center justify-center">
+                      <span className="text-3xl font-bold text-accent">Q</span>
                     </div>
-                    <div className="text-sm mt-1">
-                      Start a new session to begin
+                    <div className="text-center">
+                      <div className="text-base font-semibold text-[#e8e6e3]">
+                        Welcome to Qwen Code
+                      </div>
+                      <div className="text-sm mt-1">
+                        Start a new session to begin
+                      </div>
                     </div>
+                    <button
+                      onClick={() => setShowNewSession(true)}
+                      className="px-4 py-2 bg-accent text-white text-sm rounded hover:bg-accent-hover transition-colors"
+                    >
+                      New Session
+                    </button>
                   </div>
-                  <button
-                    onClick={() => setShowNewSession(true)}
-                    className="px-4 py-2 bg-accent text-white text-sm rounded hover:bg-accent-hover transition-colors"
-                  >
-                    New Session
-                  </button>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            </ErrorBoundary>
 
             {/* LoadingIndicator stays above the input bar so it's visible
                 during streaming. We no longer hide it while a permission

@@ -6,6 +6,7 @@
 import { useEffect } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { ChatView } from './views/ChatView';
+import { ErrorBoundary } from './components/shared/ErrorBoundary';
 import { useSessionStore } from './stores/sessionStore';
 import { sessionsApi } from './api/sessions';
 
@@ -26,5 +27,9 @@ export default function App() {
       });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return <ChatView />;
+  return (
+    <ErrorBoundary>
+      <ChatView />
+    </ErrorBoundary>
+  );
 }

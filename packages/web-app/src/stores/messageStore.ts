@@ -1,3 +1,8 @@
+/**
+ * @license
+ * Copyright 2025 Qwen team
+ * SPDX-License-Identifier: Apache-2.0
+ */
 import { create } from 'zustand';
 import type { ChatMessageData } from '@qwen-code/webui';
 import type {
@@ -6,6 +11,9 @@ import type {
   PermissionRequest,
   TokenUsage,
 } from '../types/message';
+
+/** Maximum number of sessions whose data is kept in memory at once. */
+const MAX_SESSIONS_IN_MEMORY = 10;
 
 interface MessageStore {
   // Messages per session (sessionId → ChatMessageData[])
@@ -71,6 +79,9 @@ interface MessageStore {
       }
     >
   >;
+  // LRU access order — session ids ordered oldest→newest (most recent at END).
+  // When length exceeds MAX_SESSIONS_IN_MEMORY the first (LRU) entry is evicted.
+  sessionAccessOrder: string[];
   // Connection error
   connectionError: string | null;
   // Currently active tool name (for live status display in LoadingIndicator)
@@ -131,11 +142,19 @@ interface MessageStore {
   ) => void;
   clearStreamingText: (uuid: string) => void;
   setConnectionError: (err: string | null) => void;
+  /**
+   * Mark a session as most-recently-used. Evicts the least-recently-used
+   * session(s) from memory when the in-memory count exceeds
+   * MAX_SESSIONS_IN_MEMORY. Safe to call on the currently active session —
+   * it moves it to the end of the access order so it is never the eviction
+   * candidate.
+   */
+  touchSession: (sessionId: string) => void;
   setCurrentToolName: (name: string | null) => void;
   incrementTurnCount: (sessionId: string) => void;
 }
 
-export const useMessageStore = create<MessageStore>((set) => ({
+export const useMessageStore = create<MessageStore>((set, get) => ({
   messagesBySession: {},
   streamingText: {},
   toolCallsBySession: {},
@@ -151,6 +170,7 @@ export const useMessageStore = create<MessageStore>((set) => ({
   modelLimits: null,
   approvalMode: null,
   fileModsBySession: {},
+  sessionAccessOrder: [],
   connectionError: null,
   currentToolName: null,
   turnCountBySession: {},
@@ -261,6 +281,9 @@ export const useMessageStore = create<MessageStore>((set) => ({
         tokenUsageBySession: tokenUsage,
         sessionTokensBySession: sessionTokens,
         fileModsBySession: fileMods,
+        sessionAccessOrder: s.sessionAccessOrder.filter(
+          (id) => id !== sessionId,
+        ),
       };
     }),
 
@@ -375,4 +398,21 @@ export const useMessageStore = create<MessageStore>((set) => ({
         [sessionId]: (s.turnCountBySession[sessionId] ?? 0) + 1,
       },
     })),
+
+  touchSession: (sessionId) => {
+    // Move sessionId to the end (most-recently-used position).
+    const order = get().sessionAccessOrder.filter((id) => id !== sessionId);
+    order.push(sessionId);
+
+    // Evict all entries beyond the cap, calling clearSession for each.
+    // We call clearSession via get() to reuse its logic (which also updates
+    // sessionAccessOrder), then write the remaining order in one final set().
+    while (order.length > MAX_SESSIONS_IN_MEMORY) {
+      const lru = order.shift()!; // oldest is at position 0
+      get().clearSession(lru);
+    }
+
+    // Persist the updated (and already-eviction-adjusted) order.
+    set({ sessionAccessOrder: order });
+  },
 }));

@@ -79,6 +79,72 @@ const TRUNCATION_PARAM_GUIDANCE =
   'If the content is too large for a single response, ' +
   'consider splitting it into smaller parts.';
 
+/**
+ * Tools that are safe to retry automatically on transient failures.
+ * These are all read-only / idempotent — they have no observable side effects,
+ * so re-running them after a network hiccup or transient permission error
+ * cannot cause data loss or duplication.
+ *
+ * Side-effect tools (write_file, edit, run_shell_command, …) are deliberately
+ * excluded: retrying them could clobber files or repeat destructive commands.
+ */
+const RETRYABLE_TOOLS = new Set([
+  'read_file',
+  'list_directory',
+  'glob',
+  'grep_search',
+  'web_fetch',
+  'web_search',
+  'get_file_info',
+  'read_many_files',
+]);
+
+/**
+ * Executes a function with automatic exponential-backoff retries, but ONLY
+ * when `toolName` is in RETRYABLE_TOOLS.  Side-effect tools are passed through
+ * without any retry wrapping so that failures surface immediately.
+ *
+ * Retry schedule (maxRetries = 2):
+ *   attempt 0 → failure → wait 500 ms
+ *   attempt 1 → failure → wait 1 000 ms
+ *   attempt 2 → throw (propagates to caller)
+ *
+ * @param toolName   - The registered tool name (used to gate retry eligibility).
+ * @param execute    - Zero-argument async factory that runs the tool.
+ * @param signal     - AbortSignal; if aborted, retries are skipped immediately.
+ * @param maxRetries - Maximum number of additional attempts after the first (default 2).
+ */
+async function executeWithRetry<T>(
+  toolName: string,
+  execute: () => Promise<T>,
+  signal: AbortSignal,
+  maxRetries = 2,
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await execute();
+    } catch (err) {
+      lastError = err;
+      // Never retry side-effect tools, final attempt, or aborted calls.
+      if (
+        !RETRYABLE_TOOLS.has(toolName) ||
+        attempt === maxRetries ||
+        signal.aborted
+      ) {
+        throw err;
+      }
+      debugLogger.warn(
+        `Tool "${toolName}" failed (attempt ${attempt + 1}/${maxRetries + 1}), ` +
+          `retrying in ${500 * Math.pow(2, attempt)} ms: ` +
+          `${err instanceof Error ? err.message : String(err)}`,
+      );
+      await new Promise<void>((r) => setTimeout(r, 500 * Math.pow(2, attempt)));
+    }
+  }
+  throw lastError;
+}
+
 const YOLO_DENY_PATTERNS: RegExp[] = [
   /\brm\s+(-[a-zA-Z]*r[a-zA-Z]*f|--recursive)\b/,
   /\brm\s+(-[a-zA-Z]*f[a-zA-Z]*r)\b/,
@@ -1653,17 +1719,25 @@ export class CoreToolScheduler {
         );
         this.notifyToolCallsUpdate();
       };
-      promise = invocation.execute(
+      // Shell tools are never in RETRYABLE_TOOLS, so executeWithRetry passes
+      // through immediately without adding any retry overhead.
+      promise = executeWithRetry(
+        toolName,
+        () =>
+          invocation.execute(
+            signal,
+            liveOutputCallback,
+            shellExecutionConfig,
+            setPidCallback,
+          ),
         signal,
-        liveOutputCallback,
-        shellExecutionConfig,
-        setPidCallback,
       );
     } else {
-      promise = invocation.execute(
+      promise = executeWithRetry(
+        toolName,
+        () =>
+          invocation.execute(signal, liveOutputCallback, shellExecutionConfig),
         signal,
-        liveOutputCallback,
-        shellExecutionConfig,
       );
     }
 

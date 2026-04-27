@@ -994,4 +994,9 @@ export const SessionManager = {
       SessionManager.disposeSession(id);
     }
   },
+
+  /** Returns the number of currently active (spawned) sessions. */
+  getActiveSessionCount(): number {
+    return sessions.size;
+  },
 };

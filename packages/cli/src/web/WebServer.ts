@@ -22,6 +22,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const USE_EMBEDDED = Object.keys(staticFiles).length > 0;
 
+/** Unix timestamp (ms) recorded when this module is first loaded. */
+const SERVER_START_TIME = Date.now();
+
 // Resolve the dev-mode static directory (web-app dist/).
 function resolveStaticDir(): string {
   const devPath = path.resolve(__dirname, '../../../../packages/web-app/dist');
@@ -437,9 +440,52 @@ async function handleApi(
     return;
   }
 
-  // GET /api/health
+  // GET /api/health — always returns 200; status field indicates overall health.
   if (pathname === '/api/health') {
-    sendJson(res, 200, { status: 'ok' });
+    const settings = readSettings();
+    const security = (settings['security'] as Record<string, unknown>) ?? {};
+    const auth = (security['auth'] as Record<string, unknown>) ?? {};
+    const apiKey = (auth['apiKey'] as string) ?? '';
+    const baseUrl = (auth['baseUrl'] as string) ?? '';
+    const authType = (auth['selectedType'] as string) ?? 'openai';
+
+    const uptime = Math.floor((Date.now() - SERVER_START_TIME) / 1000);
+    const activeSessions = SessionManager.getActiveSessionCount();
+
+    let llm: {
+      ok: boolean | null;
+      latencyMs?: number;
+      error?: string;
+      note?: string;
+    };
+    let overall: 'ok' | 'degraded';
+
+    if (!apiKey) {
+      llm = { ok: null, note: 'no api key configured' };
+      overall = 'ok';
+    } else {
+      const t0 = Date.now();
+      const llmCheck = await Promise.race([
+        testConnection(authType, apiKey, baseUrl),
+        new Promise<{ ok: false; error: string }>((r) =>
+          setTimeout(() => r({ ok: false, error: 'timeout' }), 3000),
+        ),
+      ]);
+      const latencyMs = Date.now() - t0;
+      llm = {
+        ok: llmCheck.ok,
+        latencyMs,
+        ...(!llmCheck.ok && llmCheck.error ? { error: llmCheck.error } : {}),
+      };
+      overall = llmCheck.ok ? 'ok' : 'degraded';
+    }
+
+    sendJson(res, 200, {
+      status: overall,
+      uptime,
+      activeSessions,
+      llm,
+    });
     return;
   }
 
