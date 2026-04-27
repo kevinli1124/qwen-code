@@ -14,6 +14,7 @@
  * For persistent interactive agents, see AgentInteractive (Phase 2).
  */
 
+import { setMaxListeners } from 'node:events';
 import type { Config } from '../../config/config.js';
 import { createDebugLogger } from '../../utils/debugLogger.js';
 import type {
@@ -215,6 +216,7 @@ export class AgentHeadless {
 
     // Set up abort signal propagation
     const abortController = new AbortController();
+    setMaxListeners(50, abortController.signal);
     const onExternalAbort = () => {
       abortController.abort();
     };

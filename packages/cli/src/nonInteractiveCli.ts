@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { setMaxListeners } from 'node:events';
 import type {
   Config,
   ToolCallRequestInfo,
@@ -177,6 +178,10 @@ export async function runNonInteractive(
 
     const geminiClient = config.getGeminiClient();
     const abortController = options.abortController ?? new AbortController();
+    // Raise the limit once at the point of creation. Multiple subsystems
+    // (agent-core rounds, tool scheduler, message-bus, hook-runner) all add
+    // abort listeners to this signal concurrently; the default of 10 is too low.
+    setMaxListeners(50, abortController.signal);
 
     // Setup signal handlers for graceful shutdown
     const shutdownHandler = () => {
