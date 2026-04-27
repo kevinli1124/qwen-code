@@ -645,7 +645,15 @@ export const SessionManager = {
     const child = spawn(nodeExe, spawnArgs, {
       cwd,
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env, QWEN_CODE_NO_RELAUNCH: '1' },
+      env: {
+        ...process.env,
+        QWEN_CODE_NO_RELAUNCH: '1',
+        // Enable cron/loop tools so the /loop skill can call cron_create.
+        // The non-interactive CLI already has a full cron execution loop that
+        // keeps the child alive between firings and streams each cron turn
+        // back to the web UI via stdout → SSE.
+        QWEN_CODE_ENABLE_CRON: '1',
+      },
     });
 
     const session: ActiveSession = {

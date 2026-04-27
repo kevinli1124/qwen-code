@@ -98,7 +98,10 @@ export function useSessionEvents(sessionId: string | null) {
 
         case 'stream_text': {
           // First content event — clear the "thinking" pending indicator.
+          // Also set streaming=true: cron-fired turns start here without a
+          // user sendQuery(), so isStreaming would otherwise stay false.
           setPendingTurn(sessionId, null);
+          setStreaming(true);
           updateStreamingText(event.uuid, event.delta);
           break;
         }
@@ -127,6 +130,7 @@ export function useSessionEvents(sessionId: string | null) {
 
         case 'tool_start': {
           setPendingTurn(sessionId, null);
+          setStreaming(true); // cron-fired turns may start with a tool call
           setCurrentToolName(formatToolTitle(event.toolName, event.args));
           const kind = mapToolNameToKind(event.toolName);
           const baseTitle = formatToolTitle(event.toolName, event.args);
