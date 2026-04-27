@@ -8,7 +8,8 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import dts from 'vite-plugin-dts';
 import { resolve } from 'path';
-import { rmSync, existsSync } from 'node:fs';
+import { rmSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 
 /**
  * Vite configuration for @qwen-code/webui library
@@ -31,7 +32,27 @@ export default defineConfig({
     {
       name: 'clean-dist',
       buildStart() {
-        if (process.platform === 'win32') return;
+        if (process.platform === 'win32') {
+          // Pre-create dist/src/** tree mirroring src/ to prevent EPERM
+          // when vite-plugin-dts creates declaration files in subdirectories.
+          const srcDir = resolve(__dirname, 'src');
+          const distSrcDir = resolve(__dirname, 'dist', 'src');
+          function mirrorDirs(src: string, dest: string) {
+            if (!existsSync(src)) return;
+            mkdirSync(dest, { recursive: true });
+            for (const entry of readdirSync(src, { withFileTypes: true })) {
+              if (entry.isDirectory()) {
+                mirrorDirs(join(src, entry.name), join(dest, entry.name));
+              }
+            }
+          }
+          try {
+            mirrorDirs(srcDir, distSrcDir);
+          } catch {
+            // Non-fatal: vite-plugin-dts will still attempt its own mkdir.
+          }
+          return;
+        }
         const distPath = resolve(__dirname, 'dist');
         if (!existsSync(distPath)) return;
         try {
