@@ -643,8 +643,16 @@ async function handleApi(
       sendError(res, 400, `Invalid mode: ${mode}`);
       return;
     }
-    const ok = SessionManager.setApprovalMode(id, mode);
-    sendJson(res, ok ? 200 : 404, { ok });
+    const sent = SessionManager.setApprovalMode(id, mode);
+    if (!sent) {
+      // Session exists but child is idle (not yet spawned). Persist the mode
+      // to settings.json so the child picks it up on next spawn.
+      const merged = deepMerge(readSettings(), {
+        tools: { approvalMode: mode },
+      });
+      writeSettings(merged);
+    }
+    sendJson(res, 200, { ok: true });
     return;
   }
 
