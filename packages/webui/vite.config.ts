@@ -7,7 +7,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
-import { rmSync, existsSync } from 'node:fs';
+import { rmSync, existsSync, mkdirSync } from 'node:fs';
 
 /**
  * Vite configuration for @qwen-code/webui library
@@ -40,6 +40,16 @@ export default defineConfig({
       },
     },
     react(),
+    {
+      name: 'pre-create-dts-dir',
+      closeBundle() {
+        // Pre-create dist/src so the subsequent `tsc -p tsconfig.dts.json`
+        // step can write .d.ts files without EPERM on Windows. Antivirus tools
+        // briefly lock a newly created dist/ directory; creating dist/src here
+        // (in the same process) avoids the first mkdir race in tsc.
+        mkdirSync(resolve(__dirname, 'dist', 'src'), { recursive: true });
+      },
+    },
   ],
   build: {
     emptyOutDir: false,
