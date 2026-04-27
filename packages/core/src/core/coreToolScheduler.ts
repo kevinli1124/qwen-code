@@ -18,6 +18,7 @@ import type {
   AnyToolInvocation,
   ChatRecordingService,
 } from '../index.js';
+import { setMaxListeners } from 'node:events';
 import { createDebugLogger } from '../utils/debugLogger.js';
 import { wrapIfSuspicious } from '../utils/promptInjectionGuard.js';
 import {
@@ -836,6 +837,11 @@ export class CoreToolScheduler {
     signal: AbortSignal,
   ): Promise<void> {
     if (this.isRunning() || this.isScheduling) {
+      // Each queued tool call adds one { once: true } 'abort' listener.
+      // With many concurrent tool calls this legitimately exceeds Node's
+      // default limit of 10, triggering a spurious MaxListeners warning.
+      // Raise the limit to a safe ceiling; listeners are always cleaned up.
+      setMaxListeners(Math.max(50, this.requestQueue.length + 10), signal);
       return new Promise((resolve, reject) => {
         const abortHandler = () => {
           // Find and remove the request from the queue
