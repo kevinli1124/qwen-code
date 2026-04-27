@@ -583,9 +583,21 @@ export const SessionManager = {
     // Spawn CLI in stream-json mode. In a Node SEA build (qwen.exe),
     // process.argv[1] is the first user-facing flag (e.g. "--web") rather
     // than a script path, so we must re-invoke the exe itself with only
-    // stream-json flags. In plain Node we still spawn `node dist/cli.js`.
+    // stream-json flags. In plain Node we still spawn `node dist/index.js`.
+    //
+    // Special case: if the server was started via dist/src/web-entry.js,
+    // that script only starts a web server and IGNORES --input-format
+    // stream-json entirely. Spawning it as the child worker would open
+    // a new web server on another port instead of running as a CLI session.
+    // Resolve to dist/index.js (two levels up from dist/src/web-entry.js)
+    // which is the correct full CLI entry that handles stream-json.
     const nodeExe = process.argv[0];
-    const cliScript = process.argv[1];
+    const rawScript = process.argv[1];
+    const cliScript =
+      typeof rawScript === 'string' &&
+      (rawScript.endsWith('web-entry.js') || rawScript.endsWith('web-entry.ts'))
+        ? path.resolve(path.dirname(rawScript), '..', 'index.js')
+        : rawScript;
     const isSea = typeof cliScript === 'string' && cliScript.startsWith('--');
 
     // yargs enforces that stream-json input pairs with stream-json output.
