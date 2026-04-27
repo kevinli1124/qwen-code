@@ -223,6 +223,20 @@ export async function handleLocalCommand(
       return { handled: true };
     }
 
+    case 'reload': {
+      // /reload reloads QWEN.md and memory from disk. In web mode the
+      // child CLI spawns fresh for each turn and already reads current
+      // config, so a reload is a no-op. Each new message will pick up
+      // the latest .qwen/ files automatically.
+      deps.appendMessage(
+        deps.sessionId,
+        makeAssistantMessage(
+          '✓ Web mode: config and memory files are read on every new turn — no explicit reload needed.',
+        ),
+      );
+      return { handled: true };
+    }
+
     default:
       return { handled: false };
   }

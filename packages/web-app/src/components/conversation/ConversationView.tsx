@@ -51,6 +51,7 @@ export const ConversationView: FC<ConversationViewProps> = ({
 }) => {
   const messagesBySession = useMessageStore((s) => s.messagesBySession);
   const streamingText = useMessageStore((s) => s.streamingText);
+  const streamingToolOutput = useMessageStore((s) => s.streamingToolOutput);
   const activeSession = useSessionStore((s) =>
     s.sessions.find((sess) => sess.id === sessionId),
   );
@@ -77,11 +78,9 @@ export const ConversationView: FC<ConversationViewProps> = ({
     [],
   );
 
-  // Merge streaming messages into the list for live display. Memoized so
-  // the array reference is stable between renders where neither the stored
-  // messages nor the streaming buffer changed — otherwise we hand a new
-  // array to ChatViewer every render and its internal effects (and the
-  // scroll layout effect below that depends on length) fire in a loop.
+  // Merge streaming messages and live tool output into the list for live
+  // display. Memoized so the array reference is stable between renders where
+  // nothing changed — otherwise ChatViewer's internal effects fire in a loop.
   const messages = messagesBySession[sessionId];
   const displayMessages: ChatMessageData[] = useMemo(() => {
     const base = messages ?? [];
@@ -91,6 +90,31 @@ export const ConversationView: FC<ConversationViewProps> = ({
           ...msg,
           message: { ...msg.message, content: streamingText[msg.uuid] },
         };
+      }
+      // Overlay live tool output chunks onto in-progress tool cards so the
+      // user sees the command output stream in real-time rather than waiting
+      // for tool_complete. Once complete, the patched content supersedes this.
+      if (msg.type === 'tool_call' && msg.toolCall) {
+        const callId = msg.toolCall.toolCallId;
+        const liveOutput = streamingToolOutput[callId];
+        if (
+          liveOutput &&
+          msg.toolCall.status === 'in_progress' &&
+          msg.toolCall.content?.length === 0
+        ) {
+          return {
+            ...msg,
+            toolCall: {
+              ...msg.toolCall,
+              content: [
+                {
+                  type: 'content' as const,
+                  content: { type: 'text', text: liveOutput },
+                },
+              ],
+            },
+          };
+        }
       }
       return msg;
     });
@@ -105,7 +129,7 @@ export const ConversationView: FC<ConversationViewProps> = ({
       }
     }
     return merged;
-  }, [messages, streamingText]);
+  }, [messages, streamingText, streamingToolOutput]);
 
   // Scroll listener: trigger loadMore when user approaches the top.
   // Capture the current scrollHeight so we can restore scroll position

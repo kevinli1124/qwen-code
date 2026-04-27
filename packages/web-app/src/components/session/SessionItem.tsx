@@ -3,7 +3,7 @@
  * Copyright 2025 Qwen team
  * SPDX-License-Identifier: Apache-2.0
  */
-import type { FC } from 'react';
+import { useState, type FC } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useSessionStore } from '../../stores/sessionStore';
 import { sessionsApi } from '../../api/sessions';
@@ -37,6 +37,7 @@ function getRelativeTime(isoDate: string): string {
 }
 
 export const SessionItem: FC<SessionItemProps> = ({ session, isActive }) => {
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const { setActiveSessionId, removeSession } = useSessionStore(
     useShallow((s) => ({
       setActiveSessionId: s.setActiveSessionId,
@@ -44,14 +45,25 @@ export const SessionItem: FC<SessionItemProps> = ({ session, isActive }) => {
     })),
   );
 
-  const handleDelete = async (e: React.MouseEvent) => {
+  const handleDeleteClick = (e: React.MouseEvent) => {
     e.stopPropagation();
+    setConfirmDelete(true);
+  };
+
+  const handleConfirmDelete = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setConfirmDelete(false);
     try {
       await sessionsApi.delete(session.id);
     } catch {
       // Ignore server errors — remove from UI regardless
     }
     removeSession(session.id);
+  };
+
+  const handleCancelDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setConfirmDelete(false);
   };
 
   return (
@@ -62,32 +74,55 @@ export const SessionItem: FC<SessionItemProps> = ({ session, isActive }) => {
           ? 'bg-[#2e2e2e] text-[#e8e6e3]'
           : 'text-[#8a8a8a] hover:bg-[#1e1e1e] hover:text-[#e8e6e3]',
       ].join(' ')}
-      onClick={() => setActiveSessionId(session.id)}
+      onClick={() => !confirmDelete && setActiveSessionId(session.id)}
     >
       <StatusDot status={session.status} />
       <div className="flex-1 min-w-0 pr-5">
         <div className="text-xs font-medium truncate leading-tight">
           {session.title}
         </div>
-        <div className="text-[10px] text-[#8a8a8a] mt-0.5">
-          {getRelativeTime(session.updatedAt)}
-        </div>
+        {confirmDelete ? (
+          <div
+            className="flex items-center gap-1.5 mt-1"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span className="text-[10px] text-[#e8e6e3]">Delete?</span>
+            <button
+              onClick={handleConfirmDelete}
+              className="px-2 py-0.5 text-[10px] rounded bg-red-500/20 text-red-400 border border-red-500/40 hover:bg-red-500/30 transition-colors"
+            >
+              Yes
+            </button>
+            <button
+              onClick={handleCancelDelete}
+              className="px-2 py-0.5 text-[10px] rounded bg-[#2e2e2e] text-[#8a8a8a] border border-[#3e3e3e] hover:text-[#e8e6e3] transition-colors"
+            >
+              No
+            </button>
+          </div>
+        ) : (
+          <div className="text-[10px] text-[#8a8a8a] mt-0.5">
+            {getRelativeTime(session.updatedAt)}
+          </div>
+        )}
       </div>
-      {/* Delete button — visible on hover */}
-      <button
-        onClick={handleDelete}
-        className="absolute right-1.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-[#8a8a8a] hover:text-red-400 hover:bg-[#3a1a1a]"
-        title="Delete session"
-      >
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-          <path
-            d="M1 1l8 8M9 1L1 9"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-          />
-        </svg>
-      </button>
+      {/* Delete button — visible on hover, hidden while confirming */}
+      {!confirmDelete && (
+        <button
+          onClick={handleDeleteClick}
+          className="absolute right-1.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-[#8a8a8a] hover:text-red-400 hover:bg-[#3a1a1a]"
+          title="Delete session"
+        >
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+            <path
+              d="M1 1l8 8M9 1L1 9"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
+      )}
     </div>
   );
 };

@@ -158,13 +158,11 @@ export const PermissionCard: FC<PermissionCardProps> = ({
     ? String(input?.command ?? '').slice(0, 80) || null
     : null;
 
-  // Matches QuestionModal's outer wrapper so the two dialogs feel like
-  // the same product. Dim backdrop keeps focus on the prompt; card
-  // stays centered so the draft text in InputBar (still mounted) sits
-  // visually behind it instead of being replaced.
+  // Inline at the bottom of the chat area, replacing the InputBar.
+  // No backdrop — the card is in-flow so it doesn't obscure the conversation.
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="w-[640px] max-w-[90vw] max-h-[85vh] overflow-y-auto flex flex-col gap-3 bg-[#242424] border border-[#2e2e2e] rounded-lg px-4 py-3 shadow-2xl animate-fade-up">
+    <div className="border-t border-yellow-500/25 bg-[#1a1a1a]">
+      <div className="max-h-[60vh] overflow-y-auto flex flex-col gap-3 px-4 py-3 animate-fade-up">
         {/* Context line — subtle identifier above the main header */}
         <div className="text-xs text-[#8a8a8a]">
           Agent is requesting permission to use{' '}
@@ -251,9 +249,7 @@ export const PermissionCard: FC<PermissionCardProps> = ({
               </>
             ) : null}
           </div>
-          <div className="text-[#5a5a5a]">
-            Press Enter to allow · Esc to deny
-          </div>
+          <div className="text-[#5a5a5a]">Enter to allow · Esc to deny</div>
         </div>
       </div>
     </div>

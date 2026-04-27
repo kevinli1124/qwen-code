@@ -57,7 +57,19 @@
 
   /* Buttons */
   --app-button-background: #2e2e2e;
+  --app-button-foreground: #e8e6e3;
+  --app-button-secondary-background: #1e1e1e;
+  --app-button-hover-background: #3e3e3e;
   --app-ghost-button-hover-background: rgba(255,255,255,0.06);
+
+  /* List active state */
+  --app-list-active-foreground: #ffffff;
+
+  /* Links */
+  --app-link-color: #4f6bff;
+
+  /* Input secondary bg (used by AskUserQuestionDialog) */
+  --app-input-secondary-background: #1e1e1e;
 }
 
 * {

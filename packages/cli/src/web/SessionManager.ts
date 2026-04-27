@@ -55,6 +55,12 @@ interface ActiveSession {
   /** Set true once a `result` event is broadcast so the close handler can
    *  detect a clean exit that happened before the result was flushed. */
   resultReceived: boolean;
+  /**
+   * Set true by disposeSession to signal the child.on('close') handler that
+   * this exit was intentional (e.g. /clear). Suppresses spurious error
+   * broadcasts and prevents deletion of SSE clients parked in pendingSseClients.
+   */
+  disposed: boolean;
   // Track streaming state for tool call reconstruction
   activeToolUseBlocks: Map<
     number,
@@ -328,6 +334,21 @@ function translateAndBroadcast(session: ActiveSession, raw: unknown): void {
         session.id,
         isError ? 'error' : 'completed',
       );
+      // Persist the camelCase token usage so the frontend can restore CTX
+      // when switching back to this session after a page reload or switch.
+      if (usage) {
+        PersistenceManager.appendMessage(session.id, {
+          type: 'result',
+          timestamp: new Date().toISOString(),
+          data: {
+            inputTokens: (usage['input_tokens'] as number) ?? 0,
+            outputTokens: (usage['output_tokens'] as number) ?? 0,
+            cacheReadInputTokens:
+              (usage['cache_read_input_tokens'] as number) ?? 0,
+            durationMs,
+          },
+        });
+      }
       break;
     }
 
@@ -627,6 +648,7 @@ export const SessionManager = {
       textChunks: [],
       hydrated: false,
       resultReceived: false,
+      disposed: false,
     };
     if (!persistentSnapshots.has(id)) persistentSnapshots.set(id, new Map());
 
@@ -691,16 +713,18 @@ export const SessionManager = {
     }
 
     child.on('close', (code) => {
-      if (code !== 0) {
+      // code === null means the process was killed by a signal (SIGTERM from
+      // disposeSession). Treat that as intentional — don't broadcast an error.
+      if (!session.disposed && code !== 0 && code !== null) {
         broadcast(session, 'message', {
           type: 'error',
           message: `CLI process exited with code ${code}`,
         });
-      } else if (!session.resultReceived) {
-        // Child exited cleanly (code 0) but never sent a `result` JSON line
-        // (e.g. stdout-flush race on fast tasks, or process.exit(0) called
-        // before the adapter flushed). Synthesise a success result so the
-        // frontend calls setStreaming(false) and the spinner stops.
+      } else if (!session.disposed && !session.resultReceived) {
+        // Child exited cleanly (code 0 or signal) but never sent a `result`
+        // JSON line (e.g. stdout-flush race on fast tasks, or process.exit(0)
+        // called before the adapter flushed). Synthesise a success result so
+        // the frontend calls setStreaming(false) and the spinner stops.
         broadcast(session, 'message', {
           type: 'result',
           success: true,
@@ -708,10 +732,13 @@ export const SessionManager = {
         });
       }
       // Clean up all resources so module-level Maps don't grow unboundedly
-      // across the server lifetime.
+      // across the server lifetime. Skip pendingSseClients if disposeSession
+      // already transferred live SSE clients there for a re-create.
       sessions.delete(id);
       persistentSnapshots.delete(id);
-      pendingSseClients.delete(id);
+      if (!session.disposed) {
+        pendingSseClients.delete(id);
+      }
     });
   },
 
@@ -976,16 +1003,34 @@ export const SessionManager = {
   /** Kill the child process (if running) and release all Maps for a session. */
   disposeSession(id: string): void {
     const session = sessions.get(id);
-    if (session?.child) {
+    if (session) {
+      // Mark as intentionally disposed before kill so the child.on('close')
+      // handler suppresses spurious error broadcasts.
+      session.disposed = true;
       try {
         session.child.kill('SIGTERM');
       } catch {
         // already exited
       }
+      // Transfer live SSE clients to pendingSseClients so they are
+      // automatically re-attached if the session is re-created (e.g. after
+      // /clear). Without this, post-clear queries spawn a fresh child whose
+      // broadcast never reaches the still-open EventSource connection.
+      if (session.sseClients.size) {
+        let pending = pendingSseClients.get(id);
+        if (!pending) {
+          pending = new Set();
+          pendingSseClients.set(id, pending);
+        }
+        for (const c of session.sseClients) {
+          pending.add(c);
+        }
+      }
     }
     sessions.delete(id);
     persistentSnapshots.delete(id);
-    pendingSseClients.delete(id);
+    // Note: pendingSseClients is intentionally NOT deleted here when there
+    // are live clients — they need to survive until the session is re-created.
   },
 
   /** Kill every active child process — called on server shutdown. */

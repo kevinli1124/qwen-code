@@ -90,6 +90,10 @@ interface MessageStore {
   currentToolName: string | null;
   // Turn counter per session (incremented on each 'result' event)
   turnCountBySession: Record<string, number>;
+  // Live streaming output per tool call (callId → accumulated text).
+  // Populated from tool_output_chunk events and cleared on tool_complete so
+  // ConversationView can merge it into the tool-call card in real-time.
+  streamingToolOutput: Record<string, string>;
 
   // Actions
   setMessages: (sessionId: string, messages: ChatMessageData[]) => void;
@@ -155,6 +159,10 @@ interface MessageStore {
   touchSession: (sessionId: string) => void;
   setCurrentToolName: (name: string | null) => void;
   incrementTurnCount: (sessionId: string) => void;
+  /** Append a chunk to the live streaming output buffer for a tool call. */
+  appendToolOutputStream: (callId: string, chunk: string) => void;
+  /** Clear the live streaming output for a tool call (called on tool_complete). */
+  clearToolOutputStream: (callId: string) => void;
 }
 
 export const useMessageStore = create<MessageStore>((set, get) => ({
@@ -178,6 +186,7 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
   connectionError: null,
   currentToolName: null,
   turnCountBySession: {},
+  streamingToolOutput: {},
 
   setMessages: (sessionId, messages) =>
     set((s) => ({
@@ -427,4 +436,18 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
     // Persist the updated (and already-eviction-adjusted) order.
     set({ sessionAccessOrder: order });
   },
+
+  appendToolOutputStream: (callId, chunk) =>
+    set((s) => ({
+      streamingToolOutput: {
+        ...s.streamingToolOutput,
+        [callId]: (s.streamingToolOutput[callId] ?? '') + chunk,
+      },
+    })),
+
+  clearToolOutputStream: (callId) =>
+    set((s) => {
+      const { [callId]: _removed, ...rest } = s.streamingToolOutput;
+      return { streamingToolOutput: rest };
+    }),
 }));

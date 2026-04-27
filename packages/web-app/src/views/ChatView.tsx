@@ -25,7 +25,7 @@ import {
   PermissionCard,
   type PermissionDecision,
 } from '../components/conversation/PermissionCard';
-import { QuestionModal } from '../components/conversation/QuestionModal';
+import { QuestionBar } from '../components/conversation/QuestionBar';
 import {
   PlanConfirmationModal,
   type PlanAction,
@@ -89,6 +89,7 @@ export const ChatView: FC = () => {
     sessionTokensBySession,
     resetSessionTokens,
     turnCountBySession,
+    setTokenUsage,
   } = useMessageStore(
     useShallow((s) => ({
       isStreaming: s.isStreaming,
@@ -110,11 +111,18 @@ export const ChatView: FC = () => {
       sessionTokensBySession: s.sessionTokensBySession,
       resetSessionTokens: s.resetSessionTokens,
       turnCountBySession: s.turnCountBySession,
+      setTokenUsage: s.setTokenUsage,
     })),
   );
 
   // ── URL ↔ session sync ───────────────────────────────────────────────
   const [searchParams, setSearchParams] = useSearchParams();
+
+  // Capture the initial ?session= param before the URL sync effect can
+  // clear it (the sync effect runs with activeSessionId=null on mount and
+  // immediately calls setSearchParams({}), wiping the param before the
+  // sessions API resolves).
+  const initialUrlSessionId = useRef(searchParams.get('session'));
 
   // Push/replace URL whenever the active session changes.
   useEffect(() => {
@@ -133,7 +141,7 @@ export const ChatView: FC = () => {
     if (urlRestoreAttempted.current) return;
     if (sessions.length === 0) return;
     urlRestoreAttempted.current = true;
-    const sessionParam = searchParams.get('session');
+    const sessionParam = initialUrlSessionId.current;
     if (
       sessionParam &&
       sessions.some((s) => s.id === sessionParam) &&
@@ -141,7 +149,7 @@ export const ChatView: FC = () => {
     ) {
       setActiveSessionId(sessionParam);
     }
-  }, [sessions, searchParams, activeSessionId, setActiveSessionId]);
+  }, [sessions, activeSessionId, setActiveSessionId]);
   // ── end URL sync ─────────────────────────────────────────────────────
 
   const [commandList, setCommandList] = useState<CommandMetadata[]>([]);
@@ -191,12 +199,33 @@ export const ChatView: FC = () => {
           hasMore: !!data.hasMore,
           isLoading: false,
         });
+        // Restore last known token usage from persisted result events so
+        // CTX stays populated when switching between historical sessions.
+        const lastResult = [...data.messages]
+          .reverse()
+          .find((m) => m.type === 'result');
+        if (lastResult) {
+          const u = lastResult.data as {
+            inputTokens?: number;
+            outputTokens?: number;
+            cacheReadInputTokens?: number;
+            durationMs?: number;
+          };
+          if (u.inputTokens !== undefined) {
+            setTokenUsage(activeSessionId, {
+              inputTokens: u.inputTokens,
+              outputTokens: u.outputTokens ?? 0,
+              cacheReadInputTokens: u.cacheReadInputTokens,
+              durationMs: u.durationMs ?? 0,
+            });
+          }
+        }
       })
       .catch(() => {
         // Mock mode / no server — leave whatever is in the store.
         setHistoryState({ oldest: null, hasMore: false, isLoading: false });
       });
-  }, [activeSessionId, setMessages, clearSession, touchSession]);
+  }, [activeSessionId, setMessages, clearSession, touchSession, setTokenUsage]);
 
   const loadMore = useCallback(async () => {
     if (!activeSessionId) return;
@@ -290,11 +319,14 @@ export const ChatView: FC = () => {
   }, []);
 
   // Cleanup countdown on unmount
-  useEffect(() => () => {
+  useEffect(
+    () => () => {
       if (reconnectIntervalRef.current !== null) {
         clearInterval(reconnectIntervalRef.current);
       }
-    }, []);
+    },
+    [],
+  );
 
   // Human-readable reconnect message shown in the banner
   const reconnectMessage = useMemo(() => {
@@ -621,43 +653,45 @@ export const ChatView: FC = () => {
               </div>
             </ErrorBoundary>
 
-            {/* LoadingIndicator stays above the input bar so it's visible
-                during streaming. We no longer hide it while a permission
-                prompt is active — the prompt overlays on top instead. */}
-            {activeSessionId && <LoadingIndicator visible={isStreaming} />}
+            {/* LoadingIndicator sits above the bottom bar. Hidden while an
+                interaction card (permission / question) is shown so it
+                doesn't fight for vertical space. */}
+            {activeSessionId && !pendingPermission && !pendingQuestion && (
+              <LoadingIndicator visible={isStreaming} />
+            )}
 
-            {/* InputBar is always mounted while a session is active so
-                the user's in-flight draft text survives
-                permission / question / plan prompts (they now overlay
-                instead of replacing the input area). */}
+            {/* Bottom bar: InputBar OR an interaction card (permission /
+                question). InputBar stays mounted to preserve draft text;
+                it is visually hidden (not unmounted) when a card is active. */}
             {activeSessionId && (
-              <InputBar onSend={handleSend} onStop={handleStop} />
+              <>
+                <div
+                  className={
+                    pendingPermission || pendingQuestion ? 'hidden' : ''
+                  }
+                >
+                  <InputBar onSend={handleSend} onStop={handleStop} />
+                </div>
+                {pendingPermission && (
+                  <PermissionCard
+                    request={pendingPermission}
+                    projectCwd={activeSession?.cwd}
+                    onDecide={handlePermissionDecision}
+                  />
+                )}
+                {pendingQuestion && (
+                  <QuestionBar
+                    questions={pendingQuestion.questions}
+                    onSubmit={handleQuestionSubmit}
+                    onCancel={handleQuestionCancel}
+                  />
+                )}
+              </>
             )}
           </div>
         }
         rightPanel={<RightPanel />}
       />
-
-      {/* Permission prompt — overlay (was inline replacement of
-          InputBar). Same modal pattern as QuestionModal for visual
-          consistency; InputBar stays mounted underneath so draft text
-          isn't lost when a permission_request arrives mid-typing. */}
-      {pendingPermission && (
-        <PermissionCard
-          request={pendingPermission}
-          projectCwd={activeSession?.cwd}
-          onDecide={handlePermissionDecision}
-        />
-      )}
-
-      {/* ask_user_question dialog */}
-      {pendingQuestion && (
-        <QuestionModal
-          questions={pendingQuestion.questions}
-          onSubmit={handleQuestionSubmit}
-          onCancel={handleQuestionCancel}
-        />
-      )}
 
       {/* exit_plan_mode plan review dialog */}
       {pendingPlan && (

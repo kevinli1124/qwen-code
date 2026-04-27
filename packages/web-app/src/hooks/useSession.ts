@@ -35,6 +35,8 @@ export function useSessionEvents(sessionId: string | null) {
     setConnectionError,
     setCurrentToolName,
     incrementTurnCount,
+    appendToolOutputStream,
+    clearToolOutputStream,
   } = useMessageStore(
     useShallow((s) => ({
       appendMessage: s.appendMessage,
@@ -59,6 +61,8 @@ export function useSessionEvents(sessionId: string | null) {
       setConnectionError: s.setConnectionError,
       setCurrentToolName: s.setCurrentToolName,
       incrementTurnCount: s.incrementTurnCount,
+      appendToolOutputStream: s.appendToolOutputStream,
+      clearToolOutputStream: s.clearToolOutputStream,
     })),
   );
   const { updateSession } = useSessionStore(
@@ -212,8 +216,12 @@ export function useSessionEvents(sessionId: string | null) {
           }
           patchToolCallMessage(sessionId, event.callId, {
             status: event.success ? 'completed' : 'failed',
+            durationMs: event.durationMs,
             content: contentBlocks,
           });
+          // Clear the live streaming buffer for this call — the final
+          // aggregated output from contentBlocks supersedes it.
+          clearToolOutputStream(event.callId);
           // Close the agent_spawn card if this tool_complete corresponds to a subagent
           const spawnedSubagentId = agentSpawnByParentCallIdRef.current.get(
             event.callId,
@@ -270,6 +278,9 @@ export function useSessionEvents(sessionId: string | null) {
         case 'tool_output_chunk': {
           if (typeof event.chunk === 'string') {
             appendTerminal(sessionId, event.chunk);
+            // Also feed into the streaming output buffer so the tool card
+            // can show live output while the tool is running.
+            appendToolOutputStream(event.callId, event.chunk);
           }
           break;
         }
@@ -394,6 +405,8 @@ export function useSessionEvents(sessionId: string | null) {
       setConnectionError,
       setCurrentToolName,
       incrementTurnCount,
+      appendToolOutputStream,
+      clearToolOutputStream,
       updateSession,
     ],
   );
