@@ -116,13 +116,16 @@ export const ChatView: FC = () => {
   );
 
   // ── URL ↔ session sync ───────────────────────────────────────────────
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [, setSearchParams] = useSearchParams();
 
-  // Capture the initial ?session= param before the URL sync effect can
-  // clear it (the sync effect runs with activeSessionId=null on mount and
-  // immediately calls setSearchParams({}), wiping the param before the
-  // sessions API resolves).
-  const initialUrlSessionId = useRef(searchParams.get('session'));
+  // Capture the initial ?session= param directly from window.location so
+  // React Router's search-params state (which updates asynchronously) can
+  // never race with our read. The URL sync effect clears ?session= on mount
+  // (activeSessionId=null), but we need the original value to restore the
+  // session once the API responds.
+  const initialUrlSessionId = useRef(
+    new URLSearchParams(window.location.search).get('session'),
+  );
 
   // Push/replace URL whenever the active session changes.
   useEffect(() => {

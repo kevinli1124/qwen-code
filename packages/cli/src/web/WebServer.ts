@@ -274,12 +274,30 @@ function serveStatic(
           res.end('Not found');
           return;
         }
-        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        // Always revalidate the HTML entry point so browsers pick up new
+        // hashed JS/CSS bundles immediately after a redeploy.
+        res.writeHead(200, {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          Pragma: 'no-cache',
+        });
         res.end(indexData);
       });
       return;
     }
-    res.writeHead(200, { 'Content-Type': mimeType(path.extname(filePath)) });
+    const ext = path.extname(filePath);
+    const headers: Record<string, string> = {
+      'Content-Type': mimeType(ext),
+    };
+    // HTML files: never cache. Hashed assets (JS/CSS with content-hash in
+    // filename): cache aggressively — they never change once deployed.
+    if (ext === '.html') {
+      headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
+      headers['Pragma'] = 'no-cache';
+    } else if (ext === '.js' || ext === '.css') {
+      headers['Cache-Control'] = 'public, max-age=31536000, immutable';
+    }
+    res.writeHead(200, headers);
     res.end(data);
   });
 }

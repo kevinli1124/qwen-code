@@ -159,98 +159,68 @@ export const PermissionCard: FC<PermissionCardProps> = ({
     : null;
 
   // Inline at the bottom of the chat area, replacing the InputBar.
-  // No backdrop — the card is in-flow so it doesn't obscure the conversation.
+  // Structure: compact header row + scrollable detail + always-visible buttons.
+  // Nothing is fixed-positioned so the conversation is never obscured.
   return (
-    <div className="border-t border-yellow-500/25 bg-[#1a1a1a]">
-      <div className="max-h-[60vh] overflow-y-auto flex flex-col gap-3 px-4 py-3 animate-fade-up">
-        {/* Context line — subtle identifier above the main header */}
-        <div className="text-xs text-[#8a8a8a]">
-          Agent is requesting permission to use{' '}
-          <span className="font-semibold text-[#b0b0b0]">
-            {request.toolName}
-          </span>
+    <div className="border-t border-yellow-500/25 bg-[#1a1a1a] flex flex-col max-h-[50vh]">
+      {/* ── Compact header row ── */}
+      <div className="flex items-center gap-2 px-4 py-2 border-b border-[#2e2e2e] flex-shrink-0">
+        <span className="flex-shrink-0 w-4 h-4 rounded-full bg-yellow-500/20 text-yellow-400 flex items-center justify-center text-[10px] font-bold">
+          !
+        </span>
+        <span className="text-xs font-semibold text-[#e8e6e3] flex-shrink-0">
+          Permission required
+        </span>
+        <span className="text-[11px] text-[#8a8a8a] truncate">
+          <span className="font-mono text-[#c0c0c0]">{request.toolName}</span>
           {shellCommand && (
-            <>
-              {' '}
-              —{' '}
-              <span className="font-mono text-[#8a8a8a]">
-                {shellCommand}
-                {((input?.command as string | undefined)?.length ?? 0 > 80)
-                  ? '…'
-                  : ''}
-              </span>
-            </>
+            <span className="ml-1 text-[#6a6a6a]">
+              — {shellCommand}
+              {((input?.command as string | undefined)?.length ?? 0) > 80
+                ? '…'
+                : ''}
+            </span>
           )}
-        </div>
+        </span>
+      </div>
 
-        {/* Header */}
-        <div className="flex items-start gap-2">
-          <div className="flex-shrink-0 w-5 h-5 rounded-full bg-yellow-500/20 text-yellow-400 flex items-center justify-center text-[11px] font-bold">
-            !
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-semibold text-[#e8e6e3]">
-              Permission required
-            </div>
-            <div className="text-[11px] text-[#8a8a8a] mt-0.5">
-              The agent wants to run{' '}
-              <span className="font-mono text-[#e8e6e3]">
-                {request.toolName}
-              </span>
-              . Review before approving.
-            </div>
-          </div>
-        </div>
-
-        {/* Tool-specific detail */}
+      {/* ── Scrollable tool detail ── */}
+      <div className="flex-1 overflow-y-auto px-4 py-2 min-h-0">
         <div className="flex flex-col gap-2">
           {renderToolDetail(request.toolName, input)}
         </div>
+      </div>
 
-        {/* Decision buttons */}
-        <div className="flex flex-wrap gap-2 pt-1">
-          <button
-            onClick={() => onDecide('allow_once')}
-            className="flex-1 min-w-[100px] px-3 py-1.5 rounded bg-accent text-white text-xs font-medium hover:bg-accent-hover transition-colors"
-            autoFocus
-          >
-            Allow once
-          </button>
-          <button
-            onClick={() => onDecide('allow_project')}
-            className="flex-1 min-w-[140px] px-3 py-1.5 rounded bg-[#2e2e2e] text-[#e8e6e3] text-xs font-medium hover:bg-[#3e3e3e] border border-[#3e3e3e] transition-colors"
-            title={`Remember this for ${projectScope}`}
-          >
-            Always for this project
-          </button>
-          <button
-            onClick={() => onDecide('allow_user')}
-            className="flex-1 min-w-[110px] px-3 py-1.5 rounded bg-[#2e2e2e] text-[#e8e6e3] text-xs font-medium hover:bg-[#3e3e3e] border border-[#3e3e3e] transition-colors"
-            title="Remember globally"
-          >
-            Always allow
-          </button>
-          <button
-            onClick={() => onDecide('deny')}
-            className="px-3 py-1.5 rounded bg-red-500/10 text-red-400 text-xs font-medium hover:bg-red-500/20 border border-red-500/30 transition-colors"
-          >
-            Deny
-          </button>
-        </div>
-
-        <div className="flex items-center justify-between text-[10px] text-[#8a8a8a]">
-          <div>
-            {projectCwd ? (
-              <>
-                Project:{' '}
-                <span className="font-mono text-[#a0a0a0]">
-                  {shortenPath(projectCwd, 60)}
-                </span>
-              </>
-            ) : null}
-          </div>
-          <div className="text-[#5a5a5a]">Enter to allow · Esc to deny</div>
-        </div>
+      {/* ── Decision buttons — always visible at bottom ── */}
+      <div className="flex-shrink-0 px-4 py-2 border-t border-[#2e2e2e] flex items-center gap-2">
+        <button
+          onClick={() => onDecide('allow_once')}
+          className="px-3 py-1.5 rounded bg-accent text-white text-xs font-medium hover:bg-accent-hover transition-colors"
+          autoFocus
+        >
+          Allow once
+        </button>
+        <button
+          onClick={() => onDecide('allow_project')}
+          className="px-3 py-1.5 rounded bg-[#2e2e2e] text-[#e8e6e3] text-xs font-medium hover:bg-[#3e3e3e] border border-[#3e3e3e] transition-colors"
+          title={`Remember this for ${projectScope}`}
+        >
+          This project
+        </button>
+        <button
+          onClick={() => onDecide('allow_user')}
+          className="px-3 py-1.5 rounded bg-[#2e2e2e] text-[#e8e6e3] text-xs font-medium hover:bg-[#3e3e3e] border border-[#3e3e3e] transition-colors"
+          title="Remember globally across all projects"
+        >
+          Always
+        </button>
+        <button
+          onClick={() => onDecide('deny')}
+          className="px-3 py-1.5 rounded bg-red-500/10 text-red-400 text-xs font-medium hover:bg-red-500/20 border border-red-500/30 transition-colors"
+        >
+          Deny
+        </button>
+        <span className="ml-auto text-[10px] text-[#5a5a5a]">Enter · Esc</span>
       </div>
     </div>
   );

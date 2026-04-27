@@ -3,7 +3,7 @@
  * Copyright 2025 Qwen team
  * SPDX-License-Identifier: Apache-2.0
  */
-import { useState, useEffect, type FC } from 'react';
+import { useState, useEffect, useRef, type FC } from 'react';
 
 interface QuestionOption {
   label: string;
@@ -23,6 +23,14 @@ interface QuestionBarProps {
   onCancel: () => void;
 }
 
+/**
+ * Inline question bar — replaces the InputBar at the bottom of the chat.
+ *
+ * Design principle: never obscure the conversation. The bar sits exactly
+ * where the InputBar normally lives; the conversation scrolls above it.
+ * Options are compact chips in a single scrollable row so the bar stays
+ * within a normal input-area height (~80-100 px).
+ */
 export const QuestionBar: FC<QuestionBarProps> = ({
   questions,
   onSubmit,
@@ -31,9 +39,12 @@ export const QuestionBar: FC<QuestionBarProps> = ({
   const [questionIndex, setQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<number, string[]>>({});
   const [customText, setCustomText] = useState('');
+  const [showCustom, setShowCustom] = useState(false);
+  const customInputRef = useRef<HTMLInputElement>(null);
 
   const question = questions[questionIndex];
   const isLast = questionIndex === questions.length - 1;
+  const currentSelections = answers[questionIndex] ?? [];
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -46,9 +57,24 @@ export const QuestionBar: FC<QuestionBarProps> = ({
     return () => window.removeEventListener('keydown', onKey);
   }, [onCancel]);
 
+  useEffect(() => {
+    if (showCustom) customInputRef.current?.focus();
+  }, [showCustom]);
+
   if (!question) return null;
 
-  const currentSelections = answers[questionIndex] ?? [];
+  const buildResult = (
+    idx: number,
+    val: string,
+    snapshot: Record<number, string[]>,
+  ): Record<string, string> => {
+    const result: Record<string, string> = {};
+    questions.forEach((_, i) => {
+      const sel = i === idx ? [val] : (snapshot[i] ?? []);
+      if (sel.length > 0) result[String(i)] = sel.join(', ');
+    });
+    return result;
+  };
 
   const selectOption = (label: string) => {
     if (question.multiSelect) {
@@ -60,15 +86,11 @@ export const QuestionBar: FC<QuestionBarProps> = ({
       const next = { ...answers, [questionIndex]: [label] };
       setAnswers(next);
       if (isLast) {
-        const result: Record<string, string> = {};
-        questions.forEach((_, i) => {
-          const sel = i === questionIndex ? [label] : (next[i] ?? []);
-          if (sel.length > 0) result[String(i)] = sel.join(', ');
-        });
-        onSubmit(result);
+        onSubmit(buildResult(questionIndex, label, next));
       } else {
         setQuestionIndex(questionIndex + 1);
         setCustomText('');
+        setShowCustom(false);
       }
     }
   };
@@ -83,69 +105,68 @@ export const QuestionBar: FC<QuestionBarProps> = ({
     setCustomText('');
     if (!question.multiSelect) {
       if (isLast) {
-        const result: Record<string, string> = {};
-        questions.forEach((_, i) => {
-          const sel = i === questionIndex ? [val] : (next[i] ?? []);
-          if (sel.length > 0) result[String(i)] = sel.join(', ');
-        });
-        onSubmit(result);
+        onSubmit(buildResult(questionIndex, val, next));
       } else {
         setQuestionIndex(questionIndex + 1);
+        setShowCustom(false);
       }
     }
   };
 
   const submitMulti = () => {
+    const allAnswers = { ...answers };
+    if (customText.trim()) {
+      allAnswers[questionIndex] = [
+        ...(allAnswers[questionIndex] ?? []),
+        customText.trim(),
+      ];
+    }
     if (isLast) {
       const result: Record<string, string> = {};
       questions.forEach((_, i) => {
-        const sel = answers[i] ?? [];
+        const sel = allAnswers[i] ?? [];
         if (sel.length > 0) result[String(i)] = sel.join(', ');
       });
       onSubmit(result);
     } else {
       setQuestionIndex(questionIndex + 1);
       setCustomText('');
+      setShowCustom(false);
     }
   };
 
   return (
-    <div className="border-t border-accent/25 bg-[#1a1a1a] px-4 py-3 animate-fade-up">
-      {/* Tab row for multi-question flows */}
-      {questions.length > 1 && (
-        <div className="flex gap-1.5 mb-2 overflow-x-auto">
-          {questions.map((q, i) => (
-            <button
-              key={i}
-              onClick={() => setQuestionIndex(i)}
-              className={[
-                'px-2.5 py-1 rounded-full text-[11px] font-medium whitespace-nowrap transition-colors',
-                i === questionIndex
-                  ? 'bg-accent text-white'
-                  : 'bg-[#2e2e2e] text-[#8a8a8a] hover:text-[#e8e6e3]',
-              ].join(' ')}
-            >
-              {q.header}
-              {(answers[i]?.length ?? 0) > 0 && (
-                <span className="ml-1 text-green-400">✓</span>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Question text */}
-      <div className="mb-2.5">
-        {questions.length === 1 && (
-          <div className="text-xs font-semibold text-accent mb-0.5">
+    <div className="border-t border-[#2e2e2e] bg-[#1a1a1a] px-4 py-2.5">
+      {/* ── Top row: question label + cancel ── */}
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2 min-w-0">
+          {/* accent dot */}
+          <span className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-accent" />
+          {/* header + question on one compact line */}
+          <span className="text-[11px] font-medium text-accent truncate">
             {question.header}
-          </div>
-        )}
-        <div className="text-sm text-[#e8e6e3]">{question.question}</div>
+          </span>
+          <span className="text-[11px] text-[#8a8a8a] truncate hidden sm:block">
+            {question.question}
+          </span>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+          {questions.length > 1 && (
+            <span className="text-[10px] text-[#5a5a5a]">
+              {questionIndex + 1}/{questions.length}
+            </span>
+          )}
+          <button
+            onClick={onCancel}
+            className="text-[11px] text-[#5a5a5a] hover:text-[#e8e6e3] transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
       </div>
 
-      {/* Options */}
-      <div className="flex flex-wrap gap-2 mb-2">
+      {/* ── Options row: horizontally scrollable chips ── */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">
         {question.options.map((opt) => {
           const selected = currentSelections.includes(opt.label);
           return (
@@ -154,56 +175,77 @@ export const QuestionBar: FC<QuestionBarProps> = ({
               onClick={() => selectOption(opt.label)}
               title={opt.description || undefined}
               className={[
-                'px-3 py-1.5 rounded text-xs font-medium border transition-colors',
+                'flex-shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium border whitespace-nowrap transition-all',
                 selected
-                  ? 'bg-accent/20 border-accent/60 text-accent'
-                  : 'bg-[#2e2e2e] border-[#3e3e3e] text-[#e8e6e3] hover:border-accent/40 hover:bg-[#3e3e3e]',
+                  ? 'bg-accent/15 border-accent/50 text-accent'
+                  : 'bg-[#242424] border-[#3e3e3e] text-[#c8c6c3] hover:border-accent/30 hover:text-[#e8e6e3]',
               ].join(' ')}
             >
               {question.multiSelect && (
-                <span className="mr-1.5 text-[10px]">
-                  {selected ? '☑' : '☐'}
+                <span className="text-[9px] opacity-70">
+                  {selected ? '▪' : '▫'}
                 </span>
               )}
               {opt.label}
             </button>
           );
         })}
-      </div>
 
-      {/* Custom input row + footer controls */}
-      <div className="flex items-center gap-2">
-        <input
-          type="text"
-          value={customText}
-          onChange={(e) => setCustomText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              submitCustom();
-            }
-          }}
-          placeholder="Other…"
-          className="flex-1 bg-[#242424] border border-[#3e3e3e] rounded px-2.5 py-1 text-xs text-[#e8e6e3] placeholder:text-[#5a5a5a] focus:outline-none focus:border-accent/50"
-        />
+        {/* Other / custom input toggle */}
+        {!showCustom ? (
+          <button
+            onClick={() => setShowCustom(true)}
+            className="flex-shrink-0 px-2.5 py-1 rounded-full text-[11px] border border-dashed border-[#3e3e3e] text-[#5a5a5a] hover:text-[#e8e6e3] hover:border-[#5a5a5a] whitespace-nowrap transition-colors"
+          >
+            + Other
+          </button>
+        ) : (
+          <div className="flex-shrink-0 flex items-center gap-1">
+            <input
+              ref={customInputRef}
+              type="text"
+              value={customText}
+              onChange={(e) => setCustomText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  submitCustom();
+                }
+                if (e.key === 'Escape') {
+                  e.preventDefault();
+                  setShowCustom(false);
+                  setCustomText('');
+                }
+              }}
+              placeholder="Type and press Enter…"
+              className="w-48 bg-[#242424] border border-accent/40 rounded-full px-2.5 py-1 text-[11px] text-[#e8e6e3] placeholder:text-[#5a5a5a] focus:outline-none"
+            />
+            {customText.trim() && (
+              <button
+                onClick={submitCustom}
+                className="flex-shrink-0 px-2 py-1 rounded-full bg-accent text-white text-[11px] font-medium hover:bg-accent-hover transition-colors"
+              >
+                ↵
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Confirm button for multi-select */}
         {question.multiSelect && (
           <button
             onClick={submitMulti}
             disabled={currentSelections.length === 0 && !customText.trim()}
-            className="px-3 py-1 rounded bg-accent text-white text-xs font-medium disabled:opacity-40 hover:bg-accent-hover transition-colors"
+            className="flex-shrink-0 px-3 py-1 rounded-full bg-accent text-white text-[11px] font-medium disabled:opacity-40 hover:bg-accent-hover transition-colors ml-1"
           >
-            {isLast ? 'Submit' : 'Next'}
+            {isLast ? 'Done' : 'Next →'}
           </button>
         )}
-        <button
-          onClick={onCancel}
-          className="px-3 py-1 rounded bg-[#2e2e2e] text-[#8a8a8a] text-xs hover:text-[#e8e6e3] transition-colors"
-        >
-          Cancel
-        </button>
-        <span className="text-[10px] text-[#5a5a5a] hidden sm:block">
-          Esc to cancel
-        </span>
+      </div>
+
+      {/* Question text shown below on mobile (hidden on sm+) */}
+      <div className="text-[10px] text-[#5a5a5a] mt-1.5 sm:hidden truncate">
+        {question.question}
       </div>
     </div>
   );
