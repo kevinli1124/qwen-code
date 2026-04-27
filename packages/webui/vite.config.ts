@@ -9,6 +9,7 @@ import react from '@vitejs/plugin-react';
 import dts from 'vite-plugin-dts';
 import { resolve } from 'path';
 import { rmSync, existsSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 
 /**
  * Vite configuration for @qwen-code/webui library
@@ -23,14 +24,26 @@ import { rmSync, existsSync } from 'node:fs';
 export default defineConfig({
   plugins: [
     // On Windows, Vite's built-in emptyOutDir uses rmdirSync which fails with
-    // ENOTEMPTY on non-empty directories. Clean the dist folder ourselves using
-    // fs.rmSync({ recursive, force }) which handles nested directories correctly.
+    // ENOTEMPTY or EPERM (locked files / antivirus) on non-empty directories.
+    // Use rmdir /s /q via the shell on Windows (most reliable), fall back to
+    // fs.rmSync on other platforms. Both are wrapped in try/catch so that a
+    // failure is non-fatal — Vite will overwrite files on the next build anyway.
     {
       name: 'clean-dist-windows',
       buildStart() {
         const distPath = resolve(__dirname, 'dist');
-        if (existsSync(distPath)) {
-          rmSync(distPath, { recursive: true, force: true });
+        if (!existsSync(distPath)) return;
+        try {
+          if (process.platform === 'win32') {
+            execSync(`rmdir /s /q "${distPath}"`, {
+              stdio: 'ignore',
+              shell: true,
+            });
+          } else {
+            rmSync(distPath, { recursive: true, force: true });
+          }
+        } catch {
+          // Non-fatal: Vite will overwrite existing files.
         }
       },
     },
